@@ -5,6 +5,6 @@
 ```
 Play as Miller in a horror Visual-Novel and march into the unknown on a halloween night. unaware of what might wait for you and your friends in the darkness.
 ```
-- 制作：Taler
-- 公開日：2024/09/30
+- Creator：Taler
+- Released：2024/09/30
 - itch.io：[That's What the Coin Said](https://taler.itch.io/twtcs)

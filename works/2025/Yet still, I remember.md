@@ -7,6 +7,6 @@ A short story of memory, regret, and letting go.
 静かな夢の中に、二人の友人はもう一度出会う。
 記憶と後悔、そして手放すことを描いた短い物語。
 ```
-- 制作：Ruminio
-- 公開日：2025/07/20
+- Creator：Ruminio
+- Released：2025/07/20
 - itch.io：[Yet still, I remember](https://minute.itch.io/yet-still-i-remember)

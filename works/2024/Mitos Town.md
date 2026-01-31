@@ -9,6 +9,6 @@ Maybe they can help her there? Well on her way a big guy threaten her, telling h
 Then, when she finally got there the locals... They were acting a little weird.
 But surely it will be fine, surely she'll find some help. It's not like this is going to be her last stop.
 ```
-- 制作：
-- 公開日：2024/09/30
+- Creator：
+- Released：2024/09/30
 - itch.io：[Mitos Town](https://ccc123p.itch.io/mitos-town)

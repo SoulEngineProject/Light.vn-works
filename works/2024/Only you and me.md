@@ -5,6 +5,6 @@
 María arrives with her child to at a small town in the middle of nowhere, hoping her past won't be stubborn enough to follow them here.
 However, she slowly comes to realize, things won't be so easy.
 ```
-- 制作：Ma_Ka
-- 公開日：2024/09/30
+- Creator：Ma_Ka
+- Released：2024/09/30
 - itch.io：[Only you and me](https://ma-ka.itch.io/only-you-and-me)

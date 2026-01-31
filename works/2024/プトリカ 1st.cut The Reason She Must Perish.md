@@ -12,6 +12,6 @@
 「この愛が、禁断と知りながら――」
 そしてあなたは、真実を知る。
 ```
-- 制作：トトメトリ
-- 公開日：2024/10/07
+- Creator：トトメトリ
+- Released：2024/10/07
 - Steam：[プトリカ 1st.cut:The Reason She Must Perish](https://store.steampowered.com/app/2818450/_1stcutThe_Reason_She_Must_Perish/)

@@ -7,6 +7,6 @@ You enter "Halloween Candytown" a magical world full of candied villagers.
 The villagers are happy to see you, as traveler and guest, and they welcome you with open arms.
 Is it all? Make friends? Face Fear? Will you find a way home safely or trap yourself in this sweet candied world forever?
 ```
-- 制作：YoruBox, kekaiin, Manit .K, titaniumskin
-- 公開日：2024/09/29
+- Creator：YoruBox, kekaiin, Manit .K, titaniumskin
+- Released：2024/09/29
 - itch.io：[Welcome to Halloween Candytown](https://yorubox.itch.io/welcome-to-halloween-candytown)

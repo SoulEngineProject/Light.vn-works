@@ -11,6 +11,6 @@ the drummer, Alec; the bartender, Loretta and the private detective
 Bernard, they all have their own theories. Now Inez must decide who
 to believe if she wants to find her beloved Heather again.
 ```
-- 制作：July Teixeira
-- 公開日：2024/09/30
+- Creator：July Teixeira
+- Released：2024/09/30
 - itch.io：[Sangria](https://juliateixeira.itch.io/sangria)

@@ -5,6 +5,6 @@
 ```
 Within the brain of “Funblood”, you are a “Funblood” who has become severed. So of course, you have to get up now!
 ```
-- 制作：Slitherbop
-- 公開日：2024/09/30
+- Creator：Slitherbop
+- Released：2024/09/30
 - itch.io：[PLAY OF WIRE](https://slitherbop.itch.io/play-of-wire)

@@ -6,7 +6,7 @@
 ソーシャルネットワークサービス『PLAZA』へログインして色々なサービスを体験しよう！
 PLAZA by Iruka-Tio は、SNSを模したシュミレーションアドベンチャーゲームです。
 ```
-- 制作：グリーンポップパーティー
-- 公開日：2025/08/15
+- Creator：グリーンポップパーティー
+- Released：2025/08/15
 - HP：[PLAZA by Iruka-Tio](https://greenpopparty.wixsite.com/green-pop-party/plazabyirukatio)
 - フリーゲーム夢現：[PLAZA by Iruka-Tio（体験版）](https://freegame-mugen.jp/simulation/game_11852.html)

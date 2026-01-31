@@ -6,6 +6,6 @@
 Light.vn公式パブリッシング作品の第2弾。
 2021年初出の同名作品のリメイク作品。
 ```
-- 制作：筍laboratore
-- 公開日：2024/03/13
+- Creator：筍laboratore
+- Released：2024/03/13
 - Steam：[狂愛イノセンス -The Broken Platonic-](https://store.steampowered.com/app/2780390/_The_Broken_Platonic/)

@@ -7,8 +7,8 @@
 OP～第一階層は「THE FIRST FLOOR:」、第二階層は「THE SECOND FLOOR:」、第三階層は「THE THIRD FLOOR:」、
 第四階層は「THE FOURTH FLOOR:」に収録されています。
 ```
-- 制作：渦女屋本舗
-- 公開日：2024/01/05
+- Creator：渦女屋本舗
+- Released：2024/01/05
 - BOOTH：[ウィルと黄昏の旅 -THE FIFTH FLOOR-](https://uzumeya.booth.pm/items/5399698)
 - HP：[UZUMEYA](http://490xx.sakura.ne.jp/)
 - Twitter：[渦女屋本舗](https://x.com/Uzumeyahonpo)

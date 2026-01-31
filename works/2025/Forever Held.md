@@ -3,6 +3,6 @@
 ```
 Your two best friends are getting married, and you've been a horrible bridesmaid. Can you be honest before it's too late?
 ```
-- 制作：Theo
-- 公開日：2025/07/16
+- Creator：Theo
+- Released：2025/07/16
 - itch.io：[Forever Held](https://minute.itch.io/forever-held)
