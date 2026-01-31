@@ -188,18 +188,21 @@ fn extract_first_image(md: &str) -> Option<String> {
 }
 
 async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) -> impl IntoResponse {
-    // Basic input sanitization
-    if !year.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        || !title.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        || year.len() > 10
-        || title.len() > 200
+
+    // Only check very basic length + no obvious traversal attempts
+    if year.len() > 20
+        || title.len() > 300
+        || year.contains("..")
+        || title.contains("..")
+        || year.contains('/') 
+        || title.contains('/')
     {
         return (
             StatusCode::BAD_REQUEST,
             Html("<h1>400 Bad Request</h1><p>Invalid year or title</p>".to_string()),
         );
     }
-
+    
     let file_path = PathBuf::from("works").join(&year).join(format!("{}.md", title));
 
     if !file_path.starts_with("works/") || !file_path.is_file() {
