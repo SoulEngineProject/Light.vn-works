@@ -189,7 +189,12 @@
           return;
         }
 
-        data.children.forEach(year => {
+        // Sort years descending (newest first)
+        const sortedYears = data.children
+          .filter(y => y.is_dir && y.name.match(/^\d{4}$/)) // only 4-digit years
+          .sort((a, b) => b.name.localeCompare(a.name));    // "2026" > "2025"
+
+        sortedYears.forEach(year => {
           if (!year.is_dir) return;
 
           const details = document.createElement('details');
@@ -203,13 +208,25 @@
           (year.children || []).forEach(item => {
             if (item.is_dir) return; // skip any deeper folders for now
 
+            // Create clean display name: remove .md + improve readability
+            let displayName = item.name
+              .replace(/\.md$/i, '')          // remove .md (case insensitive)
+              .trim();
+
+            // Build the link path (remove .md if present)
+            // ex. /works/2025/title1.md → /works/2025/title1
+            let linkPath = item.path;
+            if (linkPath.endsWith('.md')) {
+              linkPath = linkPath.slice(0, -3);
+            }
+
             const a = document.createElement('a');
-            a.href = item.path.replace(/\.md$/, '');   // /works/2025/title1.md → /works/2025/title1
+            a.href = linkPath;
             a.className = 'file-card';
             a.target = "_self";   // or "_blank" if you prefer new tab
 
             a.innerHTML = `
-              <div class="file-name">${item.name}</div>
+              <div class="file-name">${displayName}</div>
               <div class="file-meta">Read →</div>
             `;
 

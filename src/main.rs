@@ -55,7 +55,7 @@ async fn render_markdown(
 
     let content = match fs::read_to_string(&file_path).await {
         Ok(c) => c,
-        Err(e) => {
+        Err(_e) => {
             return (
                 StatusCode::NOT_FOUND,
                 Html(format!(
