@@ -208,10 +208,17 @@
           .filter(y => y.is_dir && y.name.match(/^\d{4}$/)) // only 4-digit years
           .sort((a, b) => b.name.localeCompare(a.name));    // "2026" > "2025"
 
-        sortedYears.forEach(year => {
+        sortedYears.forEach((year, index) => {
           if (!year.is_dir) return;
 
           const details = document.createElement('details');
+
+          // Open only the first two blocks
+          // (two, since the current year might be empty)
+          if (index === 0 || index === 1) {
+            details.setAttribute('open', '');
+          }
+
           const summary = document.createElement('summary');
           summary.textContent = year.name;
           details.appendChild(summary);

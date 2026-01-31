@@ -8,7 +8,7 @@ use axum::{
     response::{Html, IntoResponse},
     http::StatusCode,
 };
-use pulldown_cmark::{html, Parser, Event, Tag, LinkType, CowStr};
+use pulldown_cmark::{html, Parser, Event};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -202,7 +202,7 @@ async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) ->
             Html("<h1>400 Bad Request</h1><p>Invalid year or title</p>".to_string()),
         );
     }
-    
+
     let file_path = PathBuf::from("works").join(&year).join(format!("{}.md", title));
 
     if !file_path.starts_with("works/") || !file_path.is_file() {
