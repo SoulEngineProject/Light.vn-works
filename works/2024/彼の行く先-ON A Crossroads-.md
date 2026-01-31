@@ -7,6 +7,6 @@
 難しさは一切無し、障害となるものも無し
 牢獄の中で生まれ、光にほのかな憧れを抱いた少年のこれからの生き方を、ただ選ぶのみとなっています。
 ```
-- 制作：nafumi
-- 公開日：2024/11/22
+- Creator：nafumi
+- Released：2024/11/22
 - Booth：[彼の行く先-ON A Crossroads-](https://nafumi.booth.pm/items/6312650)

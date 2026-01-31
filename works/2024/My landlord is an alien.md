@@ -5,6 +5,6 @@
 ```
 Hoshisora Runa, an ordinary space research student living in the midst of Tokyo, comes to a predictment after meeting her landlord.
 ```
-- 制作：RecOFiv3
-- 公開日：2024/09/29
+- Creator：RecOFiv3
+- Released：2024/09/29
 - itch.io：[My landlord is an alien](https://recofiv3.itch.io/my-landlord-is-an-alien)

@@ -6,6 +6,6 @@
 A hospital-themed café is actually a front for a group of witches who perform various deeds in the dead of night for their master!
 Whether it's moral or not?! It doesn't matter!
 ```
-- 制作：Baphomet The Clown
-- 公開日：2024/09/11
+- Creator：Baphomet The Clown
+- Released：2024/09/11
 - itch.io：[CAFÉ GUILE](https://poundtoundhound.itch.io/cafe-guile)

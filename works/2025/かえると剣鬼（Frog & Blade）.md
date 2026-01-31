@@ -10,6 +10,6 @@
 それらを追ううちに、主人公は自らのことと、世界の秘密に向きあっていくことになる。
 選択と成長が、未来を変えるカギになる。
 ```
-- 制作：StarGazer
-- 公開日：2025/08/15
+- Creator：StarGazer
+- Released：2025/08/15
 - Steam：[かえると剣鬼](https://store.steampowered.com/app/3644110/Frog__Blade/)

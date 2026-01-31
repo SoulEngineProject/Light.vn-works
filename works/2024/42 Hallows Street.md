@@ -6,6 +6,6 @@
 You play as Noah Nova, a student trying to uncover the dark secrets of a mansion that holds a significant place in both his and his friend's past.
 As Noah delves deeper into its mysteries, he is forced to confront the inevitability of death.
 ```
-- 制作：OldPat
-- 公開日：2024/09/30
+- Creator：OldPat
+- Released：2024/09/30
 - itch.io：[42 Hallows Street](https://oldpat.itch.io/42-hallows-street)
