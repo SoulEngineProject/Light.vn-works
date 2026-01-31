@@ -4,92 +4,234 @@ use axum::{
     routing::get_service,
     Json,
     Router,
-    extract::Path,
+    extract::Path as AxumPath,           // renamed to avoid conflict
     response::{Html, IntoResponse},
     http::StatusCode,
 };
-use pulldown_cmark::{html, Parser};
+use pulldown_cmark::{html, Parser, Event, Tag, LinkType, CowStr};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path as FsPath, PathBuf};   // renamed Path → FsPath
 use tokio::fs;
 use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
-// 1. The Node struct (your tree representation)
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct Node {
     name: String,
-    path: String,              // e.g. "/works/2025/title1.md"
+    path: String,
     is_dir: bool,
     children: Option<Vec<Node>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnail: Option<String>,
 }
 
-// 2. The handler that returns the whole tree as JSON
 async fn get_tree() -> Json<Node> {
-    let root_dir = std::path::Path::new("works");
+    let root_dir = FsPath::new("works");           // ← use FsPath
 
-    // Wrap the initial call too (since it's recursive async)
-    let root = Box::pin(build_node(root_dir, root_dir)).await
-        .unwrap_or(Node {
-            name: "works".to_string(),
-            path: "/works".to_string(),
-            is_dir: true,
-            children: Some(vec![]),
-        });
+    println!("Current working directory: {:?}", std::env::current_dir().ok());
+    println!("Does 'works' exist?     {:?}", root_dir.exists());
+    println!("Is 'works' a directory? {:?}", root_dir.is_dir());
+
+    if root_dir.is_dir() {
+        match std::fs::read_dir(root_dir) {
+            Ok(mut entries) => {
+                println!("Entries in 'works/':");
+                while let Some(entry) = entries.next() {
+                    if let Ok(e) = entry {
+                        println!("  - {:?}", e.path().display());
+                    }
+                }
+            }
+            Err(e) => println!("Cannot read 'works/': {}", e),
+        }
+    } else {
+        println!("'works' is not a directory or cannot be accessed");
+    }
+
+    let mut nodes: HashMap<String, Node> = HashMap::new();
+
+    for entry in WalkDir::new(root_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let full_path = entry.path();
+
+        // Skip the root directory itself
+        if full_path == root_dir {
+            continue;
+        }
+
+        // Reliable relative path (works on Windows & Unix)
+        let rel_path = match full_path.strip_prefix(root_dir) {
+            Ok(stripped) => {
+                let path_str = stripped
+                    .to_string_lossy()
+                    .replace('\\', "/")           // normalize to forward slashes
+                    .trim_matches('/')
+                    .to_string();
+
+                if path_str.is_empty() {
+                    "/works".to_string()
+                } else {
+                    format!("/works/{}", path_str)
+                }
+            }
+            Err(_) => continue,
+        };
+
+        let name = full_path
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
+        let is_dir = full_path.is_dir();
+
+        let mut thumbnail = None;
+
+        if !is_dir && full_path.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case("md")) {
+            if let Ok(content) = fs::read_to_string(full_path).await {
+                thumbnail = extract_first_image(&content);
+            }
+        }
+
+        println!(
+            "Adding → path: \"{}\", name: \"{}\", is_dir: {}, thumbnail: {:?}",
+            rel_path, name, is_dir, thumbnail
+        );
+
+        let node = Node {
+            name,
+            path: rel_path.clone(),
+            is_dir,
+            children: if is_dir { Some(Vec::new()) } else { None },
+            thumbnail,
+        };
+
+        nodes.insert(rel_path, node);
+    }
+
+    // Build hierarchy
+    let mut root = nodes.remove("/works").unwrap_or(Node {
+        name: "works".to_string(),
+        path: "/works".to_string(),
+        is_dir: true,
+        children: Some(Vec::new()),
+        thumbnail: None,
+    });
+
+    let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
+
+    for path in nodes.keys() {
+        if let Some(parent) = parent_path(path) {
+            by_parent.entry(parent).or_default().push(path.clone());
+        }
+    }
+
+    for children in by_parent.values_mut() {
+        children.sort();
+    }
+
+    attach_children(&mut root, &nodes, &by_parent);
 
     Json(root)
 }
 
-async fn render_markdown(
-    Path((year, title)): Path<(String, String)>,
-) -> impl IntoResponse {
-    // Build safe path: works/year/title.md
-    println!("Requested: year={}, title={}", year, title);  // ← add this
+fn parent_path(path: &str) -> Option<String> {
+    let path = path.trim_end_matches('/');
+    let last_slash = path.rfind('/')?;
+    if last_slash == 0 {
+        None  // root
+    } else {
+        Some(path[..last_slash].to_string())
+    }
+}
 
-    let mut file_path = PathBuf::from("works");
-    file_path.push(&year);
-    file_path.push(format!("{}.md", title));
+fn attach_children(node: &mut Node, all_nodes: &HashMap<String, Node>, by_parent: &HashMap<String, Vec<String>>) {
+    if let Some(child_paths) = by_parent.get(&node.path) {
+        let mut children = Vec::new();
+        for child_path in child_paths {
+            if let Some(child) = all_nodes.get(child_path) {
+                let mut child_clone = child.clone();
+                attach_children(&mut child_clone, all_nodes, by_parent);
+                children.push(child_clone);
+            }
+        }
+        node.children = if children.is_empty() { None } else { Some(children) };
+    }
+}
 
-    println!("Trying to read: {:?}", file_path);  // ← add this
+fn extract_first_image(md: &str) -> Option<String> {
+    let parser = Parser::new(md);
+
+    for event in parser {
+        if let Event::Html(html) = event {
+            let html_str = html.to_string();
+
+            // Look for src="https://github.com/user-attachments/...
+            if let Some(src_start) = html_str.find("src=\"https://github.com/user-attachments/") {
+                let rest = &html_str[src_start + 5..]; // skip src="
+                if let Some(end_quote) = rest.find('\"') {
+                    let src_value = &rest[..end_quote];
+                    // Quick sanity check: make sure it's still a github assets URL
+                    if src_value.starts_with("https://github.com/user-attachments/") {
+                        return Some(src_value.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) -> impl IntoResponse {
+    // Basic input sanitization
+    if !year.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        || !title.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        || year.len() > 10
+        || title.len() > 200
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            Html("<h1>400 Bad Request</h1><p>Invalid year or title</p>".to_string()),
+        );
+    }
+
+    let file_path = PathBuf::from("works").join(&year).join(format!("{}.md", title));
+
+    if !file_path.starts_with("works/") || !file_path.is_file() {
+        return not_found_html(&year, &title);
+    }
 
     let content = match fs::read_to_string(&file_path).await {
         Ok(c) => c,
-        Err(_e) => {
-            return (
-                StatusCode::NOT_FOUND,
-                Html(format!(
-                    r#"
-                    <!DOCTYPE html>
-                    <html lang="en" class="dark">
-                    <head><title>404 Not Found</title>
-                    <style>body {{ background:#0a0a0f; color:#e0e0ff; font-family:sans-serif; padding:4rem; text-align:center; }}</style>
-                    </head>
-                    <body>
-                        <h1>404 - Not Found</h1>
-                        <p>Could not find: <code>{}/{}.md</code></p>
-                        <p><a href="/" style="color:#6366f1;">← Back to archive</a></p>
-                    </body>
-                    </html>
-                    "#,
-                    year, title
-                )),
-            );
-        }
+        Err(_) => return not_found_html(&year, &title),
     };
 
-    // Convert to HTML
     let md_html = markdown_to_html(&content);
 
-    // Nice wrapper page (reuse your dark theme)
-    let full_page = format!(
+    let title_display = title
+        .replace('-', " ")
+        .replace('_', " ")
+        .split_whitespace()
+        .map(|w| {
+            let mut chars = w.chars();
+            chars.next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default() + chars.as_str()
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let page = format!(
         r#"
         <!DOCTYPE html>
         <html lang="en" class="dark">
         <head>
             <meta charset="UTF-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-            <title>{title} - {year}</title>
+            <title>{title_display} - {year}</title>
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -116,29 +258,48 @@ async fn render_markdown(
                 code {{ background: #111119; padding: 0.2em 0.4em; border-radius: 0.3rem; }}
                 .back {{ display: inline-block; margin: 1.5rem 0; color: var(--text-muted); text-decoration: none; }}
                 .back:hover {{ color: var(--accent); }}
+                img {{ max-width: 100%; height: auto; border-radius: 0.5rem; }}
             </style>
         </head>
         <body>
             <a href="/" class="back">← Back to archive</a>
-            <h1>{title}</h1>
+            <h1>{title_display}</h1>
             <p style="color: var(--text-muted);">From {year}</p>
             <div>{md_html}</div>
         </body>
         </html>
         "#,
-        title = title.replace('-', " ").replace('_', " "),  // optional: make title pretty
+        title_display = title_display,
         year = year,
         md_html = md_html
     );
 
-    // Return success as tuple too (StatusCode::OK is implicit if omitted, but explicit is clearer)
+    (StatusCode::OK, Html(page))
+}
+
+fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     (
-        StatusCode::OK,
-        Html(full_page),
+        StatusCode::NOT_FOUND,
+        Html(format!(
+            r#"
+            <!DOCTYPE html>
+            <html lang="en" class="dark">
+            <head><title>404 Not Found</title>
+            <style>body {{ background:#0a0a0f; color:#e0e0ff; font-family:sans-serif; padding:4rem; text-align:center; }}</style>
+            </head>
+            <body>
+                <h1>404 - Not Found</h1>
+                <p>Could not find: <code>{year}/{title}.md</code></p>
+                <p><a href="/" style="color:#6366f1;">← Back to archive</a></p>
+            </body>
+            </html>
+            "#,
+            year = year,
+            title = title
+        )),
     )
 }
 
-// Returns HTML string from Markdown content
 fn markdown_to_html(md_content: &str) -> String {
     let mut html_output = String::new();
     let parser = Parser::new(md_content);
@@ -146,58 +307,8 @@ fn markdown_to_html(md_content: &str) -> String {
     html_output
 }
 
-// 3. Recursive helper — stays async
-async fn build_node(base: &std::path::Path, entry: &std::path::Path) -> Option<Node> {
-    let name = entry.file_name()?.to_string_lossy().into_owned();
-    let rel_path = {
-        let stripped = entry.strip_prefix(base).ok()?.to_string_lossy().replace('\\', "/");
-        let parts: Vec<&str> = stripped.split('/').filter(|s| !s.is_empty()).collect();
-        
-        if parts.is_empty() {
-            "/works".to_string()
-        } else {
-            format!("/works/{}", parts.join("/"))
-        }
-    };
-
-    if entry.is_file() {
-        return Some(Node {
-            name,
-            path: rel_path,
-            is_dir: false,
-            children: None,
-        });
-    }
-
-    if !entry.is_dir() {
-        return None;
-    }
-
-    let mut children = vec![];
-
-    for entry in WalkDir::new(entry)
-        .max_depth(2)
-        .min_depth(1)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        // ← Key change: Box::pin around the recursive call
-        if let Some(node) = Box::pin(build_node(base, entry.path())).await {
-            children.push(node);
-        }
-    }
-
-    Some(Node {
-        name,
-        path: rel_path,
-        is_dir: true,
-        children: if children.is_empty() { None } else { Some(children) },
-    })
-}
-
 #[tokio::main]
 async fn main() {
-    // Serve everything from the "public" folder
     let serve_dir = ServeDir::new("public")
         .not_found_service(ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))));
 
@@ -224,5 +335,4 @@ fn get_port() -> u16 {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(8080)
-
 }
