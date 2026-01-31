@@ -2,7 +2,7 @@
 
 https://light-vn-works.onrender.com/
 
-Server + Client for Light.vn Works. 
+Light.vn Works Server + Client
 
 ## Adding or modifying a game
 
