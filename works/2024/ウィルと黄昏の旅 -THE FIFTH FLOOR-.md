@@ -2,11 +2,12 @@
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/c109d98e-e69e-46c1-9584-5c1eab67e88d" />
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/96fc153b-6ed2-4db1-b826-b84024786c8a" />
 
-```
+---
 この作品は「ウィルと黄昏の旅」全7階層のうちの第五階層の物語のみを収録したものです。
 OP～第一階層は「THE FIRST FLOOR:」、第二階層は「THE SECOND FLOOR:」、第三階層は「THE THIRD FLOOR:」、
 第四階層は「THE FOURTH FLOOR:」に収録されています。
-```
+
+---
 - Creator：渦女屋本舗
 - Released：2024/01/05
 - BOOTH：[ウィルと黄昏の旅 -THE FIFTH FLOOR-](https://uzumeya.booth.pm/items/5399698)
