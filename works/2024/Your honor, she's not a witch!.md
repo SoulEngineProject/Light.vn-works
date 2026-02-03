@@ -5,6 +5,6 @@
 ---
 Be a lawyer on a witch trial!
 ---
-Creator：Bridge_Dragoon
-Released：2024/09/30
-itch.io：[Your honor, she's not a witch!](https://bridge-dragoon.itch.io/your-honor-shes-not-a-witch)
+- Creator：Bridge_Dragoon
+- Released：2024/09/30
+- itch.io：[Your honor, she's not a witch!](https://bridge-dragoon.itch.io/your-honor-shes-not-a-witch)
