@@ -1,6 +1,4 @@
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4c1aa3f1-2e4e-4b6b-ad94-96da7410d844" />
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/44220f38-b886-45ba-88bd-c494af1ccb0c" />
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/2379504f-d618-4ba8-886f-3825432686b1" />
 
 ---
 「元」天使と天使、そして人間たちが織り成す、少し変わった物語。
