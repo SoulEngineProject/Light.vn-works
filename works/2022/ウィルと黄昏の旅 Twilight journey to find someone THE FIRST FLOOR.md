@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/ce5e8e40-ff8e-4fe1-ba62-bccb68141048" />
 
 ---
 画面をクリックして反応を楽しむADV
