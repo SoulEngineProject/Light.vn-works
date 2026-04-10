@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/39237ac3-c2f5-4cab-8eb3-96d22519f443" />
 
 ---
 「戦火に囚われし者よ。悲劇の終わりを望むか？」
