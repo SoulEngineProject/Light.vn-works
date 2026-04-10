@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1dc1ccda-c709-4631-875b-264989fb7789" />
 
 ---
 俺はお前じゃないと○○できない
