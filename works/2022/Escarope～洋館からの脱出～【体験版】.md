@@ -1,4 +1,6 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/61cfe8b6-d09b-4c54-abcf-27980982bd57" />
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1812cfc9-2687-49f5-bd6d-c380b3b90092" />
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/36cbff3f-416d-460a-9bbb-dc41a53c8182" />
 
 ---
 間違えたら即エンド!?　脱出を目指すADVゲーム
