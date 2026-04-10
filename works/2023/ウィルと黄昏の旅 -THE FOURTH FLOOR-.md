@@ -1,4 +1,6 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/8cc2d904-ff8e-4137-a790-e9ea607990ef" />
+<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/2675d099-1b83-4fb8-ac08-cfed34eff857" />
+<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/677ee7c4-b02a-44f5-a4cd-2a66c3cfed1a" />
 
 ---
 この作品は「ウィルと黄昏の旅」全7階層のうちの第四階層の物語のみを収録したものです。
