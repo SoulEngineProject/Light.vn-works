@@ -1,6 +1,4 @@
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/a184040d-4814-4ae5-b98e-7d43e656478a" />
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/eba1b675-7561-4090-b037-3ba1655577ee" />
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/74bfcebb-2e6e-492f-8cef-f3d2d265db16" />
 
 ---
 画面をクリックして反応を楽しむADV
