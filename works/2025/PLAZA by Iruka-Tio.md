@@ -3,7 +3,7 @@
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/1e54648e-6b76-48c1-aa2a-9bab1d7f61d1" />
 
 ---
-ソーシャルネットワークサービス『PLAZA』へログインして色々なサービスを体験しよう！
+ソーシャルネットワークサービス『PLAZA』へログインして色々なサービスを体験しよう！  
 PLAZA by Iruka-Tio は、SNSを模したシュミレーションアドベンチャーゲームです。
 
 ---
