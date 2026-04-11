@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/96016a87-bfcc-4944-b198-5dbdaa0739ff" />
 
 ---
 ''ファンタジー乙女ゲーム
