@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/3f5652aa-2e33-422b-9561-a33c297e9a48" />
 
 ---
 異世界バトル物語
