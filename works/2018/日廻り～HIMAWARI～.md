@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e5e7da44-0a74-4ae1-a348-0e12008c16f7" />
 
 ---
 廻る夏のヒマワリADV
