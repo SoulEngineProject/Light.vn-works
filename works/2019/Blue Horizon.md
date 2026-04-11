@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/fed6140b-af45-49d5-81e2-c9ecbf543539" />
 
 ---
 姉か妹、救えるのは一人だけ。
