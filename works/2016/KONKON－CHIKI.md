@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e8e33dcd-7204-4b83-b231-e50be8aac262" />
 
 ---
 海に行こうぜ鉄仮面ブス！
