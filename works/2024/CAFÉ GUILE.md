@@ -3,7 +3,7 @@
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/84b8ea30-7d92-4424-bc66-adb7bcae4cc0" />
 
 ---
-A hospital-themed café is actually a front for a group of witches who perform various deeds in the dead of night for their master!
+A hospital-themed café is actually a front for a group of witches who perform various deeds in the dead of night for their master!  
 Whether it's moral or not?! It doesn't matter!
 
 ---

@@ -3,7 +3,7 @@
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/778884e2-3e06-4032-aa63-a5038b9c4db8" />
 
 ---
-オムニバス形式のホラーノベルです。
+オムニバス形式のホラーノベルです。  
 複数作者による毛色の違いを楽しめます
 
 ---

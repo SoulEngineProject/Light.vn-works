@@ -3,7 +3,7 @@
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/39199073-9e7c-4098-8215-db3f94365cc6" />
 
 ---
-Light.vn公式パブリッシング作品の第2弾。
+Light.vn公式パブリッシング作品の第2弾。  
 2021年初出の同名作品のリメイク作品。
 
 ---
