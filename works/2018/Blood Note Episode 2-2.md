@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/936b4e1a-c4b3-4040-aec6-29cbde1f8a0f" />
 
 ---
 ファンタジック人外ADV
