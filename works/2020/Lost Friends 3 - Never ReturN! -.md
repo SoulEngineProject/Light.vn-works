@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e9c584a3-dde4-497b-8032-2d61fa9c95ac" />
 
 ---
 可能性を試してみる短編ADV
