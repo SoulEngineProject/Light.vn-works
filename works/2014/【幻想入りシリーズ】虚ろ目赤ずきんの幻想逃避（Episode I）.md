@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/ac2120d2-e0dc-4791-a7d8-8fe9109084ff" />
 
 ---
 幻想入りシリーズを投稿するのは初めてとなります。
