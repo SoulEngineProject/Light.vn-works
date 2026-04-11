@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/06dffd34-7c30-41c1-9309-d81dd8cb7b70" />
 
 ---
 飛べたとしても豚は×ね　バレンタインデーミニゲーム
