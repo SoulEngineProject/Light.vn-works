@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/5f4d1130-2627-4361-9330-729ab2d6eee2" />
 
 ---
 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、第三話。
