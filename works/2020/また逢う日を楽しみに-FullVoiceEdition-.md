@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/a104ce17-b827-49f5-be4f-a95e915fc7b0" />
 
 ---
 －－大好きよ、私の大切な宝物
