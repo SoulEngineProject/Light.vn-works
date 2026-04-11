@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4ed58f58-3928-4d2d-a69f-49bce64acf60" />
 
 ---
 奇跡って何だろう短編ADV
