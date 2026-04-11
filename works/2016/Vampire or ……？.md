@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/fdf24eb4-3f5d-4ef9-9c3e-bd574067c15a" />
 
 ---
 好きになった人の正体は、とっても不思議な存在でした。
