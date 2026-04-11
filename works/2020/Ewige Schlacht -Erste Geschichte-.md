@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/288b3a1d-ef02-4d7a-b731-fc4c94c584bb" />
 
 ---
 「これは、繰り返される強者達の遊戯〈ひげき〉」
