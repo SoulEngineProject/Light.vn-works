@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/3af024b1-be81-45e5-a265-b362c494f7f7" />
 
 ---
 ――誰も居ない世界の、白い少女
