@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e28d23b0-fca6-4d8a-8c7d-725c877c2497" />
 
 ---
 新本格シネマADV《Oscillatus 零》の後編、EP3;4を収録しています。
