@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/d8f8df84-2cc5-40e1-acfe-fee0008d3e96" />
 
 ---
 わんこ男子と戯れる系ＡＤＶ
