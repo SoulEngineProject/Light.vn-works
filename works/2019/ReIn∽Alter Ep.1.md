@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1fcc9ea7-59dc-40e3-88f6-32d53e2bdaba" />
 
 ---
 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、第一話。
