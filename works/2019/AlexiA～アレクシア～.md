@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/32f272b4-b823-4b6a-87d0-241efef161de" />
 
 ---
 愛、嫌悪、否定、そして選択。　電波障害ノベルADV
