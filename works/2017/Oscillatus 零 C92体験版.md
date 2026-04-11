@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/5d2c407d-7775-4efa-8020-c025e85b2bad" />
 
 ---
 鎖(とざ)された記憶(かこ)も 襲(せま)り繰(く)る運命(みらい)も 零に還(かえ)す
