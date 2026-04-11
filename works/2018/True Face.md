@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/0d1f8ce4-9f8b-4851-9886-15f488fc3d85" />
 
 ---
 全国有数のお嬢様が集まる天谷女学院高校。
