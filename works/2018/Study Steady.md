@@ -1,4 +1,4 @@
-<!--img width="384" height="216" alt="image" src=""/-->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/2d263b86-aedc-4367-a244-1a371dca149c" />
 
 ---
 高校2年、夏休み前テストの下位3名は、夏休み中に勉強部への入部をすることになった。
