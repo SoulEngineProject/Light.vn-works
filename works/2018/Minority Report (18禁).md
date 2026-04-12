@@ -10,4 +10,4 @@ tagline: ""
 tags: [r18]
 ---
 
-<!-- TODO: paste screenshots here -->
+<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/0b9e2461-5e2c-41d1-8912-7aed86d2aaae" />
