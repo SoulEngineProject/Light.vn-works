@@ -22,10 +22,5 @@ jobs:
       run: cargo test --verbose
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
-    - name: Generate coverage
-      run: cargo tarpaulin --out xml --output-dir coverage
-    - name: Upload coverage
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage/cobertura.xml
+    - name: Coverage
+      run: cargo tarpaulin --skip-clean
