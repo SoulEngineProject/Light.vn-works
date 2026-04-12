@@ -11,9 +11,11 @@ body::after {
   height: 600px;
   background: url('/LX.png') no-repeat center;
   background-size: contain;
-  opacity: 0.15;
+  opacity: 0.2;
   pointer-events: none;
   z-index: -1;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
 }
 
 .container {
