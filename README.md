@@ -10,15 +10,26 @@ Make a PR with the following template.
 Filename: `works/<year>/<title>.md`  
 Content:
 ```
-3-4 screenshots
-(just paste them in the file - will upload to github. example:
-<img width="384" height="216" alt="image" src="....whatever github creates..." />)
+---
+creator: <name>
+released: <YYYY/MM/DD>
+link_label: <platform name, e.g. itch.io, Steam, Booth>
+link_url: <url to game page>
+tagline: <one-line description>
+---
+
+<paste 3-4 screenshots here - github will upload them automatically>
+<img width="384" height="216" alt="image" src="....whatever github creates..." />
 
 ---
-synopsis
-<add blank line: important>
----
-- Creator: <name>
-- Released: <date>
-- Any other info
+Synopsis text here.
+```
+
+For multiple links, add `extra_links`:
+```
+extra_links:
+  - label: Steam
+    url: https://store.steampowered.com/app/...
+  - label: Booth
+    url: https://example.booth.pm/items/...
 ```
