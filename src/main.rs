@@ -305,7 +305,7 @@ async fn render_markdown(
                         ""
                     };
                     format!(
-                        r#"<a href="{}" class="more-creator-card">{}{}<span>{}</span></a>"#,
+                        r#"<a href="{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&g.path),
                         badge,
                         thumb,
