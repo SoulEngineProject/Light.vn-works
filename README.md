@@ -33,3 +33,8 @@ extra_links:
   - label: Booth
     url: https://example.booth.pm/items/...
 ```
+
+For R18 games, add `tags`:
+```
+tags: [r18]
+```
