@@ -1,3 +1,18 @@
+---
+creator: Regen Radikaler
+released: 2017/08/11
+link_label: DLsite
+link_url: "https://www.dlsite.com/maniax/work/=/product_id/RJ206373/?medium=twitter&program=on_sale&source=workpost_sale&utm_medium=sns&utm_content=workpost_sale&utm_campaign=twitter"
+extra_links:
+  - label: BOOTH
+    url: "https://regen-radikaler.booth.pm/"
+  - label: HP
+    url: "https://regenradikaler.wixsite.com/oscillatus-zero"
+  - label: Twitter
+    url: "https://twitter.com/cos6official"
+tagline: 異能を前提としたミステリ作品でありながら、百合を主軸に置いたストーリーとなっています。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/f87832a0-a479-4285-b01e-68219aa3a456" />
 
 ---
@@ -11,11 +26,3 @@
 幾重にも交錯する思惑に、彼女たちの運命は揺れ動く  
 それでも「わたし」は、今、この瞬間を生きると誓った  
 失われた真実を取り戻し、全てを零へ還すために――――
-
----
-- Creator: Regen Radikaler
-- Released: 2017/08/11
-- DLsite: [Oscillatus 零 Episode 1, 2](https://www.dlsite.com/maniax/work/=/product_id/RJ206373/?medium=twitter&program=on_sale&source=workpost_sale&utm_medium=sns&utm_content=workpost_sale&utm_campaign=twitter)
-- BOOTH: [Regen Radikaler](https://regen-radikaler.booth.pm/)
-- HP: [Oscillatus 零](https://regenradikaler.wixsite.com/oscillatus-zero)
-- Twitter: [Regen Radikaler](https://twitter.com/cos6official)

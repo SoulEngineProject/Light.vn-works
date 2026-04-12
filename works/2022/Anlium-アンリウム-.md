@@ -1,3 +1,22 @@
+---
+creator: TitleA+++/WtmMif
+released: 2022/10/15
+link_label: フリーゲーム夢現
+link_url: "https://freegame-mugen.jp/adventure/game_10585.html"
+extra_links:
+  - label: BOOTH
+    url: "https://wtmmif.booth.pm/items/4240228"
+  - label: firestorage
+    url: "https://fire.st/o0bpmwI"
+  - label: HP
+    url: "https://wtmmif.wixsite.com/anlium"
+  - label: Twitter
+    url: "https://twitter.com/kaiguti"
+  - label: "Ci-en"
+    url: "https://ci-en.net/creator/206"
+tagline: 「元」天使と天使、そして人間たちが織り成す、少し変わった物語。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4c1aa3f1-2e4e-4b6b-ad94-96da7410d844" />
 
 ---
@@ -16,13 +35,3 @@
 　作ってるだけで、直すことはしてないんだけど……）  
 と、そんなことも考えながら彼は――  
 ――これは、そんな出会いから動き出す、「元」天使と天使、そして人間たちの少し変わった物語。
-
----
-- Creator: TitleA+++/WtmMif
-- Released: 2022/10/15
-- フリーゲーム夢現: [Anlium-アンリウム-](https://freegame-mugen.jp/adventure/game_10585.html)
-- BOOTH: [【新装開店！】Anlium-アンリウム-](https://wtmmif.booth.pm/items/4240228)
-- firestorage: [Anlium本編ゲームデータ](https://fire.st/o0bpmwI)
-- HP: [Anlium/TitleA+++](https://wtmmif.wixsite.com/anlium)
-- Twitter: [kaiguti](https://twitter.com/kaiguti)
-- Ci-en: [kaiguti/WtmMif](https://ci-en.net/creator/206)

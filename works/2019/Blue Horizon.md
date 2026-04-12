@@ -1,3 +1,14 @@
+---
+creator: うたかたの唄
+released: 2019/03/29
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/19855"
+extra_links:
+  - label: HP
+    url: "http://utakata0uta.com"
+tagline: 姉か妹、救えるのは一人だけ。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/fed6140b-af45-49d5-81e2-c9ecbf543539" />
 
 ---
@@ -7,9 +18,3 @@
 すっかりと変わってしまった町と変わらない二人。  
 しかし全く変わらないということはなかった。  
 離れていた数年間で抱えるものは大きくなってしまい、いつしか大きな悩みになっていた……
-
----
-- Creator: うたかたの唄
-- Released: 2019/03/29
-- ふりーむ！: [Blue Horizon](https://www.freem.ne.jp/win/game/19855)
-- HP: [うたかたの唄](http://utakata0uta.com)

@@ -1,21 +1,24 @@
-// src/main.rs
 use axum::{
     routing::get,
     routing::get_service,
     Json,
     Router,
-    extract::Path as AxumPath,           // renamed to avoid conflict
+    extract::Path as AxumPath,
     response::{Html, IntoResponse},
     http::StatusCode,
 };
-use pulldown_cmark::{html, Parser, Event};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::path::{Path as FsPath, PathBuf};   // renamed Path → FsPath
+use std::path::{Path as FsPath, PathBuf};
 use tokio::fs;
 use tower_http::services::ServeDir;
 use walkdir::WalkDir;
+
+use lightvn_works::{
+    GameMeta, parse_frontmatter, extract_first_image, extract_all_images,
+    markdown_to_html, html_escape, strip_img_tags,
+};
 
 #[derive(Serialize, Clone)]
 struct Node {
@@ -25,30 +28,12 @@ struct Node {
     children: Option<Vec<Node>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thumbnail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    meta: Option<GameMeta>,
 }
 
 async fn get_tree() -> Json<Node> {
-    let root_dir = FsPath::new("works");           // ← use FsPath
-
-    println!("Current working directory: {:?}", std::env::current_dir().ok());
-    println!("Does 'works' exist?     {:?}", root_dir.exists());
-    println!("Is 'works' a directory? {:?}", root_dir.is_dir());
-
-    if root_dir.is_dir() {
-        match std::fs::read_dir(root_dir) {
-            Ok(mut entries) => {
-                println!("Entries in 'works/':");
-                while let Some(entry) = entries.next() {
-                    if let Ok(e) = entry {
-                        println!("  - {:?}", e.path().display());
-                    }
-                }
-            }
-            Err(e) => println!("Cannot read 'works/': {}", e),
-        }
-    } else {
-        println!("'works' is not a directory or cannot be accessed");
-    }
+    let root_dir = FsPath::new("works");
 
     let mut nodes: HashMap<String, Node> = HashMap::new();
 
@@ -59,17 +44,15 @@ async fn get_tree() -> Json<Node> {
     {
         let full_path = entry.path();
 
-        // Skip the root directory itself
         if full_path == root_dir {
             continue;
         }
 
-        // Reliable relative path (works on Windows & Unix)
         let rel_path = match full_path.strip_prefix(root_dir) {
             Ok(stripped) => {
                 let path_str = stripped
                     .to_string_lossy()
-                    .replace('\\', "/")           // normalize to forward slashes
+                    .replace('\\', "/")
                     .trim_matches('/')
                     .to_string();
 
@@ -90,17 +73,20 @@ async fn get_tree() -> Json<Node> {
         let is_dir = full_path.is_dir();
 
         let mut thumbnail = None;
+        let mut meta = None;
 
-        if !is_dir && full_path.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case("md")) {
+        if !is_dir
+            && full_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map_or(false, |e| e.eq_ignore_ascii_case("md"))
+        {
             if let Ok(content) = fs::read_to_string(full_path).await {
-                thumbnail = extract_first_image(&content);
+                let (parsed_meta, body) = parse_frontmatter(&content);
+                thumbnail = extract_first_image(body);
+                meta = Some(parsed_meta);
             }
         }
-
-        println!(
-            "Adding → path: \"{}\", name: \"{}\", is_dir: {}, thumbnail: {:?}",
-            rel_path, name, is_dir, thumbnail
-        );
 
         let node = Node {
             name,
@@ -108,18 +94,19 @@ async fn get_tree() -> Json<Node> {
             is_dir,
             children: if is_dir { Some(Vec::new()) } else { None },
             thumbnail,
+            meta,
         };
 
         nodes.insert(rel_path, node);
     }
 
-    // Build hierarchy
     let mut root = nodes.remove("/works").unwrap_or(Node {
         name: "works".to_string(),
         path: "/works".to_string(),
         is_dir: true,
         children: Some(Vec::new()),
         thumbnail: None,
+        meta: None,
     });
 
     let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
@@ -143,13 +130,17 @@ fn parent_path(path: &str) -> Option<String> {
     let path = path.trim_end_matches('/');
     let last_slash = path.rfind('/')?;
     if last_slash == 0 {
-        None  // root
+        None
     } else {
         Some(path[..last_slash].to_string())
     }
 }
 
-fn attach_children(node: &mut Node, all_nodes: &HashMap<String, Node>, by_parent: &HashMap<String, Vec<String>>) {
+fn attach_children(
+    node: &mut Node,
+    all_nodes: &HashMap<String, Node>,
+    by_parent: &HashMap<String, Vec<String>>,
+) {
     if let Some(child_paths) = by_parent.get(&node.path) {
         let mut children = Vec::new();
         for child_path in child_paths {
@@ -159,42 +150,22 @@ fn attach_children(node: &mut Node, all_nodes: &HashMap<String, Node>, by_parent
                 children.push(child_clone);
             }
         }
-        node.children = if children.is_empty() { None } else { Some(children) };
+        node.children = if children.is_empty() {
+            None
+        } else {
+            Some(children)
+        };
     }
 }
 
-fn extract_first_image(md: &str) -> Option<String> {
-    let parser = Parser::new(md);
-
-    for event in parser {
-        if let Event::Html(html) = event {
-            let html_str = html.to_string();
-
-            // Look for src="https://github.com/user-attachments/...
-            if let Some(src_start) = html_str.find("src=\"https://github.com/user-attachments/") {
-                let rest = &html_str[src_start + 5..]; // skip src="
-                if let Some(end_quote) = rest.find('\"') {
-                    let src_value = &rest[..end_quote];
-                    // Quick sanity check: make sure it's still a github assets URL
-                    if src_value.starts_with("https://github.com/user-attachments/") {
-                        return Some(src_value.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) -> impl IntoResponse {
-
-    // Only check very basic length + no obvious traversal attempts
+async fn render_markdown(
+    AxumPath((year, title)): AxumPath<(String, String)>,
+) -> impl IntoResponse {
     if year.len() > 20
         || title.len() > 300
         || year.contains("..")
         || title.contains("..")
-        || year.contains('/') 
+        || year.contains('/')
         || title.contains('/')
     {
         return (
@@ -203,7 +174,9 @@ async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) ->
         );
     }
 
-    let file_path = PathBuf::from("works").join(&year).join(format!("{}.md", title));
+    let file_path = PathBuf::from("works")
+        .join(&year)
+        .join(format!("{}.md", title));
 
     if !file_path.starts_with("works/") || !file_path.is_file() {
         return not_found_html(&year, &title);
@@ -214,67 +187,251 @@ async fn render_markdown(AxumPath((year, title)): AxumPath<(String, String)>) ->
         Err(_) => return not_found_html(&year, &title),
     };
 
-    let md_html = markdown_to_html(&content);
+    let (meta, body) = parse_frontmatter(&content);
+    let images = extract_all_images(body);
+    let md_html = markdown_to_html(body);
 
-    let title_display = title
-        .replace('-', " ")
-        .replace('_', " ")
-        .split_whitespace()
-        .map(|w| {
-            let mut chars = w.chars();
-            chars.next().map(|c| c.to_uppercase().collect::<String>()).unwrap_or_default() + chars.as_str()
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
+    let title_display = title.clone();
+
+    let creator_html = meta
+        .creator
+        .as_deref()
+        .filter(|c| !c.is_empty())
+        .map(|c| format!(r#"<span class="meta-item">by {}</span>"#, html_escape(c)))
+        .unwrap_or_default();
+
+    let released_html = meta
+        .released
+        .as_deref()
+        .filter(|r| !r.is_empty())
+        .map(|r| format!(r#"<span class="meta-item">{}</span>"#, html_escape(r)))
+        .unwrap_or_default();
+
+    let mut link_html = String::new();
+    if let (Some(label), Some(url)) = (meta.link_label.as_deref(), meta.link_url.as_deref()) {
+        if !url.is_empty() {
+            link_html = format!(
+                r#"<a href="{}" class="play-btn" target="_blank" rel="noopener">{} ↗</a>"#,
+                html_escape(url),
+                html_escape(if label.is_empty() { "Play" } else { label })
+            );
+        }
+    }
+
+    let mut extra_links_html = String::new();
+    if let Some(extras) = &meta.extra_links {
+        for link in extras {
+            if !link.url.is_empty() {
+                extra_links_html += &format!(
+                    r#"<a href="{}" class="extra-link" target="_blank" rel="noopener">{} ↗</a>"#,
+                    html_escape(&link.url),
+                    html_escape(&link.label)
+                );
+            }
+        }
+    }
+
+    let hero_html = images.first().map(|url| {
+        format!(
+            r#"<div class="hero-image"><img src="{}" alt="{}" /></div>"#,
+            html_escape(url),
+            html_escape(&title_display)
+        )
+    }).unwrap_or_default();
+
+    let gallery_html = if images.len() > 1 {
+        let imgs: String = images[1..]
+            .iter()
+            .map(|url| {
+                format!(
+                    r#"<img src="{}" alt="Screenshot" loading="lazy" />"#,
+                    html_escape(url)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(r#"<div class="gallery">{}</div>"#, imgs)
+    } else {
+        String::new()
+    };
+
+    let synopsis_html = strip_img_tags(&md_html);
 
     let page = format!(
-        r#"
-        <!DOCTYPE html>
-        <html lang="en" class="dark">
-        <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-            <title>{title_display} - {year}</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-            <style>
-                :root {{
-                    --bg: #0a0a0f;
-                    --text: #e0e0ff;
-                    --text-muted: #a0a0cc;
-                    --accent: #6366f1;
-                }}
-                body {{
-                    font-family: 'Inter', system-ui, sans-serif;
-                    background: var(--bg);
-                    color: var(--text);
-                    min-height: 100vh;
-                    padding: 3rem 1rem;
-                    line-height: 1.7;
-                    max-width: 900px;
-                    margin: 0 auto;
-                }}
-                h1, h2, h3 {{ color: #fff; }}
-                a {{ color: var(--accent); }}
-                pre {{ background: #111119; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }}
-                code {{ background: #111119; padding: 0.2em 0.4em; border-radius: 0.3rem; }}
-                .back {{ display: inline-block; margin: 1.5rem 0; color: var(--text-muted); text-decoration: none; }}
-                .back:hover {{ color: var(--accent); }}
-                img {{ max-width: 100%; height: auto; border-radius: 0.5rem; }}
-            </style>
-        </head>
-        <body>
-            <a href="/" class="back">← Back to archive</a>
-            <h1>{title_display}</h1>
-            <p style="color: var(--text-muted);">From {year}</p>
-            <div>{md_html}</div>
-        </body>
-        </html>
-        "#,
-        title_display = title_display,
-        year = year,
-        md_html = md_html
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{title_display} ({year}) - Light.vn Works</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {{
+            --bg: #0d0b12;
+            --surface: #16131e;
+            --text: #ede9fe;
+            --text-muted: #a8a2c6;
+            --accent: #c084fc;
+            --accent-hover: #d8b4fe;
+            --border: #2a2440;
+        }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.7;
+        }}
+        .breadcrumb {{
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 1.5rem 1.5rem 0;
+            font-size: 0.9rem;
+        }}
+        .breadcrumb a {{
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }}
+        .breadcrumb a:hover {{ color: var(--accent); }}
+        .breadcrumb span {{ color: var(--text-muted); margin: 0 0.4rem; }}
+
+        .hero-image {{
+            max-width: 960px;
+            margin: 1.5rem auto 0;
+            padding: 0 1.5rem;
+        }}
+        .hero-image img {{
+            width: 100%;
+            max-height: 420px;
+            object-fit: cover;
+            border-radius: 1rem;
+            display: block;
+        }}
+
+        .content {{
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }}
+        .content h1 {{
+            font-size: 2rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }}
+        .meta-row {{
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }}
+        .meta-item {{
+            color: var(--text-muted);
+        }}
+        .play-btn {{
+            display: inline-block;
+            padding: 0.5rem 1.25rem;
+            background: var(--accent);
+            color: #0d0b12;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.15s;
+        }}
+        .play-btn:hover {{
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }}
+        .extra-link {{
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.85rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            transition: border-color 0.2s, color 0.2s;
+        }}
+        .extra-link:hover {{
+            border-color: var(--accent);
+            color: var(--accent);
+        }}
+
+        .synopsis {{
+            font-size: 1.05rem;
+            line-height: 1.8;
+            margin-bottom: 2rem;
+        }}
+        .synopsis p {{ margin-bottom: 1em; }}
+        .synopsis hr {{
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1.5rem 0;
+        }}
+        .synopsis a {{ color: var(--accent); }}
+        .synopsis img {{ display: none; }}
+
+        .gallery {{
+            display: flex;
+            gap: 0.75rem;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+            margin-top: 1rem;
+        }}
+        .gallery img {{
+            height: 180px;
+            border-radius: 0.75rem;
+            object-fit: cover;
+            flex-shrink: 0;
+        }}
+
+        @media (max-width: 640px) {{
+            .content h1 {{ font-size: 1.5rem; }}
+            .hero-image img {{ max-height: 240px; }}
+            .gallery img {{ height: 120px; }}
+        }}
+    </style>
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="/">Works</a>
+        <span>/</span>
+        <a href="/">{year}</a>
+        <span>/</span>
+        {title_display}
+    </nav>
+    {hero_html}
+    <div class="content">
+        <h1>{title_display}</h1>
+        <div class="meta-row">
+            {creator_html}
+            {released_html}
+            {link_html}
+            {extra_links_html}
+        </div>
+        <div class="synopsis">{synopsis_html}</div>
+        {gallery_html}
+    </div>
+</body>
+</html>"##,
+        title_display = html_escape(&title_display),
+        year = html_escape(&year),
+        hero_html = hero_html,
+        creator_html = creator_html,
+        released_html = released_html,
+        link_html = link_html,
+        extra_links_html = extra_links_html,
+        synopsis_html = synopsis_html,
+        gallery_html = gallery_html,
     );
 
     (StatusCode::OK, Html(page))
@@ -284,36 +441,28 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     (
         StatusCode::NOT_FOUND,
         Html(format!(
-            r#"
-            <!DOCTYPE html>
-            <html lang="en" class="dark">
-            <head><title>404 Not Found</title>
-            <style>body {{ background:#0a0a0f; color:#e0e0ff; font-family:sans-serif; padding:4rem; text-align:center; }}</style>
-            </head>
-            <body>
-                <h1>404 - Not Found</h1>
-                <p>Could not find: <code>{year}/{title}.md</code></p>
-                <p><a href="/" style="color:#6366f1;">← Back to archive</a></p>
-            </body>
-            </html>
-            "#,
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head><title>404 Not Found</title>
+<style>body {{ background:#0d0b12; color:#ede9fe; font-family:sans-serif; padding:4rem; text-align:center; }}</style>
+</head>
+<body>
+    <h1>404 - Not Found</h1>
+    <p>Could not find: <code>{year}/{title}.md</code></p>
+    <p><a href="/" style="color:#c084fc;">Back to archive</a></p>
+</body>
+</html>"#,
             year = year,
             title = title
         )),
     )
 }
 
-fn markdown_to_html(md_content: &str) -> String {
-    let mut html_output = String::new();
-    let parser = Parser::new(md_content);
-    html::push_html(&mut html_output, parser);
-    html_output
-}
-
 #[tokio::main]
 async fn main() {
-    let serve_dir = ServeDir::new("public")
-        .not_found_service(ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))));
+    let serve_dir = ServeDir::new("public").not_found_service(
+        ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
+    );
 
     let app = Router::new()
         .route("/api/tree", get(get_tree))
@@ -322,8 +471,7 @@ async fn main() {
         .fallback_service(serve_dir);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], get_port()));
-
-    println!("→ Listening on http://{}", addr);
+    println!("Listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

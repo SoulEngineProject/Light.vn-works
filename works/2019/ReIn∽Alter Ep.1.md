@@ -1,3 +1,14 @@
+---
+creator: Hollow Perception
+released: 2019/04/03
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/19927"
+extra_links:
+  - label: Twitter
+    url: "https://twitter.com/probabilitysky"
+tagline: 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、第一話。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1fcc9ea7-59dc-40e3-88f6-32d53e2bdaba" />
 
 ---
@@ -9,9 +20,3 @@
 ある日、同級生の少女が配信している「魔族」に関する動画を観たことで、「仮想の存在である『魔族』の実在性を確かめたい」という決心を抱き、それをきっかけに、彼の日常<セカイ>は破滅を迎えることになる。  
 『人は生まれた瞬間に、孤独になる。そうして、死ぬ時にもう一度、全てを喪って独りになるの』  
 ――それは、孤独と絶望の中で生きた少女と少年の物語の始まり。
-
----
-- Creator: Hollow Perception
-- Released: 2019/04/03
-- ふりーむ！: [ReIn∽Alter Ep.1](https://www.freem.ne.jp/win/game/19927)
-- Twitter: [anubis@Hollow_Perception](https://twitter.com/probabilitysky)

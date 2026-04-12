@@ -1,3 +1,16 @@
+---
+creator: Regen Radikaler
+released: 2018/08/10
+link_label: BOOTH
+link_url: "https://regen-radikaler.booth.pm/"
+extra_links:
+  - label: HP
+    url: "https://regenradikaler.wixsite.com/oscillatus-zero"
+  - label: Twitter
+    url: "https://twitter.com/cos6official"
+tagline: 新本格シネマADV《Oscillatus 零》の後編、EP3;4を収録しています。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e28d23b0-fca6-4d8a-8c7d-725c877c2497" />
 
 ---
@@ -11,10 +24,3 @@
 幾重にも交錯する思惑に、彼女たちの運命は揺れ動く  
 それでも「わたし」は、今、この瞬間を生きると誓った  
 失われた真実を取り戻し、全てを零へ還すために――――
-
----
-- Creator: Regen Radikaler
-- Released: 2018/08/10
-- BOOTH: [Regen Radikaler](https://regen-radikaler.booth.pm/)
-- HP: [Oscillatus 零](https://regenradikaler.wixsite.com/oscillatus-zero)
-- Twitter: [Regen Radikaler](https://twitter.com/cos6official)

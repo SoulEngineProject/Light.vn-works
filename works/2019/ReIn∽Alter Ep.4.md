@@ -1,3 +1,14 @@
+---
+creator: Hollow Perception
+released: 2019/09/27
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/21158"
+extra_links:
+  - label: Twitter
+    url: "https://twitter.com/probabilitysky"
+tagline: 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、最終話。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4a687b77-9888-498f-bd18-0707e14f0955" />
 
 ---
@@ -10,9 +21,3 @@
 彼女こそが、この世界の歴史に終止符を打つ存在「魔王」であった。  
 『せめて誰かが、ひとりぼっちの君を見つけてくれますように』  
 壮大なスケールで描かれる、孤独と愛の物語、完結編。
-
----
-- Creator: Hollow Perception
-- Released: 2019/09/27
-- ふりーむ！: [ReIn∽Alter Ep.4](https://www.freem.ne.jp/win/game/21158)
-- Twitter: [anubis@Hollow_Perception](https://twitter.com/probabilitysky)

@@ -1,3 +1,18 @@
+---
+creator: 渦女屋本舗
+released: 2018/07/15
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/18063"
+extra_links:
+  - label: BOOTH
+    url: "https://uzumeya.booth.pm/items/926627"
+  - label: HP
+    url: "http://490xx.sakura.ne.jp/"
+  - label: Twitter
+    url: "https://twitter.com/Uzumeyahonpo"
+tagline: 奇跡って何だろう短編ADV リカルドは立派な庭師になることを夢見ているただの少年だ。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4ed58f58-3928-4d2d-a69f-49bce64acf60" />
 
 ---
@@ -9,11 +24,3 @@
 楽しかった使用人時代とは一変、どうにもつまらない「遊び相手」という立場は彼の生活を少しずつ窮屈なものにしていった。  
 得たものは何か、失ったものは何だったのか。  
 「友達」と「約束」をめぐり、日常は不毛な奇跡に侵食されてゆく。
-
----
-- Creator: 渦女屋本舗
-- Released: 2018/07/15
-- ふりーむ！: [Lost Friends 2](https://www.freem.ne.jp/win/game/18063)
-- BOOTH: [Lost Friends 2](https://uzumeya.booth.pm/items/926627)
-- HP: [UZUMEYA](http://490xx.sakura.ne.jp/)
-- Twitter: [渦女屋本舗](https://twitter.com/Uzumeyahonpo)

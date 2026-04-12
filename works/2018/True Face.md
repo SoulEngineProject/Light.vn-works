@@ -1,3 +1,14 @@
+---
+creator: またたび日和
+released: 2018/12/30
+link_label: DLSite
+link_url: "https://www.dlsite.com/maniax/work/=/product_id/RJ242377.html"
+extra_links:
+  - label: Twitter
+    url: "https://twitter.com/matatabibiyori"
+tagline: 全国有数のお嬢様が集まる天谷女学院高校。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/0d1f8ce4-9f8b-4851-9886-15f488fc3d85" />
 
 ---
@@ -7,9 +18,3 @@
 香奈を怪しむ水希であったが、相互監視を理由に二人はルームシェアをすることに。  
 陰謀巡る選挙にて、二人の行きつく先は……。  
 『大切な人にだけ見せる少女たちの素顔の物語』
-
----
-- Creator: またたび日和
-- Released: 2018/12/30
-- DLSite: [True Face](https://www.dlsite.com/maniax/work/=/product_id/RJ242377.html)
-- Twitter: [またたび日和](https://twitter.com/matatabibiyori)

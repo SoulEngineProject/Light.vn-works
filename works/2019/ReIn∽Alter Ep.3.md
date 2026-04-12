@@ -1,3 +1,14 @@
+---
+creator: Hollow Perception
+released: 2019/07/17
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/20618"
+extra_links:
+  - label: Twitter
+    url: "https://twitter.com/probabilitysky"
+tagline: 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、第三話。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/5f4d1130-2627-4361-9330-729ab2d6eee2" />
 
 ---
@@ -11,9 +22,3 @@
 そしてその日、零は、自身と「少女」の正体と、孤独と悲しみに満ちた因果を知ることになるのであった。  
 『この物語にハッピーエンドとして付けるべき「結論(ジンテーゼ)」は、きっと、君の救済だ』  
 ――それは、決意と再会、すれ違いと和解の物語。
-
----
-- Creator: Hollow Perception
-- Released: 2019/07/17
-- ふりーむ！: [ReIn∽Alter Ep.3](https://www.freem.ne.jp/win/game/20618)
-- Twitter: [anubis@Hollow_Perception](https://twitter.com/probabilitysky)
