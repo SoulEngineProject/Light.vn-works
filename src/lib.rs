@@ -15,6 +15,8 @@ pub struct GameMeta {
     pub tagline: Option<String>,
     #[serde(default)]
     pub extra_links: Option<Vec<ExtraLink>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]

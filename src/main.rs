@@ -218,6 +218,21 @@ async fn render_markdown(
         }
     }
 
+    let tags_html: String = meta
+        .tags
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|tag| {
+            let class = if tag == "r18" { "tag-badge tag-r18" } else { "tag-badge tag-default" };
+            format!(
+                r#"<span class="{}">{}</span>"#,
+                class,
+                html_escape(&tag.to_uppercase())
+            )
+        })
+        .collect();
+
     let mut extra_links_html = String::new();
     if let Some(extras) = &meta.extra_links {
         for link in extras {
@@ -257,182 +272,17 @@ async fn render_markdown(
 
     let synopsis_html = strip_img_tags(&md_html);
 
-    let page = format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>{title_display} ({year}) - Light.vn Works</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {{
-            --bg: #0d0b12;
-            --surface: #16131e;
-            --text: #ede9fe;
-            --text-muted: #a8a2c6;
-            --accent: #c084fc;
-            --accent-hover: #d8b4fe;
-            --border: #2a2440;
-        }}
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            line-height: 1.7;
-        }}
-        .breadcrumb {{
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 1.5rem 1.5rem 0;
-            font-size: 0.9rem;
-        }}
-        .breadcrumb a {{
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: color 0.2s;
-        }}
-        .breadcrumb a:hover {{ color: var(--accent); }}
-        .breadcrumb span {{ color: var(--text-muted); margin: 0 0.4rem; }}
-
-        .hero-image {{
-            max-width: 960px;
-            margin: 1.5rem auto 0;
-            padding: 0 1.5rem;
-        }}
-        .hero-image img {{
-            width: 100%;
-            max-height: 420px;
-            object-fit: cover;
-            border-radius: 1rem;
-            display: block;
-        }}
-
-        .content {{
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem 4rem;
-        }}
-        .content h1 {{
-            font-size: 2rem;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 0.75rem;
-            letter-spacing: -0.02em;
-        }}
-        .meta-row {{
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-            font-size: 0.95rem;
-        }}
-        .meta-item {{
-            color: var(--text-muted);
-        }}
-        .play-btn {{
-            display: inline-block;
-            padding: 0.5rem 1.25rem;
-            background: var(--accent);
-            color: #0d0b12;
-            font-weight: 600;
-            font-size: 0.9rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            transition: background 0.2s, transform 0.15s;
-        }}
-        .play-btn:hover {{
-            background: var(--accent-hover);
-            transform: translateY(-1px);
-        }}
-        .extra-link {{
-            display: inline-block;
-            padding: 0.4rem 1rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text);
-            font-size: 0.85rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            transition: border-color 0.2s, color 0.2s;
-        }}
-        .extra-link:hover {{
-            border-color: var(--accent);
-            color: var(--accent);
-        }}
-
-        .synopsis {{
-            font-size: 1.05rem;
-            line-height: 1.8;
-            margin-bottom: 2rem;
-        }}
-        .synopsis p {{ margin-bottom: 1em; }}
-        .synopsis hr {{
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 1.5rem 0;
-        }}
-        .synopsis a {{ color: var(--accent); }}
-        .synopsis img {{ display: none; }}
-
-        .gallery {{
-            display: flex;
-            gap: 0.75rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
-            margin-top: 1rem;
-        }}
-        .gallery img {{
-            height: 180px;
-            border-radius: 0.75rem;
-            object-fit: cover;
-            flex-shrink: 0;
-        }}
-
-        @media (max-width: 640px) {{
-            .content h1 {{ font-size: 1.5rem; }}
-            .hero-image img {{ max-height: 240px; }}
-            .gallery img {{ height: 120px; }}
-        }}
-    </style>
-</head>
-<body>
-    <nav class="breadcrumb">
-        <a href="/">Works</a>
-        <span>/</span>
-        <a href="/">{year}</a>
-        <span>/</span>
-        {title_display}
-    </nav>
-    {hero_html}
-    <div class="content">
-        <h1>{title_display}</h1>
-        <div class="meta-row">
-            {creator_html}
-            {released_html}
-            {link_html}
-            {extra_links_html}
-        </div>
-        <div class="synopsis">{synopsis_html}</div>
-        {gallery_html}
-    </div>
-</body>
-</html>"##,
-        title_display = html_escape(&title_display),
-        year = html_escape(&year),
-        hero_html = hero_html,
-        creator_html = creator_html,
-        released_html = released_html,
-        link_html = link_html,
-        extra_links_html = extra_links_html,
-        synopsis_html = synopsis_html,
-        gallery_html = gallery_html,
-    );
+    let page = include_str!("../public/game.html")
+        .replace("{{title_display}}", &html_escape(&title_display))
+        .replace("{{year}}", &html_escape(&year))
+        .replace("{{hero_html}}", &hero_html)
+        .replace("{{tags_html}}", &tags_html)
+        .replace("{{creator_html}}", &creator_html)
+        .replace("{{released_html}}", &released_html)
+        .replace("{{link_html}}", &link_html)
+        .replace("{{extra_links_html}}", &extra_links_html)
+        .replace("{{synopsis_html}}", &synopsis_html)
+        .replace("{{gallery_html}}", &gallery_html);
 
     (StatusCode::OK, Html(page))
 }

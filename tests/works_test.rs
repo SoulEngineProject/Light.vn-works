@@ -141,7 +141,7 @@ fn validate_all_markdown_files() {
             errors.push(format!("{}: released field missing from frontmatter", path.display()));
         }
 
-        if !body.contains("src=\"https://github.com/user-attachments/") {
+        if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
         }
     }

@@ -1,0 +1,25 @@
+:root {
+  --bg: #0d0b12;
+  --surface: #16131e;
+  --card: #1a1726;
+  --card-hover: #221e30;
+  --text: #ede9fe;
+  --text-muted: #a8a2c6;
+  --accent: #c084fc;
+  --accent-glow: rgba(192, 132, 252, 0.2);
+  --accent-hover: #d8b4fe;
+  --border: #2a2440;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--accent-hover); }

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{{title_display}} ({{year}}) - Light.vn Works</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/game.css">
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="/">Works</a>
+        <span>/</span>
+        <a href="/">{{year}}</a>
+        <span>/</span>
+        {{title_display}}
+    </nav>
+    {{hero_html}}
+    <div class="content">
+        <h1>{{title_display}}</h1>
+        <div class="meta-row">
+            {{tags_html}}
+            {{creator_html}}
+            {{released_html}}
+            {{link_html}}
+            {{extra_links_html}}
+        </div>
+        <div class="synopsis">{{synopsis_html}}</div>
+        {{gallery_html}}
+    </div>
+</body>
+</html>
