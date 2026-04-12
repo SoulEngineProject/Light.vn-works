@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, strip_img_tags, html_escape};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -72,6 +72,62 @@ Synopsis."#;
         img.as_deref(),
         Some("https://github.com/user-attachments/assets/abc123")
     );
+}
+
+#[test]
+fn frontmatter_has_og_fields() {
+    // given: a complete markdown file with frontmatter, images, and synopsis
+    let input = r#"---
+creator: Test
+released: 2024/01/01
+link_label: itch.io
+link_url: "https://example.com"
+tagline: "A short description."
+---
+
+<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/abc123" />
+<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/def456" />
+
+---
+Full synopsis here."#;
+
+    // when: parsing frontmatter and extracting images
+    let (meta, body) = parse_frontmatter(input);
+    let images = extract_all_images(body);
+
+    // then: tagline and og_image data are available for OG tags
+    assert_eq!(meta.tagline.as_deref(), Some("A short description."));
+    assert!(!images.is_empty());
+    assert_eq!(images[0], "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(images.len(), 2);
+}
+
+#[test]
+fn frontmatter_missing_og_fields_defaults_gracefully() {
+    // given: minimal frontmatter with no tagline
+    let input = "---\ncreator: Test\nreleased: 2024/01/01\n---\n\nBody.";
+
+    // when: parsing frontmatter
+    let (meta, body) = parse_frontmatter(input);
+    let images = extract_all_images(body);
+
+    // then: tagline is None and images is empty — OG tags will be empty strings
+    assert!(meta.tagline.is_none());
+    assert!(images.is_empty());
+}
+
+#[test]
+fn search_by_tag_data_available() {
+    // given: frontmatter with tags
+    let input = "---\ncreator: Test\nreleased: 2024/01/01\ntags: [r18]\n---\n\nBody.";
+
+    // when: parsing frontmatter
+    let (meta, _body) = parse_frontmatter(input);
+
+    // then: tags are parsed and searchable
+    let tags = meta.tags.unwrap();
+    assert_eq!(tags.len(), 1);
+    assert!(tags.contains(&"r18".to_string()));
 }
 
 #[test]
@@ -154,4 +210,89 @@ fn validate_all_markdown_files() {
             errors.join("\n")
         );
     }
+}
+
+#[test]
+fn creator_index_groups_by_creator() {
+    // given: 3 games by 2 different creators
+    let entries = vec![
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None),
+        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None),
+    ];
+
+    // when: building the creator index
+    let index = build_creator_index(&entries);
+
+    // then: 2 creators, Alice has 2 games, Bob has 1
+    assert_eq!(index.len(), 2);
+    assert_eq!(index.get("alice").unwrap().len(), 2);
+    assert_eq!(index.get("bob").unwrap().len(), 1);
+}
+
+#[test]
+fn creator_index_excludes_current_game() {
+    // given: creator with 3 games
+    let entries = vec![
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None),
+        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None),
+    ];
+    let index = build_creator_index(&entries);
+
+    // when: getting related games for Game A
+    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4);
+
+    // then: returns 1 creator group with 2 games, not including Game A
+    assert_eq!(related.len(), 1);
+    assert_eq!(related[0].0, "Alice");
+    assert_eq!(related[0].1.len(), 2);
+    assert!(related[0].1.iter().all(|g| g.path != "/works/2024/Game A"));
+}
+
+#[test]
+fn creator_index_single_game_creator() {
+    // given: creator with only 1 game
+    let entries = vec![
+        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None),
+    ];
+    let index = build_creator_index(&entries);
+
+    // when: getting related games
+    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4);
+
+    // then: no related games
+    assert!(related.is_empty());
+}
+
+#[test]
+fn split_creators_comma_separated() {
+    // given: a creator field with multiple names
+    let field = "Snow Ground, ユキハラ創作企画";
+
+    // when: splitting creators
+    let names = split_creators(field);
+
+    // then: both names are extracted and trimmed
+    assert_eq!(names.len(), 2);
+    assert_eq!(names[0], "Snow Ground");
+    assert_eq!(names[1], "ユキハラ創作企画");
+}
+
+#[test]
+fn creator_index_multi_creator_game() {
+    // given: a game with 2 creators, and another game by one of them
+    let entries = vec![
+        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None),
+        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None),
+    ];
+    let index = build_creator_index(&entries);
+
+    // when: getting related games for the collab game
+    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4);
+
+    // then: Bob's section shows Solo Game
+    assert_eq!(related.len(), 1);
+    assert_eq!(related[0].0, "Bob");
+    assert_eq!(related[0].1[0].title, "Solo Game");
 }

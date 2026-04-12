@@ -8,17 +8,24 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="/lvn_icon.png">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/home.css">
+  <meta property="og:title" content="Light.vn Works" />
+  <meta property="og:description" content="Games made with Light.vn" />
+  <meta property="og:image" content="/lvn_icon.png" />
+  <meta property="og:type" content="website" />
 </head>
 <body>
   <div class="container">
     <header>
-      <h1><a href="https://lightvn.net" target="_blank" rel="noopener" style="text-decoration:none;-webkit-text-fill-color:inherit;">Light.vn</a> Works</h1>
+      <h1><a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" style="text-decoration:none;-webkit-text-fill-color:inherit;">Light.vn</a> Works</h1>
       <p class="subtitle">Managed By: <span lang="ja">&#38634;&#21407;&#12383;&#12363;&#12375;</span> (Lightvn Japan Rep.)</p>
+      <p class="subtitle">Your visual novel engine. <span id="game-count"></span> games and counting.</p>
+      <a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" class="cta-btn">Get Light.vn</a>
     </header>
 
-    <p class="contribute">Want to add your game? <a href="https://github.com/SoulEngineProject/Light.vn-works" target="_blank" rel="noopener">Open a pull request</a></p>
+    <div id="ribbon" class="ribbon"></div>
 
     <div class="search-wrap">
       <span class="search-icon">&#x1F50D;</span>
@@ -26,10 +33,11 @@
       <label class="r18-toggle"><input type="checkbox" id="hide-r18"> Hide R18</label>
     </div>
 
+    <p class="contribute">Want to add your game? <a href="https://github.com/SoulEngineProject/Light.vn-works" target="_blank" rel="noopener">Open a pull request</a></p>
+
     <div id="tree"></div>
   </div>
 
-  <footer></footer>
 
   <script src="/home.js"></script>
 </body>

@@ -1,5 +1,6 @@
 use pulldown_cmark::{html, Parser, Event};
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct GameMeta {
@@ -113,6 +114,87 @@ pub fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[derive(Clone, Debug)]
+pub struct CreatorGame {
+    pub title: String,
+    pub path: String,
+    pub thumbnail: Option<String>,
+}
+
+/// Split a creator field into individual creator names.
+pub fn split_creators(creator: &str) -> Vec<String> {
+    creator
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Build an index of creator (lowercased) → list of their games.
+/// Creators with commas are split into separate entries.
+pub fn build_creator_index(
+    entries: &[(String, String, String, Option<String>)], // (creator, title, path, thumbnail)
+) -> HashMap<String, Vec<CreatorGame>> {
+    let mut index: HashMap<String, Vec<CreatorGame>> = HashMap::new();
+
+    for (creator, title, path, thumbnail) in entries {
+        if creator.is_empty() {
+            continue;
+        }
+
+        let game = CreatorGame {
+            title: title.clone(),
+            path: path.clone(),
+            thumbnail: thumbnail.clone(),
+        };
+
+        for name in split_creators(creator) {
+            index
+                .entry(name.to_lowercase())
+                .or_default()
+                .push(game.clone());
+        }
+    }
+
+    index
+}
+
+/// Get related games by the same creator(s), excluding the current game.
+/// Returns a list of (creator_name, games) pairs for each creator that has other games.
+pub fn get_related_games_by_creator<'a>(
+    index: &'a HashMap<String, Vec<CreatorGame>>,
+    creator_field: &str,
+    current_path: &str,
+    limit: usize,
+) -> Vec<(String, Vec<&'a CreatorGame>)> {
+    if creator_field.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut seen_paths = std::collections::HashSet::new();
+    seen_paths.insert(current_path.to_string());
+
+    for name in split_creators(creator_field) {
+        if let Some(games) = index.get(&name.to_lowercase()) {
+            let related: Vec<&CreatorGame> = games
+                .iter()
+                .filter(|g| !seen_paths.contains(&g.path))
+                .take(limit)
+                .collect();
+
+            if !related.is_empty() {
+                for g in &related {
+                    seen_paths.insert(g.path.clone());
+                }
+                result.push((name, related));
+            }
+        }
+    }
+
+    result
 }
 
 pub fn strip_img_tags(input: &str) -> String {

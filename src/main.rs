@@ -16,9 +16,16 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use lightvn_works::{
-    GameMeta, parse_frontmatter, extract_first_image, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags,
+    GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator,
 };
+use std::sync::Arc;
+use axum::extract::State;
+
+#[derive(Clone)]
+struct AppState {
+    creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+}
 
 #[derive(Serialize, Clone)]
 struct Node {
@@ -159,6 +166,7 @@ fn attach_children(
 }
 
 async fn render_markdown(
+    State(state): State<AppState>,
     AxumPath((year, title)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
     if year.len() > 20
@@ -272,9 +280,46 @@ async fn render_markdown(
 
     let synopsis_html = strip_img_tags(&md_html);
 
+    let tagline = meta.tagline.as_deref().unwrap_or("");
+    let og_image = images.first().map(|s| s.as_str()).unwrap_or("");
+
+    let current_path = format!("/works/{}/{}", &year, &title);
+    let creator_field = meta.creator.as_deref().unwrap_or("");
+    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, 4);
+    let more_from_creator: String = related_by_creator
+        .iter()
+        .map(|(name, games)| {
+            let cards: String = games
+                .iter()
+                .map(|g| {
+                    let thumb = g.thumbnail.as_deref().map(|url| {
+                        format!(
+                            r#"<img src="{}" alt="{}" loading="lazy" />"#,
+                            html_escape(url),
+                            html_escape(&g.title)
+                        )
+                    }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
+                    format!(
+                        r#"<a href="{}" class="more-creator-card">{}<span>{}</span></a>"#,
+                        html_escape(&g.path),
+                        thumb,
+                        html_escape(&g.title)
+                    )
+                })
+                .collect();
+            format!(
+                r#"<div class="more-creator"><h2>More from {}</h2><div class="more-creator-grid">{}</div></div>"#,
+                html_escape(name),
+                cards
+            )
+        })
+        .collect();
+
     let page = include_str!("../public/game.html")
         .replace("{{title_display}}", &html_escape(&title_display))
         .replace("{{year}}", &html_escape(&year))
+        .replace("{{tagline}}", &html_escape(tagline))
+        .replace("{{og_image}}", &html_escape(og_image))
         .replace("{{hero_html}}", &hero_html)
         .replace("{{tags_html}}", &tags_html)
         .replace("{{creator_html}}", &creator_html)
@@ -282,7 +327,8 @@ async fn render_markdown(
         .replace("{{link_html}}", &link_html)
         .replace("{{extra_links_html}}", &extra_links_html)
         .replace("{{synopsis_html}}", &synopsis_html)
-        .replace("{{gallery_html}}", &gallery_html);
+        .replace("{{gallery_html}}", &gallery_html)
+        .replace("{{more_from_creator}}", &more_from_creator);
 
     (StatusCode::OK, Html(page))
 }
@@ -308,8 +354,53 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
+fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
+    let root_dir = FsPath::new("works");
+    let mut entries = Vec::new();
+
+    for entry in WalkDir::new(root_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let (meta, body) = parse_frontmatter(&content);
+        let creator = meta.creator.unwrap_or_default();
+        let thumbnail = extract_first_image(body);
+
+        let rel_path = path
+            .strip_prefix(root_dir)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
+        let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
+
+        entries.push((creator, title, link_path, thumbnail));
+    }
+
+    build_creator_index(&entries)
+}
+
 #[tokio::main]
 async fn main() {
+    let state = AppState {
+        creator_index: Arc::new(build_startup_index()),
+    };
+
     let serve_dir = ServeDir::new("public").not_found_service(
         ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
     );
@@ -318,7 +409,8 @@ async fn main() {
         .route("/api/tree", get(get_tree))
         .route("/works/:year/:title", get(render_markdown))
         .nest_service("/raw", ServeDir::new("works"))
-        .fallback_service(serve_dir);
+        .fallback_service(serve_dir)
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], get_port()));
     println!("Listening on http://{}", addr);

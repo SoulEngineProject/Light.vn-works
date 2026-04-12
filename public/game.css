@@ -89,6 +89,28 @@
   color: var(--accent);
 }
 
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  border: none;
+  color: #0d0b12;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 2rem;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(192, 132, 252, 0.3);
+}
+
+.share-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(192, 132, 252, 0.4);
+}
+
 .tag-badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
@@ -125,18 +147,94 @@
 .synopsis img { display: none; }
 
 .gallery {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 0.75rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
   margin-top: 1rem;
 }
 
 .gallery img {
+  width: 100%;
   height: 180px;
   border-radius: 0.75rem;
   object-fit: cover;
-  flex-shrink: 0;
+}
+
+.more-creator {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.more-creator h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.more-creator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.more-creator-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.more-creator-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(192, 132, 252, 0.3);
+}
+
+.more-creator-card img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+}
+
+.more-creator-card span {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.more-creator-placeholder {
+  width: 100%;
+  height: 100px;
+  background: linear-gradient(135deg, var(--surface), var(--bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+
+.game-footer {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.game-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.game-footer a:hover {
+  color: var(--accent-hover);
 }
 
 @media (max-width: 640px) {
