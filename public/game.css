@@ -67,8 +67,10 @@
   transition: background 0.2s, transform 0.15s;
 }
 
+.play-btn:visited { color: #0d0b12; }
 .play-btn:hover {
-  background: var(--accent-hover);
+  background: #a855f7;
+  color: #0d0b12;
   transform: translateY(-1px);
 }
 
@@ -84,6 +86,7 @@
   transition: border-color 0.2s, color 0.2s;
 }
 
+.extra-link:visited { color: var(--text); }
 .extra-link:hover {
   border-color: var(--accent);
   color: var(--accent);
