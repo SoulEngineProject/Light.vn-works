@@ -216,9 +216,9 @@ fn validate_all_markdown_files() {
 fn creator_index_groups_by_creator() {
     // given: 3 games by 2 different creators
     let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string()),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string()),
-        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/03/01".to_string()),
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
+        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/03/01".to_string(), vec![]),
     ];
 
     // when: building the creator index
@@ -234,9 +234,9 @@ fn creator_index_groups_by_creator() {
 fn creator_index_excludes_current_game() {
     // given: creator with 3 games
     let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string()),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string()),
-        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/12/01".to_string()),
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/12/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 
@@ -254,7 +254,7 @@ fn creator_index_excludes_current_game() {
 fn creator_index_single_game_creator() {
     // given: creator with only 1 game
     let entries = vec![
-        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None, "2024/01/01".to_string()),
+        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None, "2024/01/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 
@@ -283,8 +283,8 @@ fn split_creators_comma_separated() {
 fn creator_index_multi_creator_game() {
     // given: a game with 2 creators, and another game by one of them
     let entries = vec![
-        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None, "2024/05/01".to_string()),
-        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None, "2024/02/01".to_string()),
+        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None, "2024/05/01".to_string(), vec![]),
+        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None, "2024/02/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 

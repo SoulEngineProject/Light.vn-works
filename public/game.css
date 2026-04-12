@@ -180,6 +180,7 @@
 }
 
 .more-creator-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
@@ -187,6 +188,13 @@
   text-decoration: none;
   color: var(--text);
   transition: transform 0.2s, border-color 0.2s;
+}
+
+.more-creator-card .card-badge {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  z-index: 1;
 }
 
 .more-creator-card:hover {

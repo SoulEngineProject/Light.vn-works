@@ -299,9 +299,15 @@ async fn render_markdown(
                             html_escape(&g.title)
                         )
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
+                    let badge = if g.tags.contains(&"r18".to_string()) {
+                        r#"<span class="card-badge card-badge-r18">R18</span>"#
+                    } else {
+                        ""
+                    };
                     format!(
-                        r#"<a href="{}" class="more-creator-card">{}<span>{}</span></a>"#,
+                        r#"<a href="{}" class="more-creator-card">{}{}<span>{}</span></a>"#,
                         html_escape(&g.path),
+                        badge,
                         thumb,
                         html_escape(&g.title)
                     )
@@ -390,7 +396,8 @@ fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
 
         let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
 
-        entries.push((creator, title, link_path, thumbnail, released));
+        let tags = meta.tags.unwrap_or_default();
+        entries.push((creator, title, link_path, thumbnail, released, tags));
     }
 
     build_creator_index(&entries)
