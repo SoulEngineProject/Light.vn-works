@@ -1,3 +1,11 @@
+---
+creator: まとこ
+released: 2016/02/14
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/11203"
+tagline: 飛べたとしても豚は×ね　バレンタインデーミニゲーム 主人公の姫川真白は、憧れの先輩がクソマゾヒストだったことを知り大ショックを受けていた。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/06dffd34-7c30-41c1-9309-d81dd8cb7b70" />
 
 ---
@@ -7,8 +15,3 @@
 しかし、幼馴染で元彼である駆谷　元（かりや　はじめ）が、  
 「先輩にもう渡さないなら、俺にバレンタインチョコをくれ」  
 と言い出して……？
-
----
-- Creator: まとこ
-- Released: 2016/02/14
-- ふりーむ！: [V×V　Day!](https://www.freem.ne.jp/win/game/11203)

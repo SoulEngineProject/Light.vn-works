@@ -1,3 +1,18 @@
+---
+creator: 渦女屋本舗
+released: 2023/02/11
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/29957"
+extra_links:
+  - label: BOOTH
+    url: "https://uzumeya.booth.pm/items/4534280"
+  - label: HP
+    url: "http://490xx.sakura.ne.jp/"
+  - label: Twitter
+    url: "https://twitter.com/Uzumeyahonpo"
+tagline: 画面をクリックして反応を楽しむADV 「樹の塔にいるオルガという女性を探して欲しい。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/a184040d-4814-4ae5-b98e-7d43e656478a" />
 
 ---
@@ -10,11 +25,3 @@
 人物やオブジェなどあやしいと思った所をぽちっとクリックして下さい。  
 基本的には会話をすることで話が進んでいきます。  
 この作品は「ウィルと黄昏の旅」全7階層のうちの第三階層の物語のみを収録したものです。
-
----
-- Creator: 渦女屋本舗
-- Released: 2023/02/11
-- ふりーむ！: [ウィルと黄昏の旅 Twilight journey to find someone THE THIRD FLOOR:](https://www.freem.ne.jp/win/game/29957)
-- BOOTH: [ウィルと黄昏の旅 -THE FOURTH FLOOR-](https://uzumeya.booth.pm/items/4534280)
-- HP: [UZUMEYA](http://490xx.sakura.ne.jp/)
-- Twitter: [渦女屋本舗](https://twitter.com/Uzumeyahonpo)

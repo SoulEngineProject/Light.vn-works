@@ -1,3 +1,16 @@
+---
+creator: AZuL CiEL×CWR Another Project
+released: 2020/01/11
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/21835"
+extra_links:
+  - label: HP
+    url: "https://hadukitenka.jimdofree.com/"
+  - label: Twitter
+    url: "https://mobile.twitter.com/Raika_Tsukuyomi"
+tagline: 「これは、繰り返される強者達の遊戯〈ひげき〉」 神々が暮らす世界、｢デウスガルテン｣。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/288b3a1d-ef02-4d7a-b731-fc4c94c584bb" />
 
 ---
@@ -15,10 +28,3 @@
 不思議な肉体を持つ青年「ノヴァード」。  
 そして彼らと切っても切れぬ関わりを持つ者達。  
 自分達の力が最大限発揮できないよう細工された世界で、彼らは明日を生きるために戦うことになる。
-
----
-- Creator: AZuL CiEL×CWR Another Project
-- Released: 2020/01/11
-- ふりーむ！: [Ewige Schlacht -Erste Geschichte-](https://www.freem.ne.jp/win/game/21835)
-- HP: [Beyond the Eden](https://hadukitenka.jimdofree.com/)
-- Twitter: [羽月天夏](https://mobile.twitter.com/Raika_Tsukuyomi)

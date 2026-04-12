@@ -1,3 +1,16 @@
+---
+creator: "Operation:Novelty"
+released: 2019/08/31
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/20970"
+extra_links:
+  - label: HP
+    url: "https://www.alexia-nobeope.com/"
+  - label: Twitter
+    url: "https://mobile.twitter.com/nobeope"
+tagline: 愛、嫌悪、否定、そして選択。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/32f272b4-b823-4b6a-87d0-241efef161de" />
 
 ---
@@ -9,10 +22,3 @@
 人生とは、幸福とは何か。  
 自己愛、自己嫌悪、自己否定、自己選択。  
 生きる理由を失った少年の再起の物語。
-
----
-- Creator: Operation:Novelty
-- Released: 2019/08/31
-- ふりーむ！: [AlexiA～アレクシア～](https://www.freem.ne.jp/win/game/20970)
-- HP: [AlexiA ~アレクシア~ オフィシャルサイト](https://www.alexia-nobeope.com/)
-- Twitter: [Operation:Novelty公式](https://mobile.twitter.com/nobeope)

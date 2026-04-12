@@ -1,3 +1,18 @@
+---
+creator: 筍lavoratore
+released: 2020/01/21
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/21917"
+extra_links:
+  - label: HP
+    url: "https://hinatatakenoko.wixsite.com/my-site"
+  - label: BOOTH
+    url: "https://takelavo.booth.pm/"
+  - label: Twitter
+    url: "https://twitter.com/takelavo_hinata"
+tagline: －－大好きよ、私の大切な宝物 大好きだった姉が怪死。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/a104ce17-b827-49f5-be4f-a95e915fc7b0" />
 
 ---
@@ -9,11 +24,3 @@
 「姉貴の死の真相を調べてやる、だから俺の願いを叶えろ現人神」と。  
 &#8203;これは不器用な二人の、出会いと別れ、そして再会の物語。  
 ※本作品は2018年に公開した「また逢う日を楽しみに」にボイスをつけ、追加要素を含めたものです。
-
----
-- Creator: 筍lavoratore
-- Released: 2020/01/21
-- ふりーむ！: [また逢う日を楽しみに-FullVoiceEdition-](https://www.freem.ne.jp/win/game/21917)
-- HP: [筍lavoratore](https://hinatatakenoko.wixsite.com/my-site)
-- BOOTH: [筍lavoratore通販部](https://takelavo.booth.pm/)
-- Twitter: [雛田(筍lavoratore)](https://twitter.com/takelavo_hinata)

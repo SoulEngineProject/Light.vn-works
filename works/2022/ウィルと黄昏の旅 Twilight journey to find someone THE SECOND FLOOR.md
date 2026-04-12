@@ -1,3 +1,18 @@
+---
+creator: 渦女屋本舗
+released: 2022/08/17
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/28819"
+extra_links:
+  - label: BOOTH
+    url: "https://uzumeya.booth.pm/items/4078070"
+  - label: HP
+    url: "http://490xx.sakura.ne.jp/"
+  - label: Twitter
+    url: "https://twitter.com/Uzumeyahonpo"
+tagline: 画面をクリックして反応を楽しむADV 「樹の塔にいるオルガという女性を探して欲しい。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/66d4b60d-c637-4d67-bb62-d6129a41ea43" />
 
 ---
@@ -10,11 +25,3 @@
 この作品は「ウィルと黄昏の旅」全7階層のうちの第二階層の物語のみを収録したものです。  
 OP～第一階層は「THE FIRST FLOOR:」に収録されています。  
 （第三階層以降は完成次第に順次配信予定）
-
----
-- Creator: 渦女屋本舗
-- Released: 2022/08/17
-- ふりーむ！: [ウィルと黄昏の旅 Twilight journey to find someone THE SECOND FLOOR:](https://www.freem.ne.jp/win/game/28819)
-- BOOTH: [（DL版）ウィルと黄昏の旅 -THE SECOND FLOOR-](https://uzumeya.booth.pm/items/4078070)
-- HP: [UZUMEYA](http://490xx.sakura.ne.jp/)
-- Twitter: [渦女屋本舗](https://twitter.com/Uzumeyahonpo)

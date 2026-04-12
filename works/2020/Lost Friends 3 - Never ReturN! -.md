@@ -1,3 +1,18 @@
+---
+creator: 渦女屋本舗
+released: 2020/02/16
+link_label: ふりーむ！
+link_url: "https://www.freem.ne.jp/win/game/22073"
+extra_links:
+  - label: BOOTH
+    url: "https://uzumeya.booth.pm/items/1836118"
+  - label: HP
+    url: "http://490xx.sakura.ne.jp/"
+  - label: Twitter
+    url: "https://twitter.com/Uzumeyahonpo"
+tagline: 可能性を試してみる短編ADV 人間と妖精の戦争が終結してから数年、都市部は目覚ましく復興したものの地方各地は未だ戦災から立ち直れずにいる。
+---
+
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e9c584a3-dde4-497b-8032-2d61fa9c95ac" />
 
 ---
@@ -10,11 +25,3 @@
 「運が良ければすぐ出られるだろうし、そうでなければ生きている間に開かないかも知れない。そして一度の開扉につき出られるのは " 一人だけ " 」  
 &#8203;途方に暮れるマーティン。対照的にクロエの口角は徐々に吊り上がっていく。  
 それはとても歪な暗い笑みで、どこか嬉しそうにも見えたのだった。
-
----
-- Creator: 渦女屋本舗
-- Released: 2020/02/16
-- ふりーむ！: [Lost Friends3](https://www.freem.ne.jp/win/game/22073)
-- BOOTH: [Lost Friends3](https://uzumeya.booth.pm/items/1836118)
-- HP: [UZUMEYA](http://490xx.sakura.ne.jp/)
-- Twitter: [渦女屋本舗](https://twitter.com/Uzumeyahonpo)
