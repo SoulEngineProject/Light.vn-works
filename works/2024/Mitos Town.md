@@ -1,5 +1,5 @@
 ---
-creator: ""
+creator: CCC123p
 released: 2024/09/30
 link_label: itch.io
 link_url: "https://ccc123p.itch.io/mitos-town"

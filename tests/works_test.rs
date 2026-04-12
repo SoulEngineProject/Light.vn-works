@@ -190,11 +190,11 @@ fn validate_all_markdown_files() {
 
         let (meta, body) = parse_frontmatter(&content);
 
-        if meta.creator.is_none() {
-            errors.push(format!("{}: creator field missing from frontmatter", path.display()));
+        if meta.creator.as_deref().unwrap_or("").is_empty() {
+            errors.push(format!("{}: creator is empty", path.display()));
         }
-        if meta.released.is_none() {
-            errors.push(format!("{}: released field missing from frontmatter", path.display()));
+        if meta.released.as_deref().unwrap_or("").is_empty() {
+            errors.push(format!("{}: released date is empty", path.display()));
         }
 
         if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
