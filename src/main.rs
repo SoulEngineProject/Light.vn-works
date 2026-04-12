@@ -285,7 +285,7 @@ async fn render_markdown(
 
     let current_path = format!("/works/{}/{}", &year, &title);
     let creator_field = meta.creator.as_deref().unwrap_or("");
-    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, 4);
+    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX);
     let more_from_creator: String = related_by_creator
         .iter()
         .map(|(name, games)| {
@@ -375,6 +375,7 @@ fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
 
         let (meta, body) = parse_frontmatter(&content);
         let creator = meta.creator.unwrap_or_default();
+        let released = meta.released.unwrap_or_default();
         let thumbnail = extract_first_image(body);
 
         let rel_path = path
@@ -389,7 +390,7 @@ fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
 
         let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
 
-        entries.push((creator, title, link_path, thumbnail));
+        entries.push((creator, title, link_path, thumbnail, released));
     }
 
     build_creator_index(&entries)

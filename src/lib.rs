@@ -121,6 +121,7 @@ pub struct CreatorGame {
     pub title: String,
     pub path: String,
     pub thumbnail: Option<String>,
+    pub released: String,
 }
 
 /// Split a creator field into individual creator names.
@@ -135,11 +136,11 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 /// Build an index of creator (lowercased) → list of their games.
 /// Creators with commas are split into separate entries.
 pub fn build_creator_index(
-    entries: &[(String, String, String, Option<String>)], // (creator, title, path, thumbnail)
+    entries: &[(String, String, String, Option<String>, String)], // (creator, title, path, thumbnail, released)
 ) -> HashMap<String, Vec<CreatorGame>> {
     let mut index: HashMap<String, Vec<CreatorGame>> = HashMap::new();
 
-    for (creator, title, path, thumbnail) in entries {
+    for (creator, title, path, thumbnail, released) in entries {
         if creator.is_empty() {
             continue;
         }
@@ -148,6 +149,7 @@ pub fn build_creator_index(
             title: title.clone(),
             path: path.clone(),
             thumbnail: thumbnail.clone(),
+            released: released.clone(),
         };
 
         for name in split_creators(creator) {
@@ -156,6 +158,11 @@ pub fn build_creator_index(
                 .or_default()
                 .push(game.clone());
         }
+    }
+
+    // Sort each creator's games by release date (newest first)
+    for games in index.values_mut() {
+        games.sort_by(|a, b| b.released.cmp(&a.released));
     }
 
     index
