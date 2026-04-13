@@ -7,6 +7,7 @@ extra_links:
   - label: フリーゲーム夢現
     url: "https://freegame-mugen.jp/simulation/game_11852.html"
 tagline: ソーシャルネットワークサービス『PLAZA』へログインして色々なサービスを体験しよう！
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/15adaa53-1a83-420a-8cdd-390c968ea6f2" />

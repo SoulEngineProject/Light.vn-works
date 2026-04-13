@@ -177,8 +177,11 @@ function renderTree(data, query, hideR18) {
       const isR18 = tags.includes('r18');
       const isNew = isNewGame(released);
 
+      const isAI = tags.includes('ai');
+
       let badges = '';
       if (isR18) badges += '<span class="card-badge card-badge-r18">R18</span>';
+      if (isAI) badges += '<span class="card-badge card-badge-ai">AI</span>';
       if (isNew) badges += '<span class="card-badge card-badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');

@@ -4,6 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://taler.itch.io/twtcs"
 tagline: "Play as Miller in a horror Visual-Novel and march into the unknown on a halloween night."
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/f8b4763d-2875-40cd-b8ed-f58984ff6b03" />

@@ -13,6 +13,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/meimgames"
 tagline: ファンタジック人外ADV 吸血鬼になった元お嬢様「エリシア」が、主人公の従者「アルノート」と共に冒険者となって、人外っ娘の仲間と共に仇討ちに旅立つストーリー。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/936b4e1a-c4b3-4040-aec6-29cbde1f8a0f" />

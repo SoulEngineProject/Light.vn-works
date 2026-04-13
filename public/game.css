@@ -214,6 +214,11 @@
   color: white;
 }
 
+.card-badge-ai {
+  background: #2563eb;
+  color: white;
+}
+
 .more-creator-card:hover {
   transform: translateY(-2px);
   border-color: rgba(192, 132, 252, 0.3);

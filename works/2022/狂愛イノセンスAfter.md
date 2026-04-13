@@ -11,6 +11,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/takelavo_hinata"
 tagline: これは、4きょうだいの、きずなとひみつのおはなし。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1976fad6-9224-4341-95c4-7588839ca7a5" />

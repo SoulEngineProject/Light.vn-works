@@ -406,6 +406,11 @@ details[open] summary::before {
   color: white;
 }
 
+.card-badge-ai {
+  background: #2563eb;
+  color: white;
+}
+
 .card-badge + .card-badge {
   right: auto;
   left: 0.5rem;

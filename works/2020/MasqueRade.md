@@ -7,6 +7,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/cafe_302"
 tagline: "本作品は「アイドルマスターシンデレラガールズ」を原作とするSS「ギャルゲーMasque:Rade」の ゲーム化作品となります。"
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/88a01612-2e6f-494d-8a7b-83b41b81d121" />

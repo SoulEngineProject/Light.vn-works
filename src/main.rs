@@ -321,11 +321,13 @@ async fn render_markdown(
                             html_escape(&g.title)
                         )
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
-                    let badge = if g.tags.contains(&"r18".to_string()) {
-                        r#"<span class="card-badge card-badge-r18">R18</span>"#
-                    } else {
-                        ""
-                    };
+                    let mut badge = String::new();
+                    if g.tags.contains(&"r18".to_string()) {
+                        badge += r#"<span class="card-badge card-badge-r18">R18</span>"#;
+                    }
+                    if g.tags.contains(&"ai".to_string()) {
+                        badge += r#"<span class="card-badge card-badge-ai">AI</span>"#;
+                    }
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&g.path),

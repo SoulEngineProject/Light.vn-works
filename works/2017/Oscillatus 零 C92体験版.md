@@ -11,6 +11,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/cos6official"
 tagline: 鎖(とざ)された記憶(かこ)も 襲(せま)り繰(く)る運命(みらい)も 零に還(かえ)す SFミステリ×異能バトル×百合サスペンスをテーマとした新本格(ラディカル)シネマADVです。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/5d2c407d-7775-4efa-8020-c025e85b2bad" />

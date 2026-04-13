@@ -11,6 +11,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/takelavo_hinata"
 tagline: －－大好きよ、私の大切な宝物 大好きだった姉が怪死。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/a104ce17-b827-49f5-be4f-a95e915fc7b0" />

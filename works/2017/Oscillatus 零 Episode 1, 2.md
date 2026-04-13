@@ -11,6 +11,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/cos6official"
 tagline: 異能を前提としたミステリ作品でありながら、百合を主軸に置いたストーリーとなっています。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/f87832a0-a479-4285-b01e-68219aa3a456" />

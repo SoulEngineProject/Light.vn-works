@@ -4,6 +4,7 @@ released: 2024/03/13
 link_label: Steam
 link_url: "https://store.steampowered.com/app/2780390/_The_Broken_Platonic/"
 tagline: Light.vn公式パブリッシング作品の第2弾
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/8486d543-3a5b-4ee2-aa1e-1da0ec05eeb6" />

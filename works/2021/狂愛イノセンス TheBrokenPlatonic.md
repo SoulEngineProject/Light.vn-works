@@ -11,6 +11,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/takelavo_hinata"
 tagline: 俺はお前じゃないと○○できない くそ暑くてセミがうるさい真夏のある日。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1dc1ccda-c709-4631-875b-264989fb7789" />

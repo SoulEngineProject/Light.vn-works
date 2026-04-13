@@ -4,6 +4,7 @@ released: 2024/09/28
 link_label: itch.io
 link_url: "https://requ.itch.io/awayuki-tasogare"
 tagline: "What is death for the lifeless, and what is life for the deathless?"
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/79ea216d-6640-4385-a9cd-64eef44a998d" />

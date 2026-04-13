@@ -7,6 +7,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/probabilitysky"
 tagline: 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、第ニ話。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e855a973-0cd7-42bd-bc1e-c5d593a87719" />

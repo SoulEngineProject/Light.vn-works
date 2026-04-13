@@ -4,6 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://double-deletion-studio.itch.io/maneater"
 tagline: "Your surprisingly peaceful subway ride goes awry, though, when two odd strangers join you"
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/5f9d5665-eb09-4e90-b176-7f902edd4c45" />

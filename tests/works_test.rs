@@ -196,6 +196,9 @@ fn validate_all_markdown_files() {
         if meta.released.as_deref().unwrap_or("").is_empty() {
             errors.push(format!("{}: released date is empty", path.display()));
         }
+        if meta.tags.is_none() {
+            errors.push(format!("{}: tags field missing from frontmatter", path.display()));
+        }
 
         if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
