@@ -123,12 +123,12 @@ header::before {
   display: flex;
   gap: 0.5rem;
   width: max-content;
-  animation: scroll-left 300s linear infinite;
+  animation: scroll-left 80s linear infinite;
 }
 
 .ribbon-track.reverse {
   animation-name: scroll-right;
-  animation-duration: 330s;
+  animation-duration: 90s;
 }
 
 .ribbon:hover .ribbon-track {
@@ -153,6 +153,14 @@ header::before {
   object-fit: cover;
   border-radius: 0.4rem;
   flex-shrink: 0;
+}
+
+.ribbon-track img[data-error] {
+  display: none;
+}
+
+.card-thumb img[data-error] {
+  display: none;
 }
 
 @keyframes scroll-left {
@@ -433,9 +441,7 @@ footer a {
 footer a:hover { color: var(--accent-hover); }
 
 /* Loading */
-#tree:empty::before {
-  content: "Loading works...";
-  display: block;
+.loading-text {
   text-align: center;
   color: var(--text-muted);
   padding: 4rem 0;

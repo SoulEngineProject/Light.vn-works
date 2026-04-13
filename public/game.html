@@ -17,10 +17,24 @@
     <meta name="twitter:card" content="summary_large_image" />
 </head>
 <body>
+    <button class="lang-toggle" id="lang-toggle"></button>
+    <script>
+    (function() {
+        var p = new URLSearchParams(location.search).get('lang');
+        var lang = p === 'ja' || p === 'en' ? p : '{{i18n_detected_lang}}';
+        var btn = document.getElementById('lang-toggle');
+        btn.textContent = lang === 'ja' ? 'English' : '\u65E5\u672C\u8A9E';
+        btn.addEventListener('click', function() {
+            var url = new URL(location.href);
+            url.searchParams.set('lang', lang === 'ja' ? 'en' : 'ja');
+            location.href = url.toString();
+        });
+    })();
+    </script>
     <nav class="breadcrumb">
-        <a href="/">Works</a>
+        <a href="/{{lang_suffix}}">{{i18n_breadcrumb_works}}</a>
         <span>/</span>
-        <a href="/#{{year}}">{{year}}</a>
+        <a href="/{{lang_suffix}}#{{year}}">{{year}}</a>
         <span>/</span>
         {{title_display}}
     </nav>
@@ -33,13 +47,13 @@
             {{released_html}}
             {{link_html}}
             {{extra_links_html}}
-            <button class="share-btn" onclick="copyLink(this)">Share &#x1F517;</button>
+            <button class="share-btn" data-share="{{i18n_share}}" data-copied="{{i18n_copied}}" onclick="copyLink(this)">{{i18n_share}}</button>
         </div>
     <script>
     function copyLink(btn) {
         navigator.clipboard.writeText(window.location.href);
-        btn.textContent = 'Copied!';
-        setTimeout(function() { btn.textContent = 'Share \u{1F517}'; }, 1500);
+        btn.textContent = btn.dataset.copied;
+        setTimeout(function() { btn.textContent = btn.dataset.share; }, 1500);
     }
     </script>
         <div class="synopsis">{{synopsis_html}}</div>
@@ -47,7 +61,7 @@
         {{more_from_creator}}
     </div>
     <footer class="game-footer">
-        Built with <a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener">Light.vn</a> — your visual novel engine
+        {{i18n_footer}}
     </footer>
 </body>
 </html>

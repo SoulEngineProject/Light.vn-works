@@ -38,3 +38,22 @@ For R18 games, add `tags`:
 ```
 tags: [r18]
 ```
+
+## Build and run
+
+Requires [Rust](https://rustup.rs/).
+
+```
+cargo build
+cargo run
+```
+
+Open http://localhost:8080
+
+If changes don't appear, hard refresh with `Ctrl+Shift+R`.
+
+### Tests
+
+```
+cargo test
+```

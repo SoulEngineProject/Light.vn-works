@@ -1,6 +1,63 @@
 use pulldown_cmark::{html, Parser, Event};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
+use std::sync::OnceLock;
+
+#[derive(Debug)]
+pub struct I18nStrings {
+    pub more_from: String,
+    pub share: String,
+    pub copied: String,
+    pub footer: String,
+    pub breadcrumb_works: String,
+    pub engine_url: String,
+}
+
+struct I18nPair {
+    en: I18nStrings,
+    ja: I18nStrings,
+}
+
+static I18N: OnceLock<I18nPair> = OnceLock::new();
+
+fn load_i18n() -> &'static I18nPair {
+    I18N.get_or_init(|| {
+        let raw: HashMap<String, HashMap<String, String>> =
+            serde_json::from_str(include_str!("../public/i18n.json"))
+                .expect("Failed to parse i18n.json");
+
+        fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> I18nStrings {
+            let get = |key: &str| -> String {
+                raw.get(key)
+                    .and_then(|m| m.get(lang))
+                    .cloned()
+                    .unwrap_or_default()
+            };
+            I18nStrings {
+                more_from: get("more_from"),
+                share: get("share"),
+                copied: get("copied"),
+                footer: get("footer"),
+                breadcrumb_works: get("breadcrumb_works"),
+                engine_url: get("engine_url"),
+            }
+        }
+
+        I18nPair {
+            en: extract(&raw, "en"),
+            ja: extract(&raw, "ja"),
+        }
+    })
+}
+
+pub fn get_i18n(lang: &str) -> &'static I18nStrings {
+    let i18n = load_i18n();
+    if lang.contains("ja") {
+        &i18n.ja
+    } else {
+        &i18n.en
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct GameMeta {
