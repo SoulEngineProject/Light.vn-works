@@ -28,6 +28,7 @@ use axum::extract::State;
 #[derive(Clone)]
 struct AppState {
     creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+    game_count: usize,
 }
 
 #[derive(Serialize, Clone)]
@@ -388,7 +389,7 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
-fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
+fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
     let root_dir = FsPath::new("works");
     let mut entries = Vec::new();
 
@@ -428,13 +429,16 @@ fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
         entries.push((creator, title, link_path, thumbnail, released, tags));
     }
 
-    build_creator_index(&entries)
+    let count = entries.len();
+    (build_creator_index(&entries), count)
 }
 
 #[tokio::main]
 async fn main() {
+    let (creator_index, game_count) = build_startup_index();
     let state = AppState {
-        creator_index: Arc::new(build_startup_index()),
+        creator_index: Arc::new(creator_index),
+        game_count,
     };
 
     let serve_dir = ServeDir::new("public").not_found_service(
@@ -442,6 +446,7 @@ async fn main() {
     );
 
     let app = Router::new()
+        .route("/", get(serve_home))
         .route("/api/tree", get(get_tree))
         .route("/works/:year/:title", get(render_markdown))
         .nest_service("/raw", ServeDir::new("works"))
@@ -453,6 +458,12 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn serve_home(State(state): State<AppState>) -> Html<String> {
+    let page = include_str!("../public/index.html")
+        .replace("{{game_count}}", &state.game_count.to_string());
+    Html(page)
 }
 
 async fn handler_404() -> axum::response::Html<&'static str> {

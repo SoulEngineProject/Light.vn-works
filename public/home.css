@@ -68,6 +68,15 @@ header::before {
   font-size: 1rem;
 }
 
+.subtitle a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.subtitle a:hover {
+  color: var(--accent);
+}
+
 .cta-btn {
   display: inline-block;
   margin-top: 1rem;

@@ -43,7 +43,7 @@ Promise.all([
   });
 
 function applyStaticTranslations() {
-  setText('i18n-managed-by', t.managed_by);
+  setHtml('i18n-managed-by', t.managed_by);
   setText('i18n-subtitle', t.subtitle);
   setText('i18n-cta', t.cta);
   setText('i18n-contribute', t.contribute);
@@ -76,6 +76,11 @@ function setupLangToggle() {
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el && text) el.textContent = text;
+}
+
+function setHtml(id, html) {
+  const el = document.getElementById(id);
+  if (el && html) el.innerHTML = html;
 }
 
 document.getElementById('search').addEventListener('input', rerender);
