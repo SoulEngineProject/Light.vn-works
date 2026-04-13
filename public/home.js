@@ -7,6 +7,12 @@ const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
   ? LANG_PARAM
   : (navigator.language.startsWith('ja') ? 'ja' : 'en');
 
+// Restore R18 state from URL
+const R18_PARAM = new URLSearchParams(location.search).get('r18');
+if (R18_PARAM === '0') {
+  document.getElementById('hide-r18').checked = false;
+}
+
 // Show loading text
 document.getElementById('tree').innerHTML = '<p class="loading-text">Loading...</p>';
 
@@ -32,7 +38,7 @@ Promise.all([
     applyStaticTranslations();
 
     allData = data;
-    renderTree(data, '', false);
+    renderTree(data, '', document.getElementById('hide-r18').checked);
     scrollToHash();
     updateGameCount(data);
     buildRibbon(data);
@@ -48,17 +54,15 @@ function applyStaticTranslations() {
   setText('i18n-cta', t.cta);
   setText('i18n-contribute', t.contribute);
   setText('i18n-contribute-link', t.contribute_link);
+  var contributeLink = document.getElementById('i18n-contribute-link');
+  if (contributeLink && t.contribute_url) contributeLink.href = t.contribute_url;
   setText('i18n-hide-r18', t.hide_r18);
 
   const search = document.getElementById('search');
   if (search) search.placeholder = t.search_placeholder;
 
   const cta = document.getElementById('i18n-cta');
-  if (t.engine_url) {
-    if (cta) cta.href = t.engine_url;
-    var titleLink = document.getElementById('title-link');
-    if (titleLink) titleLink.href = t.engine_url;
-  }
+  if (cta && t.engine_url) cta.href = t.engine_url;
 }
 
 function setupLangToggle() {
@@ -69,6 +73,11 @@ function setupLangToggle() {
     const other = LANG === 'ja' ? 'en' : 'ja';
     const url = new URL(location.href);
     url.searchParams.set('lang', other);
+    if (!document.getElementById('hide-r18').checked) {
+      url.searchParams.set('r18', '0');
+    } else {
+      url.searchParams.delete('r18');
+    }
     location.href = url.toString();
   });
 }
