@@ -24,8 +24,8 @@
     "ja": "PRを作成"
   },
   "search_placeholder": {
-    "en": "Search by title or creator...",
-    "ja": "タイトルまたは作者で検索..."
+    "en": "Search by title, tag, or creator...",
+    "ja": "タイトル・作者・タグで検索..."
   },
   "hide_r18": {
     "en": "Hide R18",
