@@ -180,9 +180,9 @@ function renderTree(data, query, hideR18) {
       const isAI = tags.includes('ai');
 
       let badges = '';
-      if (isR18) badges += '<span class="card-badge card-badge-r18">R18</span>';
-      if (isAI) badges += '<span class="card-badge card-badge-ai">AI</span>';
-      if (isNew) badges += '<span class="card-badge card-badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      if (isR18) badges += '<span class="card-badge card-badge badge-r18">R18</span>';
+      if (isAI) badges += '<span class="card-badge card-badge badge-ai">AI</span>';
+      if (isNew) badges += '<span class="card-badge card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
       a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;

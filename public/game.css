@@ -122,11 +122,6 @@
   border-radius: 0.3rem;
 }
 
-.tag-r18 {
-  background: #dc2626;
-  color: white;
-}
-
 .tag-default {
   background: var(--surface);
   color: var(--text-muted);
@@ -209,15 +204,6 @@
   border-radius: 0.25rem;
 }
 
-.card-badge-r18 {
-  background: #9f1239;
-  color: white;
-}
-
-.card-badge-ai {
-  background: #2563eb;
-  color: white;
-}
 
 .more-creator-card:hover {
   transform: translateY(-2px);

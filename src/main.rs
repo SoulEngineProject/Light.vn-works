@@ -254,7 +254,11 @@ async fn render_markdown(
         .unwrap_or(&[])
         .iter()
         .map(|tag| {
-            let class = if tag == "r18" { "tag-badge tag-r18" } else { "tag-badge tag-default" };
+            let class = match tag.as_str() {
+                "r18" => "tag-badge badge-r18",
+                "ai" => "tag-badge badge-ai",
+                _ => "tag-badge tag-default",
+            };
             format!(
                 r#"<span class="{}">{}</span>"#,
                 class,
@@ -323,10 +327,10 @@ async fn render_markdown(
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let mut badge = String::new();
                     if g.tags.contains(&"r18".to_string()) {
-                        badge += r#"<span class="card-badge card-badge-r18">R18</span>"#;
+                        badge += r#"<span class="card-badge badge-r18">R18</span>"#;
                     }
                     if g.tags.contains(&"ai".to_string()) {
-                        badge += r#"<span class="card-badge card-badge-ai">AI</span>"#;
+                        badge += r#"<span class="card-badge badge-ai">AI</span>"#;
                     }
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
