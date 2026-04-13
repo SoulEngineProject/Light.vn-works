@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -295,4 +295,28 @@ fn creator_index_multi_creator_game() {
     assert_eq!(related.len(), 1);
     assert_eq!(related[0].0, "Bob");
     assert_eq!(related[0].1[0].title, "Solo Game");
+}
+
+#[test]
+fn i18n_json_parses_both_languages() {
+    // given: i18n.json exists and is loaded
+
+    // when: loading English and Japanese strings
+    let en = get_i18n("en");
+    let ja = get_i18n("ja");
+
+    // then: all required fields are non-empty
+    assert!(!en.more_from.is_empty());
+    assert!(!en.share.is_empty());
+    assert!(!en.copied.is_empty());
+    assert!(!en.footer.is_empty());
+    assert!(!en.breadcrumb_works.is_empty());
+    assert!(!en.engine_url.is_empty());
+
+    assert!(!ja.more_from.is_empty());
+    assert!(!ja.share.is_empty());
+    assert!(!ja.copied.is_empty());
+    assert!(!ja.footer.is_empty());
+    assert!(!ja.breadcrumb_works.is_empty());
+    assert!(!ja.engine_url.is_empty());
 }

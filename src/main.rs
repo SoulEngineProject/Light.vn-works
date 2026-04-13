@@ -18,13 +18,17 @@ use walkdir::WalkDir;
 use lightvn_works::{
     GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
     markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator,
+    get_i18n,
 };
+use axum::http::HeaderMap;
+use axum::extract::Query;
 use std::sync::Arc;
 use axum::extract::State;
 
 #[derive(Clone)]
 struct AppState {
     creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+    game_count: usize,
 }
 
 #[derive(Serialize, Clone)]
@@ -167,8 +171,26 @@ fn attach_children(
 
 async fn render_markdown(
     State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
     AxumPath((year, title)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
+    let lang_param = params.get("lang").map(|s| s.as_str());
+    let accept_lang = headers
+        .get("accept-language")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("en");
+    let detected_lang = match lang_param {
+        Some("ja") => "ja",
+        Some("en") => "en",
+        _ => if accept_lang.contains("ja") { "ja" } else { "en" },
+    };
+    let i18n = get_i18n(detected_lang);
+    let lang_suffix = if lang_param.is_some() {
+        format!("?lang={}", detected_lang)
+    } else {
+        String::new()
+    };
     if year.len() > 20
         || title.len() > 300
         || year.contains("..")
@@ -305,8 +327,9 @@ async fn render_markdown(
                         ""
                     };
                     format!(
-                        r#"<a href="{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
+                        r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&g.path),
+                        lang_suffix,
                         badge,
                         thumb,
                         html_escape(&g.title)
@@ -314,8 +337,8 @@ async fn render_markdown(
                 })
                 .collect();
             format!(
-                r#"<div class="more-creator"><h2>More from {}</h2><div class="more-creator-grid">{}</div></div>"#,
-                html_escape(name),
+                r#"<div class="more-creator"><h2>{}</h2><div class="more-creator-grid">{}</div></div>"#,
+                i18n.more_from.replace("{creator}", &html_escape(name)),
                 cards
             )
         })
@@ -334,7 +357,13 @@ async fn render_markdown(
         .replace("{{extra_links_html}}", &extra_links_html)
         .replace("{{synopsis_html}}", &synopsis_html)
         .replace("{{gallery_html}}", &gallery_html)
-        .replace("{{more_from_creator}}", &more_from_creator);
+        .replace("{{more_from_creator}}", &more_from_creator)
+        .replace("{{i18n_share}}", &i18n.share)
+        .replace("{{i18n_copied}}", &i18n.copied)
+        .replace("{{i18n_footer}}", &i18n.footer)
+        .replace("{{i18n_breadcrumb_works}}", &i18n.breadcrumb_works)
+        .replace("{{i18n_detected_lang}}", detected_lang)
+        .replace("{{lang_suffix}}", &lang_suffix);
 
     (StatusCode::OK, Html(page))
 }
@@ -360,7 +389,7 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
-fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
+fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
     let root_dir = FsPath::new("works");
     let mut entries = Vec::new();
 
@@ -400,13 +429,16 @@ fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
         entries.push((creator, title, link_path, thumbnail, released, tags));
     }
 
-    build_creator_index(&entries)
+    let count = entries.len();
+    (build_creator_index(&entries), count)
 }
 
 #[tokio::main]
 async fn main() {
+    let (creator_index, game_count) = build_startup_index();
     let state = AppState {
-        creator_index: Arc::new(build_startup_index()),
+        creator_index: Arc::new(creator_index),
+        game_count,
     };
 
     let serve_dir = ServeDir::new("public").not_found_service(
@@ -414,6 +446,7 @@ async fn main() {
     );
 
     let app = Router::new()
+        .route("/", get(serve_home))
         .route("/api/tree", get(get_tree))
         .route("/works/:year/:title", get(render_markdown))
         .nest_service("/raw", ServeDir::new("works"))
@@ -425,6 +458,12 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn serve_home(State(state): State<AppState>) -> Html<String> {
+    let page = include_str!("../public/index.html")
+        .replace("{{game_count}}", &state.game_count.to_string());
+    Html(page)
 }
 
 async fn handler_404() -> axum::response::Html<&'static str> {

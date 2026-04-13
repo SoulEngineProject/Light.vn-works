@@ -1,0 +1,70 @@
+{
+  "managed_by": {
+    "en": "Managed By: <a href=\"https://yukiharacreation.com/servicemenu4en\" target=\"_blank\" rel=\"noopener\">Yukihara Takashi</a> (Light.vn Japan Rep.)",
+    "ja": "管理者：<a href=\"https://yukiharacreation.com/\" target=\"_blank\" rel=\"noopener\">雪原たかし</a>（Light.vn日本代表）"
+  },
+  "subtitle": {
+    "en": "Light.vn is your visual novel engine.",
+    "ja": "Light.vnはビジュアルノベル製作に特化された、汎用ゲームエンジンです。"
+  },
+  "game_count": {
+    "en": "{n} games and counting.",
+    "ja": "<br>{n}作品、収録。"
+  },
+  "cta": {
+    "en": "Get Light.vn",
+    "ja": "Light.vnを入手"
+  },
+  "contribute": {
+    "en": "Want to add your game?",
+    "ja": "あなたのゲームを追加しませんか？"
+  },
+  "contribute_link": {
+    "en": "Open a pull request",
+    "ja": "PRを作成"
+  },
+  "search_placeholder": {
+    "en": "Search by title, tag, or creator...",
+    "ja": "タイトル・作者・タグで検索..."
+  },
+  "hide_r18": {
+    "en": "Hide R18",
+    "ja": "R18を非表示"
+  },
+  "new_badge": {
+    "en": "New",
+    "ja": "新作"
+  },
+  "no_results": {
+    "en": "No results for \"{q}\"",
+    "ja": "「{q}」の検索結果なし"
+  },
+  "loading": {
+    "en": "Loading works...",
+    "ja": "読み込み中..."
+  },
+  "more_from": {
+    "en": "More from {creator}",
+    "ja": "{creator}の他の作品"
+  },
+  "share": {
+    "en": "Share \ud83d\udd17",
+    "ja": "共有 \ud83d\udd17"
+  },
+  "copied": {
+    "en": "Copied!",
+    "ja": "コピーしました！"
+  },
+  "footer": {
+    "en": "Built with <a href=\"https://soulengineproject.itch.io/lightvn\" target=\"_blank\" rel=\"noopener\">Light.vn</a> \u2014 your visual novel engine",
+    "ja": "<a href=\"https://lightvn.net/\" target=\"_blank\" rel=\"noopener\">Light.vn</a>で制作 \u2014 あなたの為の汎用ゲームエンジン"
+  },
+  "breadcrumb_works": {
+    "en": "Works",
+    "ja": "作品一覧"
+  },
+  "engine_url": {
+    "en": "https://soulengineproject.itch.io/lightvn",
+    "ja": "https://lightvn.net/"
+  }
+}

@@ -12,17 +12,18 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/home.css">
   <meta property="og:title" content="Light.vn Works" />
-  <meta property="og:description" content="Games made with Light.vn" />
+  <meta property="og:description" content="{{game_count}}+ visual novels built with Light.vn." />
   <meta property="og:image" content="/lvn_icon.png" />
   <meta property="og:type" content="website" />
 </head>
 <body>
+  <button id="lang-toggle" class="lang-toggle">日本語</button>
   <div class="container">
     <header>
-      <h1><a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" style="text-decoration:none;-webkit-text-fill-color:inherit;">Light.vn</a> Works</h1>
-      <p class="subtitle">Managed By: <span lang="ja">&#38634;&#21407;&#12383;&#12363;&#12375;</span> (Lightvn Japan Rep.)</p>
-      <p class="subtitle">Light.vn is your visual novel engine. <span id="game-count"></span> games and counting.</p>
-      <a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" class="cta-btn">Get Light.vn</a>
+      <h1><a id="title-link" href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" style="text-decoration:none;-webkit-text-fill-color:inherit;">Light.vn</a> Works</h1>
+      <p class="subtitle" id="i18n-managed-by">Managed By: 雪原たかし (Lightvn Japan Rep.)</p>
+      <p class="subtitle"><span id="i18n-subtitle">Light.vn is your visual novel engine.</span> <span id="i18n-game-count"></span></p>
+      <a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener" class="cta-btn" id="i18n-cta">Get Light.vn</a>
     </header>
 
     <div id="ribbon" class="ribbon"></div>
@@ -30,14 +31,13 @@
     <div class="search-wrap">
       <span class="search-icon">&#x1F50D;</span>
       <input type="text" id="search" placeholder="Search by title or creator..." autocomplete="off" />
-      <label class="r18-toggle"><input type="checkbox" id="hide-r18"> Hide R18</label>
+      <label class="r18-toggle"><input type="checkbox" id="hide-r18"> <span id="i18n-hide-r18">Hide R18</span></label>
     </div>
 
-    <p class="contribute">Want to add your game? <a href="https://github.com/SoulEngineProject/Light.vn-works" target="_blank" rel="noopener">Open a pull request</a></p>
+    <p class="contribute"><span id="i18n-contribute">Want to add your game?</span> <a href="https://github.com/SoulEngineProject/Light.vn-works" target="_blank" rel="noopener" id="i18n-contribute-link">Open a pull request</a></p>
 
     <div id="tree"></div>
   </div>
-
 
   <script src="/home.js"></script>
 </body>

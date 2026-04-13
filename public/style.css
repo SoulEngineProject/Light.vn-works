@@ -25,3 +25,25 @@ a { color: var(--accent); }
 a:hover { color: var(--accent-hover); }
 
 html { scroll-behavior: smooth; }
+
+.lang-toggle {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 100;
+  padding: 0.3rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  text-decoration: none;
+}
+
+.lang-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}

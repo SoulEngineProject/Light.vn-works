@@ -1,0 +1,17 @@
+# Set the default behaviour: auto update lines to local on checkout and auto convert on push
+* text=auto
+
+# All that shouldn't be modified
+*.ico binary
+*.png binary
+*.jks binary
+*.dylib binary
+*.dll binary
+*.dll.a binary
+*.lib binary
+*.otf binary
+*.ttf binary
+*.glb binary
+*.ogg binary
+*.mpg binary
+*.webm binary

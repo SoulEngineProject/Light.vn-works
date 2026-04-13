@@ -1,13 +1,36 @@
 let allData = null;
+let t = {}; // translations
 
 const NEW_THRESHOLD_DAYS = 90;
+const LANG_PARAM = new URLSearchParams(location.search).get('lang');
+const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
+  ? LANG_PARAM
+  : (navigator.language.startsWith('ja') ? 'ja' : 'en');
 
-fetch('/api/tree')
-  .then(r => {
+// Show loading text
+document.getElementById('tree').innerHTML = '<p class="loading-text">Loading...</p>';
+
+// Setup language toggle immediately (no dependency on fetches)
+setupLangToggle();
+
+// Load i18n, then data
+Promise.all([
+  fetch('/i18n.json').then(r => r.json()),
+  fetch('/api/tree').then(r => {
     if (!r.ok) throw new Error('Failed to load tree');
     return r.json();
   })
-  .then(data => {
+])
+  .then(function(results) {
+    var i18n = results[0];
+    var data = results[1];
+
+    t = {};
+    for (var key in i18n) {
+      t[key] = i18n[key][LANG] || i18n[key]['en'] || '';
+    }
+    applyStaticTranslations();
+
     allData = data;
     renderTree(data, '', false);
     scrollToHash();
@@ -16,8 +39,49 @@ fetch('/api/tree')
   })
   .catch(err => {
     document.getElementById('tree').innerHTML =
-      '<p class="no-results">Error loading works: ' + err.message + '</p>';
+      '<p class="no-results">Error: ' + err.message + '</p>';
   });
+
+function applyStaticTranslations() {
+  setHtml('i18n-managed-by', t.managed_by);
+  setText('i18n-subtitle', t.subtitle);
+  setText('i18n-cta', t.cta);
+  setText('i18n-contribute', t.contribute);
+  setText('i18n-contribute-link', t.contribute_link);
+  setText('i18n-hide-r18', t.hide_r18);
+
+  const search = document.getElementById('search');
+  if (search) search.placeholder = t.search_placeholder;
+
+  const cta = document.getElementById('i18n-cta');
+  if (t.engine_url) {
+    if (cta) cta.href = t.engine_url;
+    var titleLink = document.getElementById('title-link');
+    if (titleLink) titleLink.href = t.engine_url;
+  }
+}
+
+function setupLangToggle() {
+  const btn = document.getElementById('lang-toggle');
+  if (!btn) return;
+  btn.textContent = LANG === 'ja' ? 'English' : '日本語';
+  btn.addEventListener('click', function() {
+    const other = LANG === 'ja' ? 'en' : 'ja';
+    const url = new URL(location.href);
+    url.searchParams.set('lang', other);
+    location.href = url.toString();
+  });
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el && text) el.textContent = text;
+}
+
+function setHtml(id, html) {
+  const el = document.getElementById(id);
+  if (el && html) el.innerHTML = html;
+}
 
 document.getElementById('search').addEventListener('input', rerender);
 document.getElementById('hide-r18').addEventListener('change', rerender);
@@ -53,6 +117,7 @@ function renderTree(data, query, hideR18) {
     .sort((a, b) => b.name.localeCompare(a.name));
 
   let totalVisible = 0;
+  const newBadgeText = t.new_badge || 'New';
 
   sortedYears.forEach((year, index) => {
     let items = (year.children || []).filter(item => {
@@ -69,7 +134,6 @@ function renderTree(data, query, hideR18) {
       return name.includes(query) || creator.includes(query) || tagStr.includes(query);
     });
 
-    // Sort newer releases first within each year
     items.sort((a, b) => {
       const ra = (a.meta && a.meta.released) || '';
       const rb = (b.meta && b.meta.released) || '';
@@ -106,10 +170,10 @@ function renderTree(data, query, hideR18) {
 
       let badges = '';
       if (isR18) badges += '<span class="card-badge card-badge-r18">R18</span>';
-      if (isNew) badges += '<span class="card-badge card-badge-new">New</span>';
+      if (isNew) badges += '<span class="card-badge card-badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
-      a.href = linkPath;
+      a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;
       a.className = 'file-card';
       a.style.animationDelay = (cardIndex * 0.04) + 's';
 
@@ -117,7 +181,7 @@ function renderTree(data, query, hideR18) {
       if (item.thumbnail) {
         thumbHtml = '<div class="card-thumb">' + badges +
           '<img src="' + item.thumbnail + '" alt="' +
-          escapeHtml(displayName) + '" loading="lazy" /></div>';
+          escapeHtml(displayName) + '" loading="lazy" onerror="retryImage.call(this)" /></div>';
       } else {
         thumbHtml = '<div class="card-thumb-placeholder">' + badges + '\u2728</div>';
       }
@@ -137,7 +201,8 @@ function renderTree(data, query, hideR18) {
   });
 
   if (totalVisible === 0 && query) {
-    container.innerHTML = '<p class="no-results">No results for "' + escapeHtml(query) + '"</p>';
+    const msg = (t.no_results || 'No results for "{q}"').replace('{q}', escapeHtml(query));
+    container.innerHTML = '<p class="no-results">' + msg + '</p>';
   }
 }
 
@@ -145,7 +210,6 @@ function buildRibbon(data) {
   const container = document.getElementById('ribbon');
   if (!container || !data.children) return;
 
-  // Collect all thumbnails with paths
   const items = [];
   data.children.forEach(year => {
     if (year.children) {
@@ -162,31 +226,31 @@ function buildRibbon(data) {
 
   if (items.length < 6) return;
 
-  // Shuffle
+  // Shuffle and cap to reduce initial image load
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [items[i], items[j]] = [items[j], items[i]];
   }
+  const capped = items.slice(0, 30);
 
-  // Split into two rows
-  const mid = Math.ceil(items.length / 2);
-  const row1 = items.slice(0, mid);
-  const row2 = items.slice(mid);
+  const mid = Math.ceil(capped.length / 2);
+  const row1 = capped.slice(0, mid);
+  const row2 = capped.slice(mid);
 
   function buildTrack(entries, reverse) {
     const track = document.createElement('div');
     track.className = 'ribbon-track' + (reverse ? ' reverse' : '');
 
-    // Duplicate for seamless loop
     const all = entries.concat(entries);
     all.forEach(entry => {
       const a = document.createElement('a');
-      a.href = entry.path;
+      a.href = LANG_PARAM ? entry.path + '?lang=' + LANG : entry.path;
       a.title = entry.title;
       const img = document.createElement('img');
       img.src = entry.url;
       img.loading = 'lazy';
       img.alt = entry.title;
+      img.onerror = retryImage;
       a.appendChild(img);
       track.appendChild(a);
     });
@@ -207,8 +271,8 @@ function updateGameCount(data) {
       }
     });
   }
-  const el = document.getElementById('game-count');
-  if (el) el.textContent = count;
+  const el = document.getElementById('i18n-game-count');
+  if (el) el.innerHTML = (t.game_count || '{n} games and counting.').replace('{n}', count);
 }
 
 function scrollToHash() {
@@ -218,6 +282,19 @@ function scrollToHash() {
   if (el) {
     el.setAttribute('open', '');
     el.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function retryImage() {
+  var retries = parseInt(this.dataset.retries || '0');
+  if (retries < 2) {
+    this.dataset.retries = retries + 1;
+    var img = this;
+    var src = img.src;
+    img.src = '';
+    setTimeout(function() { img.src = src; }, retries === 0 ? 1000 : 3000);
+  } else {
+    this.dataset.error = '1';
   }
 }
 
