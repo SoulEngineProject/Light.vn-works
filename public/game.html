@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{{title_display}} ({{year}}) - Light.vn Works</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="/lvn_icon.png">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/game.css">
+    <meta property="og:title" content="{{title_display}} - Light.vn Works" />
+    <meta property="og:description" content="{{tagline}}" />
+    <meta property="og:image" content="{{og_image}}" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+    <nav class="breadcrumb">
+        <a href="/">Works</a>
+        <span>/</span>
+        <a href="/#{{year}}">{{year}}</a>
+        <span>/</span>
+        {{title_display}}
+    </nav>
+    {{hero_html}}
+    <div class="content">
+        <h1>{{title_display}}</h1>
+        <div class="meta-row">
+            {{tags_html}}
+            {{creator_html}}
+            {{released_html}}
+            {{link_html}}
+            {{extra_links_html}}
+            <button class="share-btn" onclick="copyLink(this)">Share &#x1F517;</button>
+        </div>
+    <script>
+    function copyLink(btn) {
+        navigator.clipboard.writeText(window.location.href);
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Share \u{1F517}'; }, 1500);
+    }
+    </script>
+        <div class="synopsis">{{synopsis_html}}</div>
+        {{gallery_html}}
+        {{more_from_creator}}
+    </div>
+    <footer class="game-footer">
+        Built with <a href="https://soulengineproject.itch.io/lightvn" target="_blank" rel="noopener">Light.vn</a> — your visual novel engine
+    </footer>
+</body>
+</html>

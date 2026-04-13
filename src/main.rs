@@ -16,9 +16,16 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use lightvn_works::{
-    GameMeta, parse_frontmatter, extract_first_image, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags,
+    GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator,
 };
+use std::sync::Arc;
+use axum::extract::State;
+
+#[derive(Clone)]
+struct AppState {
+    creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+}
 
 #[derive(Serialize, Clone)]
 struct Node {
@@ -159,6 +166,7 @@ fn attach_children(
 }
 
 async fn render_markdown(
+    State(state): State<AppState>,
     AxumPath((year, title)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
     if year.len() > 20
@@ -218,6 +226,21 @@ async fn render_markdown(
         }
     }
 
+    let tags_html: String = meta
+        .tags
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|tag| {
+            let class = if tag == "r18" { "tag-badge tag-r18" } else { "tag-badge tag-default" };
+            format!(
+                r#"<span class="{}">{}</span>"#,
+                class,
+                html_escape(&tag.to_uppercase())
+            )
+        })
+        .collect();
+
     let mut extra_links_html = String::new();
     if let Some(extras) = &meta.extra_links {
         for link in extras {
@@ -257,182 +280,61 @@ async fn render_markdown(
 
     let synopsis_html = strip_img_tags(&md_html);
 
-    let page = format!(
-        r##"<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>{title_display} ({year}) - Light.vn Works</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {{
-            --bg: #0d0b12;
-            --surface: #16131e;
-            --text: #ede9fe;
-            --text-muted: #a8a2c6;
-            --accent: #c084fc;
-            --accent-hover: #d8b4fe;
-            --border: #2a2440;
-        }}
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            line-height: 1.7;
-        }}
-        .breadcrumb {{
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 1.5rem 1.5rem 0;
-            font-size: 0.9rem;
-        }}
-        .breadcrumb a {{
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: color 0.2s;
-        }}
-        .breadcrumb a:hover {{ color: var(--accent); }}
-        .breadcrumb span {{ color: var(--text-muted); margin: 0 0.4rem; }}
+    let tagline = meta.tagline.as_deref().unwrap_or("");
+    let og_image = images.first().map(|s| s.as_str()).unwrap_or("");
 
-        .hero-image {{
-            max-width: 960px;
-            margin: 1.5rem auto 0;
-            padding: 0 1.5rem;
-        }}
-        .hero-image img {{
-            width: 100%;
-            max-height: 420px;
-            object-fit: cover;
-            border-radius: 1rem;
-            display: block;
-        }}
+    let current_path = format!("/works/{}/{}", &year, &title);
+    let creator_field = meta.creator.as_deref().unwrap_or("");
+    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX);
+    let more_from_creator: String = related_by_creator
+        .iter()
+        .map(|(name, games)| {
+            let cards: String = games
+                .iter()
+                .map(|g| {
+                    let thumb = g.thumbnail.as_deref().map(|url| {
+                        format!(
+                            r#"<img src="{}" alt="{}" loading="lazy" />"#,
+                            html_escape(url),
+                            html_escape(&g.title)
+                        )
+                    }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
+                    let badge = if g.tags.contains(&"r18".to_string()) {
+                        r#"<span class="card-badge card-badge-r18">R18</span>"#
+                    } else {
+                        ""
+                    };
+                    format!(
+                        r#"<a href="{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
+                        html_escape(&g.path),
+                        badge,
+                        thumb,
+                        html_escape(&g.title)
+                    )
+                })
+                .collect();
+            format!(
+                r#"<div class="more-creator"><h2>More from {}</h2><div class="more-creator-grid">{}</div></div>"#,
+                html_escape(name),
+                cards
+            )
+        })
+        .collect();
 
-        .content {{
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem 4rem;
-        }}
-        .content h1 {{
-            font-size: 2rem;
-            font-weight: 700;
-            color: #fff;
-            margin-bottom: 0.75rem;
-            letter-spacing: -0.02em;
-        }}
-        .meta-row {{
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
-            font-size: 0.95rem;
-        }}
-        .meta-item {{
-            color: var(--text-muted);
-        }}
-        .play-btn {{
-            display: inline-block;
-            padding: 0.5rem 1.25rem;
-            background: var(--accent);
-            color: #0d0b12;
-            font-weight: 600;
-            font-size: 0.9rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            transition: background 0.2s, transform 0.15s;
-        }}
-        .play-btn:hover {{
-            background: var(--accent-hover);
-            transform: translateY(-1px);
-        }}
-        .extra-link {{
-            display: inline-block;
-            padding: 0.4rem 1rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text);
-            font-size: 0.85rem;
-            border-radius: 0.5rem;
-            text-decoration: none;
-            transition: border-color 0.2s, color 0.2s;
-        }}
-        .extra-link:hover {{
-            border-color: var(--accent);
-            color: var(--accent);
-        }}
-
-        .synopsis {{
-            font-size: 1.05rem;
-            line-height: 1.8;
-            margin-bottom: 2rem;
-        }}
-        .synopsis p {{ margin-bottom: 1em; }}
-        .synopsis hr {{
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 1.5rem 0;
-        }}
-        .synopsis a {{ color: var(--accent); }}
-        .synopsis img {{ display: none; }}
-
-        .gallery {{
-            display: flex;
-            gap: 0.75rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
-            margin-top: 1rem;
-        }}
-        .gallery img {{
-            height: 180px;
-            border-radius: 0.75rem;
-            object-fit: cover;
-            flex-shrink: 0;
-        }}
-
-        @media (max-width: 640px) {{
-            .content h1 {{ font-size: 1.5rem; }}
-            .hero-image img {{ max-height: 240px; }}
-            .gallery img {{ height: 120px; }}
-        }}
-    </style>
-</head>
-<body>
-    <nav class="breadcrumb">
-        <a href="/">Works</a>
-        <span>/</span>
-        <a href="/">{year}</a>
-        <span>/</span>
-        {title_display}
-    </nav>
-    {hero_html}
-    <div class="content">
-        <h1>{title_display}</h1>
-        <div class="meta-row">
-            {creator_html}
-            {released_html}
-            {link_html}
-            {extra_links_html}
-        </div>
-        <div class="synopsis">{synopsis_html}</div>
-        {gallery_html}
-    </div>
-</body>
-</html>"##,
-        title_display = html_escape(&title_display),
-        year = html_escape(&year),
-        hero_html = hero_html,
-        creator_html = creator_html,
-        released_html = released_html,
-        link_html = link_html,
-        extra_links_html = extra_links_html,
-        synopsis_html = synopsis_html,
-        gallery_html = gallery_html,
-    );
+    let page = include_str!("../public/game.html")
+        .replace("{{title_display}}", &html_escape(&title_display))
+        .replace("{{year}}", &html_escape(&year))
+        .replace("{{tagline}}", &html_escape(tagline))
+        .replace("{{og_image}}", &html_escape(og_image))
+        .replace("{{hero_html}}", &hero_html)
+        .replace("{{tags_html}}", &tags_html)
+        .replace("{{creator_html}}", &creator_html)
+        .replace("{{released_html}}", &released_html)
+        .replace("{{link_html}}", &link_html)
+        .replace("{{extra_links_html}}", &extra_links_html)
+        .replace("{{synopsis_html}}", &synopsis_html)
+        .replace("{{gallery_html}}", &gallery_html)
+        .replace("{{more_from_creator}}", &more_from_creator);
 
     (StatusCode::OK, Html(page))
 }
@@ -458,8 +360,55 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
+fn build_startup_index() -> HashMap<String, Vec<CreatorGame>> {
+    let root_dir = FsPath::new("works");
+    let mut entries = Vec::new();
+
+    for entry in WalkDir::new(root_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let (meta, body) = parse_frontmatter(&content);
+        let creator = meta.creator.unwrap_or_default();
+        let released = meta.released.unwrap_or_default();
+        let thumbnail = extract_first_image(body);
+
+        let rel_path = path
+            .strip_prefix(root_dir)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+
+        let title = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
+        let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
+
+        let tags = meta.tags.unwrap_or_default();
+        entries.push((creator, title, link_path, thumbnail, released, tags));
+    }
+
+    build_creator_index(&entries)
+}
+
 #[tokio::main]
 async fn main() {
+    let state = AppState {
+        creator_index: Arc::new(build_startup_index()),
+    };
+
     let serve_dir = ServeDir::new("public").not_found_service(
         ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
     );
@@ -468,7 +417,8 @@ async fn main() {
         .route("/api/tree", get(get_tree))
         .route("/works/:year/:title", get(render_markdown))
         .nest_service("/raw", ServeDir::new("works"))
-        .fallback_service(serve_dir);
+        .fallback_service(serve_dir)
+        .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], get_port()));
     println!("Listening on http://{}", addr);
