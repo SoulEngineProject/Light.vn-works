@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 
 use lightvn_works::{
     GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows,
     get_i18n,
 };
 use axum::http::HeaderMap;
@@ -254,7 +254,11 @@ async fn render_markdown(
         .unwrap_or(&[])
         .iter()
         .map(|tag| {
-            let class = if tag == "r18" { "tag-badge tag-r18" } else { "tag-badge tag-default" };
+            let class = match tag.as_str() {
+                "r18" => "tag-badge badge-r18",
+                "ai" => "tag-badge badge-ai",
+                _ => "tag-badge tag-default",
+            };
             format!(
                 r#"<span class="{}">{}</span>"#,
                 class,
@@ -285,17 +289,22 @@ async fn render_markdown(
     }).unwrap_or_default();
 
     let gallery_html = if images.len() > 1 {
-        let imgs: String = images[1..]
-            .iter()
-            .map(|url| {
-                format!(
+        let gallery_images = &images[1..];
+        let rows = gallery_rows(gallery_images.len());
+        let mut idx = 0;
+        let mut html = String::new();
+        for cols in &rows {
+            html += &format!(r#"<div class="gallery gallery-{}">"#, cols);
+            for _ in 0..*cols {
+                html += &format!(
                     r#"<img src="{}" alt="Screenshot" loading="lazy" />"#,
-                    html_escape(url)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!(r#"<div class="gallery">{}</div>"#, imgs)
+                    html_escape(&gallery_images[idx])
+                );
+                idx += 1;
+            }
+            html += "</div>";
+        }
+        html
     } else {
         String::new()
     };
@@ -321,11 +330,13 @@ async fn render_markdown(
                             html_escape(&g.title)
                         )
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
-                    let badge = if g.tags.contains(&"r18".to_string()) {
-                        r#"<span class="card-badge card-badge-r18">R18</span>"#
-                    } else {
-                        ""
-                    };
+                    let mut badge = String::new();
+                    if g.tags.contains(&"r18".to_string()) {
+                        badge += r#"<span class="card-badge badge-r18">R18</span>"#;
+                    }
+                    if g.tags.contains(&"ai".to_string()) {
+                        badge += r#"<span class="card-badge badge-ai">AI</span>"#;
+                    }
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&g.path),

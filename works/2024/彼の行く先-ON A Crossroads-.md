@@ -4,6 +4,7 @@ released: 2024/11/22
 link_label: Booth
 link_url: "https://nafumi.booth.pm/items/6312650"
 tagline: キャラクターを動かしストーリーを辿るゲームです 難しさは一切無し、障害となるものも無し 牢獄の中で生まれ、光にほのかな憧れを抱いた少年のこれからの生き方を、ただ選ぶのみとなっています。
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/079049e0-5996-4f81-ad94-c011ce90ccc7" />

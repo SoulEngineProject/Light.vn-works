@@ -26,6 +26,10 @@ a:hover { color: var(--accent-hover); }
 
 html { scroll-behavior: smooth; }
 
+.badge-r18 { background: #dc2626; color: white; }
+.badge-ai { background: #2563eb; color: white; }
+.badge-new { background: #16a34a; color: white; }
+
 .lang-toggle {
   position: fixed;
   top: 0.75rem;

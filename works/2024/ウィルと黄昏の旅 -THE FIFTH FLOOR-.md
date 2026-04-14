@@ -9,6 +9,7 @@ extra_links:
   - label: Twitter
     url: "https://x.com/Uzumeyahonpo"
 tagline: この作品は「ウィルと黄昏の旅」全7階層のうちの第五階層の物語のみを収録したものです。
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/ec946249-3b91-4469-9981-c65ef4305d95" />

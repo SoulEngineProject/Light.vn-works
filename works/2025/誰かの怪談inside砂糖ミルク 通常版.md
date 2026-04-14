@@ -4,6 +4,7 @@ released: 2025/02/28
 link_label: Booth
 link_url: "https://pallas-ahtena.booth.pm/items/6608079"
 tagline: オムニバス形式のホラーノベルです。
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/e54210cf-3460-44fc-9236-4744f35dd17f" />

@@ -396,15 +396,6 @@ details[open] summary::before {
   z-index: 2;
 }
 
-.card-badge-r18 {
-  background: #dc2626;
-  color: white;
-}
-
-.card-badge-new {
-  background: #16a34a;
-  color: white;
-}
 
 .card-badge + .card-badge {
   right: auto;

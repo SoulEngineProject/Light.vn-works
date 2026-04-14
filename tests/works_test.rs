@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -196,6 +196,22 @@ fn validate_all_markdown_files() {
         if meta.released.as_deref().unwrap_or("").is_empty() {
             errors.push(format!("{}: released date is empty", path.display()));
         }
+        if meta.tags.is_none() {
+            errors.push(format!("{}: tags field missing from frontmatter", path.display()));
+        }
+
+        // released year should match the folder year
+        let released = meta.released.as_deref().unwrap_or("");
+        let folder_year = path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if !released.is_empty() && released != "unknown" && !folder_year.is_empty() && !released.starts_with(folder_year) {
+            errors.push(format!(
+                "{}: released '{}' does not match folder year '{}'",
+                path.display(), released, folder_year
+            ));
+        }
 
         if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
@@ -319,4 +335,19 @@ fn i18n_json_parses_both_languages() {
     assert!(!ja.footer.is_empty());
     assert!(!ja.breadcrumb_works.is_empty());
     assert!(!ja.engine_url.is_empty());
+}
+
+#[test]
+fn gallery_rows_layout() {
+    // given/when/then: verify row splits for all counts 1-9
+    assert_eq!(gallery_rows(0), Vec::<usize>::new());
+    assert_eq!(gallery_rows(1), vec![1]);
+    assert_eq!(gallery_rows(2), vec![2]);
+    assert_eq!(gallery_rows(3), vec![3]);
+    assert_eq!(gallery_rows(4), vec![2, 2]);
+    assert_eq!(gallery_rows(5), vec![3, 2]);
+    assert_eq!(gallery_rows(6), vec![3, 3]);
+    assert_eq!(gallery_rows(7), vec![3, 2, 2]);
+    assert_eq!(gallery_rows(8), vec![3, 3, 2]);
+    assert_eq!(gallery_rows(9), vec![3, 3, 3]);
 }

@@ -9,6 +9,7 @@ extra_links:
   - label: Twitter
     url: "https://mobile.twitter.com/Raika_Tsukuyomi"
 tagline: 「これは、繰り返される強者達の遊戯〈ひげき〉」 神々が暮らす世界、｢デウスガルテン｣。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/288b3a1d-ef02-4d7a-b731-fc4c94c584bb" />

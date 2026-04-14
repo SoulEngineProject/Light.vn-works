@@ -9,6 +9,7 @@ extra_links:
   - label: Twitter
     url: "https://mobile.twitter.com/Raika_Tsukuyomi"
 tagline: 「戦火に囚われし者よ。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/39237ac3-c2f5-4cab-8eb3-96d22519f443" />

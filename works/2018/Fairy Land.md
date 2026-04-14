@@ -7,6 +7,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/oodenta_athra"
 tagline: 私の夢、それは理想郷 主人公は「スキ」と言ったら消える呪いにかけられてそれを解くために幼馴染の仁と奔走する。
+tags: []
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/f473a3f3-0aa2-44b4-b8b3-74dbd4214bbe" />

@@ -4,6 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://ccc123p.itch.io/mitos-town"
 tagline: "Amanda is on her way to her friend's wedding when her car suddenly breaks down at the side of the road."
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/6790b8e7-487d-46ae-a69f-f3af2e3fbbbf" />

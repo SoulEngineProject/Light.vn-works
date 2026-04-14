@@ -4,6 +4,7 @@ released: 2025/07/20
 link_label: itch.io
 link_url: "https://minute.itch.io/yet-still-i-remember"
 tagline: "Two friends meet again in a quiet dream A short story of memory, regret, and letting go."
+tags: []
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/8a04666e-cce3-443a-b289-6a7f527b422b" />
