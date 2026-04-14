@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 
 use lightvn_works::{
     GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows,
     get_i18n,
 };
 use axum::http::HeaderMap;
@@ -289,17 +289,22 @@ async fn render_markdown(
     }).unwrap_or_default();
 
     let gallery_html = if images.len() > 1 {
-        let imgs: String = images[1..]
-            .iter()
-            .map(|url| {
-                format!(
+        let gallery_images = &images[1..];
+        let rows = gallery_rows(gallery_images.len());
+        let mut idx = 0;
+        let mut html = String::new();
+        for cols in &rows {
+            html += &format!(r#"<div class="gallery gallery-{}">"#, cols);
+            for _ in 0..*cols {
+                html += &format!(
                     r#"<img src="{}" alt="Screenshot" loading="lazy" />"#,
-                    html_escape(url)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        format!(r#"<div class="gallery">{}</div>"#, imgs)
+                    html_escape(&gallery_images[idx])
+                );
+                idx += 1;
+            }
+            html += "</div>";
+        }
+        html
     } else {
         String::new()
     };

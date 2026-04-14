@@ -146,10 +146,13 @@
 
 .gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 0.75rem;
   margin-top: 1rem;
 }
+
+.gallery-1 { grid-template-columns: 1fr; }
+.gallery-2 { grid-template-columns: repeat(2, 1fr); }
+.gallery-3 { grid-template-columns: repeat(3, 1fr); }
 
 .gallery img {
   width: 100%;

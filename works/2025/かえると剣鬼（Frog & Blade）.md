@@ -4,7 +4,7 @@ released: 2025/08/15
 link_label: Steam
 link_url: "https://store.steampowered.com/app/3644110/Frog__Blade/"
 tagline: 閉じた世界の真実に抗う異能力バトルサスペンス 主人公は、カエルのお面をかぶった男に殺された──── しかし次の瞬間には、何事もなかったように家のベッドにいた。
-tags: []
+tags: [ai]
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/20768738-5c26-40d0-8432-f50325757880" />

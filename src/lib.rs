@@ -263,6 +263,39 @@ pub fn get_related_games_by_creator<'a>(
     result
 }
 
+/// Compute gallery row sizes. Fills rows of 3, avoids orphan (1 image alone)
+/// by converting the last [3, 1] into [2, 2].
+pub fn gallery_rows(n: usize) -> Vec<usize> {
+    if n == 0 {
+        return vec![];
+    }
+    if n <= 3 {
+        return vec![n];
+    }
+
+    let mut rows = Vec::new();
+    let mut remaining = n;
+
+    while remaining > 0 {
+        if remaining == 4 {
+            rows.push(2);
+            rows.push(2);
+            remaining = 0;
+        } else if remaining == 2 {
+            rows.push(2);
+            remaining = 0;
+        } else if remaining >= 3 {
+            rows.push(3);
+            remaining -= 3;
+        } else {
+            rows.push(remaining);
+            remaining = 0;
+        }
+    }
+
+    rows
+}
+
 pub fn strip_img_tags(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
     let mut remaining = input;
