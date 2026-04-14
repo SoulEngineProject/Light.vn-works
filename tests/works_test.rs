@@ -200,6 +200,19 @@ fn validate_all_markdown_files() {
             errors.push(format!("{}: tags field missing from frontmatter", path.display()));
         }
 
+        // released year should match the folder year
+        let released = meta.released.as_deref().unwrap_or("");
+        let folder_year = path.parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if !released.is_empty() && released != "unknown" && !folder_year.is_empty() && !released.starts_with(folder_year) {
+            errors.push(format!(
+                "{}: released '{}' does not match folder year '{}'",
+                path.display(), released, folder_year
+            ));
+        }
+
         if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
         }
