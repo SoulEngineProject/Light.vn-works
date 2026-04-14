@@ -9,7 +9,7 @@
   },
   "game_count": {
     "en": "{n} games and counting.",
-    "ja": "<br>{n}作品、収録。"
+    "ja": "<br>収録総数：{n}作品"
   },
   "cta": {
     "en": "Get Light.vn",
@@ -20,8 +20,8 @@
     "ja": "あなたのゲームを追加しませんか？"
   },
   "contribute_link": {
-    "en": "Submit your game",
-    "ja": "ゲームを投稿する"
+    "en": "Submit your game's info",
+    "ja": "ゲーム情報を提供する"
   },
   "contribute_url": {
     "en": "https://forms.gle/UKGwKB1Y2C1H9YRv8",
@@ -32,8 +32,8 @@
     "ja": "タイトル・作者・タグで検索..."
   },
   "hide_r18": {
-    "en": "Hide R18",
-    "ja": "R18を非表示"
+    "en": "Hide R-18",
+    "ja": "R-18を非表示"
   },
   "new_badge": {
     "en": "New",
