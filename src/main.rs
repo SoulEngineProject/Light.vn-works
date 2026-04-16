@@ -16,7 +16,7 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use lightvn_works::{
-    GameMeta, CreatorGame, parse_frontmatter, extract_first_image, extract_all_images,
+    GameMeta, CreatorGame, parse_frontmatter, extract_all_images, pick_thumbnail,
     markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows,
     get_i18n,
 };
@@ -94,7 +94,7 @@ async fn get_tree() -> Json<Node> {
         {
             if let Ok(content) = fs::read_to_string(full_path).await {
                 let (parsed_meta, body) = parse_frontmatter(&content);
-                thumbnail = extract_first_image(body);
+                thumbnail = pick_thumbnail(body, parsed_meta.thumbnail_index);
                 meta = Some(parsed_meta);
             }
         }
@@ -422,7 +422,7 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
         let (meta, body) = parse_frontmatter(&content);
         let creator = meta.creator.unwrap_or_default();
         let released = meta.released.unwrap_or_default();
-        let thumbnail = extract_first_image(body);
+        let thumbnail = pick_thumbnail(body, meta.thumbnail_index);
 
         let rel_path = path
             .strip_prefix(root_dir)

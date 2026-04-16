@@ -10,6 +10,7 @@ extra_links:
     url: "https://x.com/Uzumeyahonpo"
 tagline: この作品は「ウィルと黄昏の旅」全7階層のうちの第六階層の物語のみを収録したものです。
 tags: []
+thumbnail_index:
 ---
 
 <img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/d8ee8d6a-244b-4e5c-ae94-8305880c9ce7" />

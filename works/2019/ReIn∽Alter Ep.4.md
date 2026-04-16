@@ -8,6 +8,7 @@ extra_links:
     url: "https://twitter.com/probabilitysky"
 tagline: 孤独を抱えて生きる少年少女たちの現代異能ライト・ノベルゲーム、最終話。
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4a687b77-9888-498f-bd18-0707e14f0955" />

@@ -8,6 +8,7 @@ extra_links:
     url: "http://timetick.xxxxxxxx.jp/"
 tagline: わんこ男子と戯れる系ＡＤＶ 主人公の前に突然現れた男は、愛犬・タロウ！
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/d8f8df84-2cc5-40e1-acfe-fee0008d3e96" />

@@ -5,6 +5,7 @@ link_label: itch.io
 link_url: "https://slitherbop.itch.io/play-of-wire"
 tagline: "Within the brain of “Funblood”, you are a “Funblood” who has become severed."
 tags: []
+thumbnail_index:
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/e7a58a59-44b7-4d61-a3f3-caedf282b4d2" />

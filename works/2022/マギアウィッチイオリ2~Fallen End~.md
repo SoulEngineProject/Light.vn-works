@@ -5,6 +5,7 @@ link_label: DLsite
 link_url: "https://www.dlsite.com/maniax/work/=/product_id/RJ407061.html"
 tagline: 復活した魔王と対峙した伊織達。
 tags: [r18]
+thumbnail_index:
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/43bf1fae-b9bf-49de-9799-55cea6440b3e" />

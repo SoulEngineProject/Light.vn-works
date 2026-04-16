@@ -10,6 +10,7 @@ extra_links:
     url: "https://twitter.com/gomabaga"
 tagline: 両親を魔王に殺された少年が、女性にしか使えない変身アイテムに適合し装者となる。
 tags: [r18]
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/c6d938e5-80cd-4f19-863b-c1d3a1562d16" />

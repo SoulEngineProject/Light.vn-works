@@ -8,6 +8,7 @@ extra_links:
     url: "https://twitter.com/mmoccaa"
 tagline: 女性主人公によるビジュアルサウンドノベル。
 tags: [r18]
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/403f3148-4651-4b8c-918a-f6cdb6737c41" />

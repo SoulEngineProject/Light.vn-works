@@ -18,6 +18,7 @@ extra_links:
     url: "https://twitter.com/tuetu_tu"
 tagline: サンタが逆にプレゼントを待っているって…！
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/22521f4c-ca90-453b-b895-bf664e327857" />
