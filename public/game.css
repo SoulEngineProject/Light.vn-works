@@ -156,9 +156,8 @@
 
 .gallery img {
   width: 100%;
-  height: 180px;
+  height: auto;
   border-radius: 0.75rem;
-  object-fit: cover;
 }
 
 .more-creator {
