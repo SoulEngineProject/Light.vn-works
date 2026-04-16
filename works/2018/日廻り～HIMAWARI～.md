@@ -15,7 +15,6 @@ tags: []
 <img width="1266" height="712" alt="image" src="https://github.com/user-attachments/assets/1fb31242-ac25-4424-af4f-efb703483dba" />
 <img width="1259" height="703" alt="image" src="https://github.com/user-attachments/assets/16fd3b2d-11dc-4e42-85d6-2daf4fcf029e" />
 <img width="1267" height="708" alt="image" src="https://github.com/user-attachments/assets/5850def3-314a-44f4-9e9a-7af783b059ef" />
-<img width="1270" height="705" alt="image" src="https://github.com/user-attachments/assets/7f44877e-c18d-4b0c-b978-226499e530ae" />
 
 ---
 廻る夏のヒマワリADV  
