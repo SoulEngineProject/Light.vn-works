@@ -10,6 +10,7 @@ extra_links:
     url: "https://twitter.com/paramebi"
 tagline: "間違えたら即エンド!"
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/61cfe8b6-d09b-4c54-abcf-27980982bd57" />

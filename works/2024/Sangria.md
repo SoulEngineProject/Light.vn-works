@@ -5,6 +5,7 @@ link_label: itch.io
 link_url: "https://juliateixeira.itch.io/sangria"
 tagline: "A vampire themed visual novel that takes place in the 80’s, in which you play as Inez, a vampire who woke up one night to find out her longtime companion, Heather, had left her."
 tags: []
+thumbnail_index:
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/60517f34-c21f-4a1a-8124-291e2a024a23" />

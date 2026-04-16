@@ -5,6 +5,7 @@ link_label: itch.io
 link_url: "https://yorubox.itch.io/welcome-to-halloween-candytown"
 tagline: "You enter \"Halloween Candytown\" a magical world full of candied villagers."
 tags: []
+thumbnail_index:
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/9ba0e6e9-5e0a-415b-bb7c-200707e34585" />

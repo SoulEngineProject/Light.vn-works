@@ -12,6 +12,7 @@ extra_links:
     url: "https://twitter.com/Uzumeyahonpo"
 tagline: 画面をクリックして反応を楽しむADV 「樹の塔にいるオルガという女性を探して欲しい。
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/66d4b60d-c637-4d67-bb62-d6129a41ea43" />

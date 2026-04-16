@@ -75,6 +75,8 @@ pub struct GameMeta {
     pub extra_links: Option<Vec<ExtraLink>>,
     #[serde(default)]
     pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub thumbnail_index: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
@@ -106,6 +108,16 @@ pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
         }
     } else {
         (GameMeta::default(), content)
+    }
+}
+
+pub fn pick_thumbnail(md: &str, index: Option<usize>) -> Option<String> {
+    match index {
+        Some(i) => {
+            let images = extract_all_images(md);
+            images.get(i).cloned().or_else(|| images.into_iter().next())
+        }
+        None => extract_first_image(md),
     }
 }
 

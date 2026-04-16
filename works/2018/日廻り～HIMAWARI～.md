@@ -8,6 +8,7 @@ extra_links:
     url: "https://twitter.com/silk_pod"
 tagline: 廻る夏のヒマワリADV 「おねえちゃん……本当に人間じゃないの？
 tags: []
+thumbnail_index:
 ---
 
 <img width="1269" height="717" alt="image" src="https://github.com/user-attachments/assets/381a9143-81fc-4278-86e2-0e800c56fe47" />

@@ -5,6 +5,7 @@ link_label: ふりーむ！
 link_url: "https://www.freem.ne.jp/win/game/11919"
 tagline: 好きになった人の正体は、とっても不思議な存在でした。
 tags: []
+thumbnail_index:
 ---
 
 <img width="790" height="596" alt="image" src="https://github.com/user-attachments/assets/fc0e2993-bfe3-4b8c-aefc-cd36bf1d8eb3" />

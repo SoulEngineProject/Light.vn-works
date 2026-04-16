@@ -10,6 +10,7 @@ extra_links:
     url: "https://twitter.com/Uzumeyahonpo"
 tagline: この作品は「ウィルと黄昏の旅」全7階層のうちの第四階層の物語のみを収録したものです。
 tags: []
+thumbnail_index:
 ---
 
 <img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/8cc2d904-ff8e-4137-a790-e9ea607990ef" />

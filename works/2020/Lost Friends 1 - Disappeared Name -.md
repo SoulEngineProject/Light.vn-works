@@ -12,6 +12,7 @@ extra_links:
     url: "https://twitter.com/Uzumeyahonpo"
 tagline: ほのぼので胸糞な短編ADV 山間の孤村ウルクに暮らす少年キリオには、どうしても許して欲しい相手がいた。
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/2c4d1500-18c7-4289-b6ee-930bf82925d2" />

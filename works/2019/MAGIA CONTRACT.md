@@ -10,6 +10,7 @@ extra_links:
     url: "https://twitter.com/multi_taste"
 tagline: "''ファンタジー乙女ゲーム 主人公リーベルは、アミュレット(魔法で召喚した守護者）のフォルスと共にエーヴィヒ街にやってきた。"
 tags: []
+thumbnail_index:
 ---
 
 <img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/96016a87-bfcc-4944-b198-5dbdaa0739ff" />

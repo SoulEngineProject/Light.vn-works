@@ -5,6 +5,7 @@ link_label: ""
 link_url: ""
 tagline: ""
 tags: []
+thumbnail_index:
 ---
 
 <img width="793" height="598" alt="image" src="https://github.com/user-attachments/assets/a3c4d8fe-3696-4c54-a17c-d0d786ce4d1d" />
