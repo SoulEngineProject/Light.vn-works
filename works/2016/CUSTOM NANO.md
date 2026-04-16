@@ -8,4 +8,5 @@ tags: []
 ---
 
 <img width="1720" height="993" alt="image" src="https://github.com/user-attachments/assets/33868398-2017-45e4-81c4-38918e0e8eb5" />
-<img width="1140" height="660" alt="image" src="https://github.com/user-attachments/assets/5e0421f9-95e9-44f6-a940-a85a0414d919" />
+<img width="566" height="660" alt="image" src="https://github.com/user-attachments/assets/b1d0fe2e-69c8-4f15-b7b0-2b49d8872054" />
+<img width="567" height="660" alt="image" src="https://github.com/user-attachments/assets/45dd9a78-83cc-4705-b296-ce2fac32336d" />
