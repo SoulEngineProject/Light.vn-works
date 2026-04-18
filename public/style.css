@@ -19,12 +19,14 @@ body {
   color: var(--text);
   min-height: 100vh;
   line-height: 1.6;
+  overflow-x: hidden;
+  padding: 0 1rem;
 }
 
 a { color: var(--accent); }
 a:hover { color: var(--accent-hover); }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 .badge-r18 { background: #dc2626; color: white; }
 .badge-ai { background: #2563eb; color: white; }

@@ -152,15 +152,20 @@ function renderTree(data, query, hideR18) {
     if (items.length === 0) return;
     totalVisible += items.length;
 
-    const details = document.createElement('details');
-    details.id = year.name;
+    const section = document.createElement('div');
+    section.className = 'year-section';
+    section.id = year.name;
     if (index === 0 || query) {
-      details.setAttribute('open', '');
+      section.classList.add('open');
     }
 
-    const summary = document.createElement('summary');
+    const summary = document.createElement('div');
+    summary.className = 'year-header';
     summary.innerHTML = year.name + ' <span class="year-count">(' + items.length + ')</span>';
-    details.appendChild(summary);
+    summary.addEventListener('click', function() {
+      section.classList.toggle('open');
+    });
+    section.appendChild(summary);
 
     const filesDiv = document.createElement('div');
     filesDiv.className = 'files';
@@ -187,7 +192,6 @@ function renderTree(data, query, hideR18) {
       const a = document.createElement('a');
       a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;
       a.className = 'file-card';
-      a.style.animationDelay = (cardIndex * 0.04) + 's';
 
       let thumbHtml;
       if (item.thumbnail) {
@@ -208,8 +212,8 @@ function renderTree(data, query, hideR18) {
       filesDiv.appendChild(a);
     });
 
-    details.appendChild(filesDiv);
-    container.appendChild(details);
+    section.appendChild(filesDiv);
+    container.appendChild(section);
   });
 
   if (totalVisible === 0 && query) {
@@ -292,7 +296,7 @@ function scrollToHash() {
   if (!hash) return;
   const el = document.getElementById(hash);
   if (el) {
-    el.setAttribute('open', '');
+    el.classList.add('open');
     el.scrollIntoView({ behavior: 'smooth' });
   }
 }
@@ -309,6 +313,7 @@ function retryImage() {
     this.dataset.error = '1';
   }
 }
+
 
 function escapeHtml(str) {
   const div = document.createElement('div');
