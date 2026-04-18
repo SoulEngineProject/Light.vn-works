@@ -70,5 +70,9 @@
   "engine_url": {
     "en": "https://soulengineproject.itch.io/lightvn",
     "ja": "https://lightvn.net/"
+  },
+  "tags_label": {
+    "en": "Tags:",
+    "ja": "タグ："
   }
 }

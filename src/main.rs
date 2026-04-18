@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 
 use lightvn_works::{
     GameMeta, CreatorGame, parse_frontmatter, extract_all_images, pick_thumbnail,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows, build_tags_line,
     get_i18n,
 };
 use axum::http::HeaderMap;
@@ -248,24 +248,8 @@ async fn render_markdown(
         }
     }
 
-    let tags_html: String = meta
-        .tags
-        .as_deref()
-        .unwrap_or(&[])
-        .iter()
-        .map(|tag| {
-            let class = match tag.as_str() {
-                "r18" => "tag-badge badge-r18",
-                "ai" => "tag-badge badge-ai",
-                _ => "tag-badge tag-default",
-            };
-            format!(
-                r#"<span class="{}">{}</span>"#,
-                class,
-                html_escape(&tag.to_uppercase())
-            )
-        })
-        .collect();
+    let tags = meta.tags.as_deref().unwrap_or(&[]);
+    let tags_line = build_tags_line(tags, &i18n.tags_label, lang_param);
 
     let mut extra_links_html = String::new();
     if let Some(extras) = &meta.extra_links {
@@ -361,7 +345,7 @@ async fn render_markdown(
         .replace("{{tagline}}", &html_escape(tagline))
         .replace("{{og_image}}", &html_escape(og_image))
         .replace("{{hero_html}}", &hero_html)
-        .replace("{{tags_html}}", &tags_html)
+        .replace("{{tags_line}}", &tags_line)
         .replace("{{creator_html}}", &creator_html)
         .replace("{{released_html}}", &released_html)
         .replace("{{link_html}}", &link_html)
