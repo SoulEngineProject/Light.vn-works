@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, RELEASED_UNKNOWN};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -206,7 +206,7 @@ fn validate_all_markdown_files() {
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        if !released.is_empty() && released != "unknown" && !folder_year.is_empty() && !released.starts_with(folder_year) {
+        if !released.is_empty() && released != RELEASED_UNKNOWN && !folder_year.is_empty() && !released.starts_with(folder_year) {
             errors.push(format!(
                 "{}: released '{}' does not match folder year '{}'",
                 path.display(), released, folder_year

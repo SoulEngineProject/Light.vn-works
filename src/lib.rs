@@ -3,6 +3,8 @@ use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+pub const RELEASED_UNKNOWN: &str = "unknown";
+
 #[derive(Debug)]
 pub struct I18nStrings {
     pub more_from: String,
@@ -231,9 +233,13 @@ pub fn build_creator_index(
         }
     }
 
-    // Sort each creator's games by release date (newest first)
+    // Sort each creator's games by release date (newest first, "unknown" last)
     for games in index.values_mut() {
-        games.sort_by(|a, b| b.released.cmp(&a.released));
+        games.sort_by(|a, b| {
+            let a_date = if a.released == RELEASED_UNKNOWN { "" } else { &a.released };
+            let b_date = if b.released == RELEASED_UNKNOWN { "" } else { &b.released };
+            b_date.cmp(a_date)
+        });
     }
 
     index
