@@ -192,7 +192,7 @@ header::before {
   gap: 0.75rem;
 }
 
-.search-wrap input {
+.search-wrap input[type="text"] {
   flex: 1;
   min-width: 0;
   padding: 0.75rem 1rem 0.75rem 2.75rem;
@@ -206,8 +206,8 @@ header::before {
   transition: border-color 0.2s;
 }
 
-.search-wrap input::placeholder { color: var(--text-muted); }
-.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input[type="text"]::placeholder { color: var(--text-muted); }
+.search-wrap input[type="text"]:focus { border-color: var(--accent); }
 
 .r18-toggle {
   color: var(--text-muted);
@@ -237,7 +237,7 @@ header::before {
 }
 
 /* Year sections */
-details {
+.year-section {
   margin-bottom: 1.25rem;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -246,27 +246,34 @@ details {
   transition: box-shadow 0.3s ease;
 }
 
-details[open] {
+.year-section.open {
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.4);
 }
 
-summary {
+.year-section .files {
+  display: none;
+}
+
+.year-section.open .files {
+  display: grid;
+}
+
+.year-header {
   padding: 1.1rem 1.5rem;
   font-size: 1.3rem;
   font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: background 0.2s ease;
-  list-style: none;
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-summary::-webkit-details-marker { display: none; }
-summary:hover { background: rgba(255, 255, 255, 0.03); }
+@media (hover: hover) {
+  .year-header:hover { background: rgba(255, 255, 255, 0.03); }
+}
 
-summary::before {
+.year-header::before {
   content: '\25B6';
   font-size: 0.8rem;
   color: var(--accent);
@@ -275,7 +282,7 @@ summary::before {
   flex-shrink: 0;
 }
 
-details[open] summary::before {
+.year-section.open .year-header::before {
   transform: rotate(90deg);
 }
 
@@ -304,18 +311,17 @@ details[open] summary::before {
   color: var(--text);
   display: flex;
   flex-direction: column;
-  animation: card-enter 0.4s ease both;
+}
+
+@media (hover: hover) {
+  .file-card {
+    animation: card-enter 0.4s ease both;
+  }
 }
 
 @keyframes card-enter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .file-card:hover {

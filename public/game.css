@@ -259,5 +259,5 @@
 @media (max-width: 640px) {
   .content h1 { font-size: 1.5rem; }
   .hero-image img { max-height: 240px; }
-  .gallery img { height: 120px; }
+  .gallery { grid-template-columns: 1fr !important; }
 }

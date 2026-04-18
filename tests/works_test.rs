@@ -216,6 +216,26 @@ fn validate_all_markdown_files() {
         if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
         }
+
+        if let Some(idx) = meta.thumbnail_index {
+            let image_count = extract_all_images(body).len();
+            if idx >= image_count {
+                errors.push(format!(
+                    "{}: thumbnail_index {} out of range (only {} images)",
+                    path.display(), idx, image_count
+                ));
+            }
+        }
+
+        let frontmatter_raw = content
+            .trim_start()
+            .trim_start_matches("---")
+            .splitn(2, "\n---")
+            .next()
+            .unwrap_or("");
+        if !frontmatter_raw.lines().any(|l| l.trim_start().starts_with("thumbnail_index:")) {
+            errors.push(format!("{}: thumbnail_index field missing from frontmatter", path.display()));
+        }
     }
 
     // then: no validation errors
