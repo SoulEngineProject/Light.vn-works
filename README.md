@@ -52,6 +52,14 @@ Open http://localhost:8080
 
 If changes don't appear, hard refresh with `Ctrl+Shift+R`.
 
+### Testing on phone
+
+1. Connect phone and PC to the same WiFi
+2. Find your PC's IP: run `ipconfig` and look for the IPv4 address
+3. On your phone, open `http://<your-ip>:8080`
+4. Use a private/incognito tab to avoid cache issues
+   - Safari: tap tabs icon → swipe to "Private" → tap +
+
 ### Tests
 
 ```
