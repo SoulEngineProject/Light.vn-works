@@ -1,5 +1,5 @@
 ---
-creator: 筍laboratore
+creator: 筍lavoratore
 released: 2024/03/13
 link_label: Steam
 link_url: "https://store.steampowered.com/app/2780390/_The_Broken_Platonic/"
