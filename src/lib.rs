@@ -13,6 +13,7 @@ pub struct I18nStrings {
     pub footer: String,
     pub breadcrumb_works: String,
     pub engine_url: String,
+    pub tags_label: String,
 }
 
 struct I18nPair {
@@ -25,8 +26,8 @@ static I18N: OnceLock<I18nPair> = OnceLock::new();
 fn load_i18n() -> &'static I18nPair {
     I18N.get_or_init(|| {
         let raw: HashMap<String, HashMap<String, String>> =
-            serde_json::from_str(include_str!("../public/i18n.json"))
-                .expect("Failed to parse i18n.json");
+            serde_json::from_str(include_str!("../public/lang.json"))
+                .expect("Failed to parse lang.json");
 
         fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> I18nStrings {
             let get = |key: &str| -> String {
@@ -42,6 +43,7 @@ fn load_i18n() -> &'static I18nPair {
                 footer: get("footer"),
                 breadcrumb_works: get("breadcrumb_works"),
                 engine_url: get("engine_url"),
+                tags_label: get("tags_label"),
             }
         }
 
@@ -312,6 +314,41 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
     }
 
     rows
+}
+
+/// Build the tags line HTML for a game page.
+pub fn build_tags_line(
+    tags: &[String],
+    tags_label: &str,
+    lang_param: Option<&str>,
+) -> String {
+    let tag_links: String = if tags.is_empty() {
+        "<span class=\"tags-none\">\u{2014}</span>".to_string()
+    } else {
+        tags.iter().map(|tag| {
+            let class = match tag.as_str() {
+                "r18" => "tag-link badge-r18",
+                "ai" => "tag-link badge-ai",
+                _ => "tag-link tag-default",
+            };
+            let href = if let Some(lang) = lang_param {
+                format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
+            } else {
+                format!("/?search={}", html_escape(tag))
+            };
+            format!(
+                r#"<a href="{}" class="{}">{}</a>"#,
+                href,
+                class,
+                html_escape(&tag.to_uppercase())
+            )
+        }).collect()
+    };
+    format!(
+        r#"<div class="tags-line"><span class="tags-label">{}</span> {}</div>"#,
+        html_escape(tags_label),
+        tag_links
+    )
 }
 
 pub fn strip_img_tags(input: &str) -> String {

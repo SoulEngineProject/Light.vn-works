@@ -127,6 +127,37 @@
   color: var(--text-muted);
 }
 
+.tags-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.tags-label {
+  color: var(--text-muted);
+}
+
+.tag-link {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 0.3rem;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.tag-link:hover {
+  opacity: 0.8;
+}
+
+.tags-none {
+  color: var(--text-muted);
+}
+
 .synopsis {
   font-size: 1.05rem;
   line-height: 1.8;

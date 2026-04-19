@@ -42,13 +42,13 @@
     <div class="content">
         <h1>{{title_display}}</h1>
         <div class="meta-row">
-            {{tags_html}}
             {{creator_html}}
             {{released_html}}
             {{link_html}}
             {{extra_links_html}}
             <button class="share-btn" data-share="{{i18n_share}}" data-copied="{{i18n_copied}}" onclick="copyLink(this)">{{i18n_share}}</button>
         </div>
+        {{tags_line}}
     <script>
     function copyLink(btn) {
         navigator.clipboard.writeText(window.location.href);

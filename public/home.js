@@ -7,10 +7,18 @@ const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
   ? LANG_PARAM
   : (navigator.language.startsWith('ja') ? 'ja' : 'en');
 
-// Restore R18 state from URL
-const R18_PARAM = new URLSearchParams(location.search).get('r18');
+// Restore state from URL
+const PARAMS = new URLSearchParams(location.search);
+const R18_PARAM = PARAMS.get('r18');
+const SEARCH_PARAM = PARAMS.get('search');
 if (R18_PARAM === '0') {
   document.getElementById('hide-r18').checked = false;
+}
+if (SEARCH_PARAM) {
+  document.getElementById('search').value = SEARCH_PARAM;
+  if (SEARCH_PARAM === 'r18') {
+    document.getElementById('hide-r18').checked = false;
+  }
 }
 
 // Show loading text
@@ -21,7 +29,7 @@ setupLangToggle();
 
 // Load i18n, then data
 Promise.all([
-  fetch('/i18n.json').then(r => r.json()),
+  fetch('/lang.json').then(r => r.json()),
   fetch('/api/tree').then(r => {
     if (!r.ok) throw new Error('Failed to load tree');
     return r.json();
@@ -38,7 +46,8 @@ Promise.all([
     applyStaticTranslations();
 
     allData = data;
-    renderTree(data, '', document.getElementById('hide-r18').checked);
+    var initialQuery = document.getElementById('search').value.trim().toLowerCase();
+    renderTree(data, initialQuery, document.getElementById('hide-r18').checked);
     scrollToHash();
     updateGameCount(data);
     buildRibbon(data);

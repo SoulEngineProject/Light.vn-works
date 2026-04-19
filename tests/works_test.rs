@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, build_tags_line, RELEASED_UNKNOWN};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -370,4 +370,48 @@ fn gallery_rows_layout() {
     assert_eq!(gallery_rows(7), vec![3, 2, 2]);
     assert_eq!(gallery_rows(8), vec![3, 3, 2]);
     assert_eq!(gallery_rows(9), vec![3, 3, 3]);
+}
+
+#[test]
+fn tags_line_empty() {
+    // given: no tags
+    let tags: Vec<String> = vec![];
+
+    // when: building tags line
+    let html = build_tags_line(&tags, "Tags:", None);
+
+    // then: shows em dash
+    assert!(html.contains("tags-line"));
+    assert!(html.contains("\u{2014}"));
+    assert!(!html.contains("tag-link"));
+}
+
+#[test]
+fn tags_line_with_tags() {
+    // given: r18 and ai tags
+    let tags = vec!["r18".to_string(), "ai".to_string()];
+
+    // when: building tags line
+    let html = build_tags_line(&tags, "Tags:", None);
+
+    // then: contains clickable links with correct classes
+    assert!(html.contains("badge-r18"));
+    assert!(html.contains("badge-ai"));
+    assert!(html.contains("R18"));
+    assert!(html.contains("AI"));
+    assert!(html.contains("/?search=r18"));
+    assert!(html.contains("/?search=ai"));
+}
+
+#[test]
+fn tags_line_with_lang() {
+    // given: tags with language param
+    let tags = vec!["r18".to_string()];
+
+    // when: building tags line with Japanese
+    let html = build_tags_line(&tags, "タグ：", Some("ja"));
+
+    // then: link includes lang param
+    assert!(html.contains("/?lang=ja&search=r18"));
+    assert!(html.contains("タグ："));
 }
