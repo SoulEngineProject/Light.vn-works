@@ -65,3 +65,7 @@ If changes don't appear, hard refresh with `Ctrl+Shift+R`.
 ```
 cargo test
 ```
+
+### Analytics
+
+- https://lightvn-works.goatcounter.com/
