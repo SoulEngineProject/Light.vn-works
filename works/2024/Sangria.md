@@ -4,7 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://juliateixeira.itch.io/sangria"
 tagline: "A vampire themed visual novel that takes place in the 80’s, in which you play as Inez, a vampire who woke up one night to find out her longtime companion, Heather, had left her."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 
