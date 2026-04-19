@@ -7,7 +7,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/MyWorldProject3"
 tagline: 異世界バトル物語 異世界に飛ばされる５人。
-tags: []
+tags: [早稲田大学]
 thumbnail_index:
 ---
 
