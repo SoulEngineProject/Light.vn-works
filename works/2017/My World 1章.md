@@ -11,7 +11,11 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/3f5652aa-2e33-422b-9561-a33c297e9a48" />
+<img width="1013" height="568" alt="image" src="https://github.com/user-attachments/assets/9343b78a-9108-4777-a095-f16efd780887" />
+<img width="1014" height="566" alt="image" src="https://github.com/user-attachments/assets/53684a7a-d528-48e0-a348-0dc5c83291b8" />
+<img width="1016" height="565" alt="image" src="https://github.com/user-attachments/assets/41c50738-71ac-42a6-bd7a-8bc582e326ea" />
+<img width="1014" height="568" alt="image" src="https://github.com/user-attachments/assets/4b6420ce-fc56-41df-bd95-047acac533da" />
+<img width="1011" height="562" alt="image" src="https://github.com/user-attachments/assets/e634b6fc-bd1b-49eb-aa26-d1c4ed87eb14" />
 
 ---
 異世界バトル物語  
