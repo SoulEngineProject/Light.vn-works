@@ -7,7 +7,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/silk_pod"
 tagline: 廻る夏のヒマワリADV 「おねえちゃん……本当に人間じゃないの？
-tags: []
+tags: [早稲田大学]
 thumbnail_index:
 ---
 
