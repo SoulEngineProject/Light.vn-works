@@ -13,7 +13,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/32f272b4-b823-4b6a-87d0-241efef161de" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/98d67de2-b73f-4cb5-bb02-ba6e0cb2c784" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/282ed79b-a10c-4a80-ae9a-cedbef348fdd" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/28dde04c-2208-4578-8248-f51f368c3982" />
 
 ---
 愛、嫌悪、否定、そして選択。　電波障害ノベルADV  
