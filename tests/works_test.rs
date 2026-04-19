@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, build_tags_line, load_aliases, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -335,12 +335,12 @@ fn creator_index_multi_creator_game() {
 }
 
 #[test]
-fn i18n_json_parses_both_languages() {
+fn lang_json_parses_both_languages() {
     // given: i18n.json exists and is loaded
 
     // when: loading English and Japanese strings
-    let en = get_i18n("en");
-    let ja = get_i18n("ja");
+    let en = get_lang("en");
+    let ja = get_lang("ja");
 
     // then: all required fields are non-empty
     assert!(!en.more_from.is_empty());

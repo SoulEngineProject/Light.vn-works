@@ -56,19 +56,19 @@ fetch('/api/tree')
   });
 
 function applyStaticTranslations() {
-  setHtml('i18n-managed-by', t.managed_by);
-  setText('i18n-subtitle', t.subtitle);
-  setText('i18n-cta', t.cta);
-  setText('i18n-contribute', t.contribute);
-  setText('i18n-contribute-link', t.contribute_link);
-  var contributeLink = document.getElementById('i18n-contribute-link');
+  setHtml('lang-managed-by', t.managed_by);
+  setText('lang-subtitle', t.subtitle);
+  setText('lang-cta', t.cta);
+  setText('lang-contribute', t.contribute);
+  setText('lang-contribute-link', t.contribute_link);
+  var contributeLink = document.getElementById('lang-contribute-link');
   if (contributeLink && t.contribute_url) contributeLink.href = t.contribute_url;
-  setText('i18n-hide-r18', t.hide_r18);
+  setText('lang-hide-r18', t.hide_r18);
 
   const search = document.getElementById('search');
   if (search) search.placeholder = t.search_placeholder;
 
-  const cta = document.getElementById('i18n-cta');
+  const cta = document.getElementById('lang-cta');
   if (cta && t.engine_url) cta.href = t.engine_url;
 }
 
@@ -294,7 +294,7 @@ function updateGameCount(data) {
       }
     });
   }
-  const el = document.getElementById('i18n-game-count');
+  const el = document.getElementById('lang-game-count');
   if (el) el.innerHTML = (t.game_count || '{n} games and counting.').replace('{n}', count);
 }
 

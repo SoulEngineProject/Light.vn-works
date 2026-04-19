@@ -1,3 +1,5 @@
+pub mod app;
+
 use pulldown_cmark::{html, Parser, Event};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -6,7 +8,7 @@ use std::sync::OnceLock;
 pub const RELEASED_UNKNOWN: &str = "unknown";
 
 #[derive(Debug)]
-pub struct I18nStrings {
+pub struct LangStrings {
     pub more_from: String,
     pub share: String,
     pub copied: String,
@@ -16,27 +18,27 @@ pub struct I18nStrings {
     pub tags_label: String,
 }
 
-struct I18nPair {
-    en: I18nStrings,
-    ja: I18nStrings,
+struct LangPair {
+    en: LangStrings,
+    ja: LangStrings,
 }
 
-static I18N: OnceLock<I18nPair> = OnceLock::new();
+static LANG: OnceLock<LangPair> = OnceLock::new();
 
-fn load_i18n() -> &'static I18nPair {
-    I18N.get_or_init(|| {
+fn load_lang() -> &'static LangPair {
+    LANG.get_or_init(|| {
         let raw: HashMap<String, HashMap<String, String>> =
             serde_json::from_str(include_str!("../config/lang.json"))
                 .expect("Failed to parse lang.json");
 
-        fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> I18nStrings {
+        fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> LangStrings {
             let get = |key: &str| -> String {
                 raw.get(key)
                     .and_then(|m| m.get(lang))
                     .cloned()
                     .unwrap_or_default()
             };
-            I18nStrings {
+            LangStrings {
                 more_from: get("more_from"),
                 share: get("share"),
                 copied: get("copied"),
@@ -47,19 +49,19 @@ fn load_i18n() -> &'static I18nPair {
             }
         }
 
-        I18nPair {
+        LangPair {
             en: extract(&raw, "en"),
             ja: extract(&raw, "ja"),
         }
     })
 }
 
-pub fn get_i18n(lang: &str) -> &'static I18nStrings {
-    let i18n = load_i18n();
+pub fn get_lang(lang: &str) -> &'static LangStrings {
+    let lang_data = load_lang();
     if lang.contains("ja") {
-        &i18n.ja
+        &lang_data.ja
     } else {
-        &i18n.en
+        &lang_data.en
     }
 }
 
