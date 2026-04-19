@@ -4,7 +4,7 @@ released: 2017/08/15
 link_label: ""
 link_url: ""
 tagline: ""
-tags: []
+tags: [早稲田大学]
 thumbnail_index:
 ---
 
