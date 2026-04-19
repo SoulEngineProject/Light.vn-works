@@ -4,7 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://slitherbop.itch.io/play-of-wire"
 tagline: "Within the brain of “Funblood”, you are a “Funblood” who has become severed."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 
