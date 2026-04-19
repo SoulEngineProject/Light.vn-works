@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 
 use lightvn_works::{
     GameMeta, CreatorGame, parse_frontmatter, extract_all_images, pick_thumbnail,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows, build_tags_line,
+    markdown_to_html, html_escape, strip_img_tags, build_creator_index, get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases,
     get_i18n,
 };
 use axum::http::HeaderMap;
@@ -28,6 +28,7 @@ use axum::extract::State;
 #[derive(Clone)]
 struct AppState {
     creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+    aliases: Arc<HashMap<String, Vec<String>>>,
     game_count: usize,
 }
 
@@ -300,7 +301,7 @@ async fn render_markdown(
 
     let current_path = format!("/works/{}/{}", &year, &title);
     let creator_field = meta.creator.as_deref().unwrap_or("");
-    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX);
+    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX, &state.aliases);
     let more_from_creator: String = related_by_creator
         .iter()
         .map(|(name, games)| {
@@ -431,8 +432,10 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
 #[tokio::main]
 async fn main() {
     let (creator_index, game_count) = build_startup_index();
+    let aliases = load_aliases(include_str!("../config/aliases.json"));
     let state = AppState {
         creator_index: Arc::new(creator_index),
+        aliases: Arc::new(aliases),
         game_count,
     };
 
@@ -457,7 +460,8 @@ async fn main() {
 
 async fn serve_home(State(state): State<AppState>) -> Html<String> {
     let page = include_str!("../public/index.html")
-        .replace("{{game_count}}", &state.game_count.to_string());
+        .replace("{{game_count}}", &state.game_count.to_string())
+        .replace("{{lang_json}}", include_str!("../config/lang.json"));
     Html(page)
 }
 

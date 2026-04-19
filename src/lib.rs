@@ -26,7 +26,7 @@ static I18N: OnceLock<I18nPair> = OnceLock::new();
 fn load_i18n() -> &'static I18nPair {
     I18N.get_or_init(|| {
         let raw: HashMap<String, HashMap<String, String>> =
-            serde_json::from_str(include_str!("../public/lang.json"))
+            serde_json::from_str(include_str!("../config/lang.json"))
                 .expect("Failed to parse lang.json");
 
         fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> I18nStrings {
@@ -254,6 +254,7 @@ pub fn get_related_games_by_creator<'a>(
     creator_field: &str,
     current_path: &str,
     limit: usize,
+    aliases: &HashMap<String, Vec<String>>,
 ) -> Vec<(String, Vec<&'a CreatorGame>)> {
     if creator_field.is_empty() {
         return Vec::new();
@@ -261,9 +262,27 @@ pub fn get_related_games_by_creator<'a>(
 
     let mut result = Vec::new();
     let mut seen_paths = std::collections::HashSet::new();
+    let mut seen_names = std::collections::HashSet::new();
     seen_paths.insert(current_path.to_string());
 
+    // Collect all names to look up: direct creators + their aliases
+    let mut names_to_check: Vec<String> = Vec::new();
     for name in split_creators(creator_field) {
+        let lower = name.to_lowercase();
+        if seen_names.insert(lower.clone()) {
+            names_to_check.push(name);
+        }
+        if let Some(alias_list) = aliases.get(&lower) {
+            for alias in alias_list {
+                let alias_lower = alias.to_lowercase();
+                if seen_names.insert(alias_lower) {
+                    names_to_check.push(alias.clone());
+                }
+            }
+        }
+    }
+
+    for name in names_to_check {
         if let Some(games) = index.get(&name.to_lowercase()) {
             let related: Vec<&CreatorGame> = games
                 .iter()
@@ -317,6 +336,27 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
 }
 
 /// Build the tags line HTML for a game page.
+/// Parse alias groups JSON into a bidirectional lookup map (lowercased).
+pub fn load_aliases(json: &str) -> HashMap<String, Vec<String>> {
+    let groups: Vec<Vec<String>> = serde_json::from_str(json).unwrap_or_default();
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for group in &groups {
+        for name in group {
+            let others: Vec<String> = group
+                .iter()
+                .filter(|n| n.to_lowercase() != name.to_lowercase())
+                .cloned()
+                .collect();
+            if !others.is_empty() {
+                map.insert(name.to_lowercase(), others);
+            }
+        }
+    }
+
+    map
+}
+
 pub fn build_tags_line(
     tags: &[String],
     tags_label: &str,

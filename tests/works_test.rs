@@ -1,4 +1,5 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, build_tags_line, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, build_tags_line, load_aliases, RELEASED_UNKNOWN};
+use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -277,7 +278,7 @@ fn creator_index_excludes_current_game() {
     let index = build_creator_index(&entries);
 
     // when: getting related games for Game A
-    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4);
+    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &HashMap::new());
 
     // then: returns 1 creator group with 2 games, not including Game A
     assert_eq!(related.len(), 1);
@@ -295,7 +296,7 @@ fn creator_index_single_game_creator() {
     let index = build_creator_index(&entries);
 
     // when: getting related games
-    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4);
+    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4, &HashMap::new());
 
     // then: no related games
     assert!(related.is_empty());
@@ -325,7 +326,7 @@ fn creator_index_multi_creator_game() {
     let index = build_creator_index(&entries);
 
     // when: getting related games for the collab game
-    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4);
+    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
 
     // then: Bob's section shows Solo Game
     assert_eq!(related.len(), 1);
@@ -414,4 +415,57 @@ fn tags_line_with_lang() {
     // then: link includes lang param
     assert!(html.contains("/?lang=ja&search=r18"));
     assert!(html.contains("タグ："));
+}
+
+#[test]
+fn alias_groups_resolve_bidirectionally() {
+    // given: an alias group
+    let json = r#"[["Alice", "アリス", "A-chan"]]"#;
+
+    // when: loading aliases
+    let aliases = load_aliases(json);
+
+    // then: each name maps to all others
+    assert_eq!(aliases.get("alice").unwrap().len(), 2);
+    assert_eq!(aliases.get("アリス").unwrap().len(), 2);
+    assert_eq!(aliases.get("a-chan").unwrap().len(), 2);
+    assert!(aliases.get("alice").unwrap().contains(&"アリス".to_string()));
+    assert!(aliases.get("alice").unwrap().contains(&"A-chan".to_string()));
+}
+
+#[test]
+fn related_games_via_alias() {
+    // given: two games by different names that are aliases
+    let entries = vec![
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("アリス".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
+    ];
+    let index = build_creator_index(&entries);
+    let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
+
+    // when: getting related games for Game A (by Alice)
+    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &aliases);
+
+    // then: finds Game B via alias アリス
+    assert_eq!(related.len(), 1);
+    assert_eq!(related[0].0, "アリス");
+    assert_eq!(related[0].1[0].title, "Game B");
+}
+
+#[test]
+fn alias_no_duplicate_games() {
+    // given: a game listed under both alias names (comma-separated creator)
+    let entries = vec![
+        ("Alice, アリス".to_string(), "Collab".to_string(), "/works/2024/Collab".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Solo".to_string(), "/works/2024/Solo".to_string(), None, "2024/06/01".to_string(), vec![]),
+    ];
+    let index = build_creator_index(&entries);
+    let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
+
+    // when: getting related games for Collab
+    let related = get_related_games_by_creator(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
+
+    // then: Solo appears only once (not duplicated across alias lookups)
+    let all_titles: Vec<&str> = related.iter().flat_map(|(_, games)| games.iter().map(|g| g.title.as_str())).collect();
+    assert_eq!(all_titles.iter().filter(|t| **t == "Solo").count(), 1);
 }

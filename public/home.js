@@ -21,29 +21,27 @@ if (SEARCH_PARAM) {
   }
 }
 
+// Load translations from embedded data
+if (typeof LANG_DATA !== 'undefined') {
+  for (var key in LANG_DATA) {
+    t[key] = LANG_DATA[key][LANG] || LANG_DATA[key]['en'] || '';
+  }
+}
+
 // Show loading text
 document.getElementById('tree').innerHTML = '<p class="loading-text">Loading...</p>';
 
-// Setup language toggle immediately (no dependency on fetches)
+// Setup language toggle and apply translations immediately
 setupLangToggle();
+applyStaticTranslations();
 
-// Load i18n, then data
-Promise.all([
-  fetch('/lang.json').then(r => r.json()),
-  fetch('/api/tree').then(r => {
+// Load data
+fetch('/api/tree')
+  .then(r => {
     if (!r.ok) throw new Error('Failed to load tree');
     return r.json();
   })
-])
-  .then(function(results) {
-    var i18n = results[0];
-    var data = results[1];
-
-    t = {};
-    for (var key in i18n) {
-      t[key] = i18n[key][LANG] || i18n[key]['en'] || '';
-    }
-    applyStaticTranslations();
+  .then(function(data) {
 
     allData = data;
     var initialQuery = document.getElementById('search').value.trim().toLowerCase();
