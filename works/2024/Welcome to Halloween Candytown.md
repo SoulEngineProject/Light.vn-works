@@ -4,7 +4,7 @@ released: 2024/09/29
 link_label: itch.io
 link_url: "https://yorubox.itch.io/welcome-to-halloween-candytown"
 tagline: "You enter \"Halloween Candytown\" a magical world full of candied villagers."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 
