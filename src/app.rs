@@ -17,16 +17,17 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, CreatorGame, parse_frontmatter, extract_all_images, pick_thumbnail,
+    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images, pick_thumbnail,
     markdown_to_html, html_escape, strip_img_tags, build_creator_index,
-    get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases,
-    get_lang,
+    get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases, load_tag_config,
+    tag_style, get_lang,
 };
 
 #[derive(Clone)]
 struct AppState {
     creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
     aliases: Arc<HashMap<String, Vec<String>>>,
+    tag_config: Arc<HashMap<String, TagInfo>>,
     game_count: usize,
 }
 
@@ -256,7 +257,8 @@ async fn render_markdown(
         (false, true) => "?r18=0".to_string(),
         (false, false) => String::new(),
     };
-    let tags_line = build_tags_line(tags, &lang.tags_label, lang_param);
+    let released = meta.released.as_deref().unwrap_or("");
+    let tags_line = build_tags_line(tags, &lang.tags_label, lang_param, &state.tag_config, released);
 
     let mut extra_links_html = String::new();
     if let Some(extras) = &meta.extra_links {
@@ -321,13 +323,17 @@ async fn render_markdown(
                             html_escape(&g.title)
                         )
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
-                    let mut badge = String::new();
-                    if g.tags.contains(&"r18".to_string()) {
-                        badge += r#"<span class="card-badge badge-r18">R18</span>"#;
-                    }
-                    if g.tags.contains(&"ai".to_string()) {
-                        badge += r#"<span class="card-badge badge-ai">AI</span>"#;
-                    }
+                    let badge: String = g.tags.iter().map(|tag| {
+                        let style_attr = match tag_style(tag, &state.tag_config) {
+                            Some(s) => format!(r#" style="{}""#, s),
+                            None => String::new(),
+                        };
+                        format!(
+                            r#"<span class="card-badge"{}>{}</span>"#,
+                            style_attr,
+                            html_escape(&tag.to_uppercase())
+                        )
+                    }).collect();
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&g.path),
@@ -438,10 +444,12 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
 
 pub fn build_app() -> Router {
     let (creator_index, game_count) = build_startup_index();
-    let aliases = load_aliases(include_str!("../config/aliases.json"));
+    let aliases = load_aliases(include_str!("../config/aliases.yaml"));
+    let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     let state = AppState {
         creator_index: Arc::new(creator_index),
         aliases: Arc::new(aliases),
+        tag_config: Arc::new(tag_config),
         game_count,
     };
 
@@ -461,7 +469,13 @@ pub fn build_app() -> Router {
 async fn serve_home(State(state): State<AppState>) -> Html<String> {
     let page = include_str!("../public/index.html")
         .replace("{{game_count}}", &state.game_count.to_string())
-        .replace("{{lang_json}}", include_str!("../config/lang.json"));
+        .replace("{{lang_json}}", include_str!("../config/lang.json"))
+        .replace("{{tag_colours_json}}", &{
+            let colours: HashMap<String, String> = state.tag_config.iter()
+                .map(|(k, v)| (k.clone(), v.colour.clone()))
+                .collect();
+            serde_json::to_string(&colours).unwrap_or_default()
+        });
     Html(page)
 }
 

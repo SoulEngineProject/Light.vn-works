@@ -159,6 +159,17 @@
   color: var(--text-muted);
 }
 
+.tag-event-link {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.tag-event-link:hover {
+  color: var(--accent-hover);
+}
+
 .synopsis {
   font-size: 1.05rem;
   line-height: 1.8;

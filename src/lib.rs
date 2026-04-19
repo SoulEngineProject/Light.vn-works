@@ -337,10 +337,62 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
     rows
 }
 
-/// Build the tags line HTML for a game page.
-/// Parse alias groups JSON into a bidirectional lookup map (lowercased).
-pub fn load_aliases(json: &str) -> HashMap<String, Vec<String>> {
-    let groups: Vec<Vec<String>> = serde_json::from_str(json).unwrap_or_default();
+/// Info for a special tag (colour, optional link).
+#[derive(Clone, Debug, Serialize)]
+pub struct TagInfo {
+    pub colour: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// Parse tag config YAML into a map of lowercased tag name → TagInfo.
+pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
+    #[derive(Deserialize)]
+    struct RawConfig {
+        #[serde(default)]
+        colours: HashMap<String, String>,
+        #[serde(default)]
+        tags: Vec<RawTagGroup>,
+    }
+    #[derive(Deserialize)]
+    struct RawTagGroup {
+        colour: String,
+        tags: Vec<String>,
+        url: Option<String>,
+        label: Option<String>,
+    }
+    let config: RawConfig = serde_yaml::from_str(yaml).unwrap_or(RawConfig {
+        colours: HashMap::new(),
+        tags: Vec::new(),
+    });
+    let mut map = HashMap::new();
+    for group in config.tags {
+        let resolved_colour = config.colours.get(&group.colour)
+            .cloned()
+            .unwrap_or(group.colour.clone());
+        for tag in &group.tags {
+            map.insert(tag.to_lowercase(), TagInfo {
+                colour: resolved_colour.clone(),
+                url: group.url.clone(),
+                label: group.label.clone(),
+            });
+        }
+    }
+    map
+}
+
+/// Get inline style for a tag badge, or None if unknown.
+pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<String> {
+    tag_config.get(&tag.to_lowercase()).map(|info| {
+        format!("background:{};color:white", info.colour)
+    })
+}
+
+/// Parse alias groups YAML into a bidirectional lookup map (lowercased).
+pub fn load_aliases(yaml: &str) -> HashMap<String, Vec<String>> {
+    let groups: Vec<Vec<String>> = serde_yaml::from_str(yaml).unwrap_or_default();
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
 
     for group in &groups {
@@ -363,33 +415,53 @@ pub fn build_tags_line(
     tags: &[String],
     tags_label: &str,
     lang_param: Option<&str>,
+    tag_config: &HashMap<String, TagInfo>,
+    released: &str,
 ) -> String {
     let tag_links: String = if tags.is_empty() {
         "<span class=\"tags-none\">\u{2014}</span>".to_string()
     } else {
         tags.iter().map(|tag| {
-            let class = match tag.as_str() {
-                "r18" => "tag-link badge-r18",
-                "ai" => "tag-link badge-ai",
-                _ => "tag-link tag-default",
+            let style_attr = match tag_style(tag, tag_config) {
+                Some(s) => format!(r#" style="{}""#, s),
+                None => String::new(),
             };
+            let class = if tag_style(tag, tag_config).is_some() { "tag-link" } else { "tag-link tag-default" };
             let href = if let Some(lang) = lang_param {
                 format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
             } else {
                 format!("/?search={}", html_escape(tag))
             };
             format!(
-                r#"<a href="{}" class="{}">{}</a>"#,
+                r#"<a href="{}" class="{}"{}>{}</a>"#,
                 href,
                 class,
+                style_attr,
                 html_escape(&tag.to_uppercase())
             )
         }).collect()
     };
+
+    // Build event links for tags that have url/label
+    let year = if released.len() >= 4 { &released[..4] } else { "" };
+    let event_links: String = tags.iter().filter_map(|tag| {
+        let info = tag_config.get(&tag.to_lowercase())?;
+        let url_template = info.url.as_deref()?;
+        let label_template = info.label.as_deref()?;
+        let url = url_template.replace("{year}", year).replace("{tag}", tag);
+        let label = label_template.replace("{year}", year).replace("{tag}", tag);
+        Some(format!(
+            r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
+            html_escape(&url),
+            html_escape(&label)
+        ))
+    }).collect();
+
     format!(
-        r#"<div class="tags-line"><span class="tags-label">{}</span> {}</div>"#,
+        r#"<div class="tags-line"><span class="tags-label">{}</span> {}{}</div>"#,
         html_escape(tags_label),
-        tag_links
+        tag_links,
+        if event_links.is_empty() { String::new() } else { format!(r#" {}"#, event_links) }
     )
 }
 

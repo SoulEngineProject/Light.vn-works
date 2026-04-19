@@ -189,12 +189,14 @@ function renderTree(data, query, hideR18) {
       const isR18 = tags.includes('r18');
       const isNew = isNewGame(released);
 
-      const isAI = tags.includes('ai');
-
+      var tagColours = (typeof TAG_COLOURS !== 'undefined') ? TAG_COLOURS : {};
       let badges = '';
-      if (isR18) badges += '<span class="card-badge card-badge badge-r18">R18</span>';
-      if (isAI) badges += '<span class="card-badge card-badge badge-ai">AI</span>';
-      if (isNew) badges += '<span class="card-badge card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      tags.forEach(function(tag) {
+        var colour = tagColours[tag.toLowerCase()];
+        var style = colour ? ' style="background:' + colour + ';color:white"' : '';
+        badges += '<span class="card-badge"' + style + '>' + escapeHtml(tag.toUpperCase()) + '</span>';
+      });
+      if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
       a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;

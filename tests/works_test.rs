@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, TagInfo, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -379,7 +379,7 @@ fn tags_line_empty() {
     let tags: Vec<String> = vec![];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None);
+    let html = build_tags_line(&tags, "Tags:", None, &HashMap::new(), "");
 
     // then: shows em dash
     assert!(html.contains("tags-line"));
@@ -389,15 +389,16 @@ fn tags_line_empty() {
 
 #[test]
 fn tags_line_with_tags() {
-    // given: r18 and ai tags
+    // given: r18 and ai tags with config
+    let config = load_tag_config("colours:\n  c1: \"#dc2626\"\n  c2: \"#2563eb\"\ntags:\n  - colour: c1\n    tags: [r18]\n  - colour: c2\n    tags: [ai]");
     let tags = vec!["r18".to_string(), "ai".to_string()];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None);
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
 
-    // then: contains clickable links with correct classes
-    assert!(html.contains("badge-r18"));
-    assert!(html.contains("badge-ai"));
+    // then: contains clickable links with inline colours
+    assert!(html.contains("background:#dc2626"));
+    assert!(html.contains("background:#2563eb"));
     assert!(html.contains("R18"));
     assert!(html.contains("AI"));
     assert!(html.contains("/?search=r18"));
@@ -410,7 +411,7 @@ fn tags_line_with_lang() {
     let tags = vec!["r18".to_string()];
 
     // when: building tags line with Japanese
-    let html = build_tags_line(&tags, "タグ：", Some("ja"));
+    let html = build_tags_line(&tags, "タグ：", Some("ja"), &HashMap::new(), "2024/01/01");
 
     // then: link includes lang param
     assert!(html.contains("/?lang=ja&search=r18"));
@@ -468,4 +469,39 @@ fn alias_no_duplicate_games() {
     // then: Solo appears only once (not duplicated across alias lookups)
     let all_titles: Vec<&str> = related.iter().flat_map(|(_, games)| games.iter().map(|g| g.title.as_str())).collect();
     assert_eq!(all_titles.iter().filter(|t| **t == "Solo").count(), 1);
+}
+
+#[test]
+fn special_tags_get_colour() {
+    // given: tag config with palette and groups
+    let yaml = "colours:\n  content: \"#dc2626\"\n  contest: \"#d97706\"\ntags:\n  - colour: content\n    tags: [r18]\n  - colour: contest\n    tags: [Summer Jam]";
+    let config = load_tag_config(yaml);
+    let tags = vec!["r18".to_string(), "Summer Jam".to_string(), "mystery".to_string()];
+
+    // when: building tags line
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
+
+    // then: r18 gets red, Summer Jam gets gold, mystery gets tag-default
+    assert!(html.contains("background:#dc2626"));
+    assert!(html.contains("background:#d97706"));
+    assert!(html.contains("tag-default"));
+    assert!(html.contains("R18"));
+    assert!(html.contains("SUMMER JAM"));
+    assert!(html.contains("MYSTERY"));
+}
+
+#[test]
+fn tag_with_url_renders_event_link() {
+    // given: tag config with url and label
+    let yaml = "colours:\n  contest: \"#d97706\"\ntags:\n  - colour: contest\n    tags: [TestFest]\n    url: \"https://example.com/{year}\"\n    label: \"{tag}{year} Entry\"";
+    let config = load_tag_config(yaml);
+    let tags = vec!["TestFest".to_string()];
+
+    // when: building tags line with released year
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2025/06/01");
+
+    // then: event link rendered with resolved year and tag
+    assert!(html.contains("https://example.com/2025"));
+    assert!(html.contains("TestFest2025 Entry"));
+    assert!(html.contains("tag-event-link"));
 }
