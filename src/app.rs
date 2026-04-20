@@ -307,7 +307,10 @@ async fn render_markdown(
 
     let synopsis_html = strip_img_tags(&md_html);
 
-    let tagline = meta.tagline.as_deref().unwrap_or("");
+    // Fallback to title if no tagline — only used in meta/OG tags (SEO), not visible on page
+    let tagline = meta.tagline.as_deref()
+        .filter(|t| !t.is_empty())
+        .unwrap_or(&title_display);
     let og_image = images.first().map(|s| s.as_str()).unwrap_or("");
 
     // Editor mockup: show last screenshot inside the Light.vn editor frame
