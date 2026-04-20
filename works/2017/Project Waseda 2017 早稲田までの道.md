@@ -4,7 +4,7 @@ released: 2017/02/27
 link_label: Youtube
 link_url: "https://www.youtube.com/watch?v=1QiPaBdq_58&t=9s"
 tagline: 早稲田大学公認サークル　CIRCLE四季凪による道案内動画です。
-tags: []
+tags: [早稲田大学]
 thumbnail_index: 1
 ---
 

@@ -4,7 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://oldpat.itch.io/42-hallows-street"
 tagline: "You play as Noah Nova, a student trying to uncover the dark secrets of a mansion that holds a significant place in both his and his friend's past."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 

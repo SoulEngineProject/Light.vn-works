@@ -4,7 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://ma-ka.itch.io/only-you-and-me"
 tagline: "María arrives with her child to at a small town in the middle of nowhere, hoping her past won't be stubborn enough to follow them here."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 

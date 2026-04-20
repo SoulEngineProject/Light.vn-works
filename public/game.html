@@ -21,7 +21,7 @@
     <script>
     (function() {
         var p = new URLSearchParams(location.search).get('lang');
-        var lang = p === 'ja' || p === 'en' ? p : '{{i18n_detected_lang}}';
+        var lang = p === 'ja' || p === 'en' ? p : '{{lang_detected_lang}}';
         var btn = document.getElementById('lang-toggle');
         btn.textContent = lang === 'ja' ? 'English' : '\u65E5\u672C\u8A9E';
         btn.addEventListener('click', function() {
@@ -32,9 +32,9 @@
     })();
     </script>
     <nav class="breadcrumb">
-        <a href="/{{lang_suffix}}">{{i18n_breadcrumb_works}}</a>
+        <a href="/{{home_suffix}}">{{lang_breadcrumb_works}}</a>
         <span>/</span>
-        <a href="/{{lang_suffix}}#{{year}}">{{year}}</a>
+        <a href="/{{home_suffix}}#{{year}}">{{year}}</a>
         <span>/</span>
         {{title_display}}
     </nav>
@@ -46,7 +46,7 @@
             {{released_html}}
             {{link_html}}
             {{extra_links_html}}
-            <button class="share-btn" data-share="{{i18n_share}}" data-copied="{{i18n_copied}}" onclick="copyLink(this)">{{i18n_share}}</button>
+            <button class="share-btn" data-share="{{lang_share}}" data-copied="{{lang_copied}}" onclick="copyLink(this)">{{lang_share}}</button>
         </div>
         {{tags_line}}
     <script>
@@ -61,7 +61,8 @@
         {{more_from_creator}}
     </div>
     <footer class="game-footer">
-        {{i18n_footer}}
+        {{lang_footer}}
     </footer>
+    <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ released: 2024/09/11
 link_label: itch.io
 link_url: "https://poundtoundhound.itch.io/cafe-guile"
 tagline: "A hospital-themed café is actually a front for a group of witches who perform various deeds in the dead of night for their master!"
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 

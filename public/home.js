@@ -21,56 +21,42 @@ if (SEARCH_PARAM) {
   }
 }
 
-// Show loading text
-document.getElementById('tree').innerHTML = '<p class="loading-text">Loading...</p>';
+// Load translations from embedded data
+if (typeof LANG_DATA !== 'undefined') {
+  for (var key in LANG_DATA) {
+    t[key] = LANG_DATA[key][LANG] || LANG_DATA[key]['en'] || '';
+  }
+}
 
-// Setup language toggle immediately (no dependency on fetches)
+// Setup language toggle and apply translations immediately
 setupLangToggle();
+applyStaticTranslations();
 
-// Load i18n, then data
-Promise.all([
-  fetch('/lang.json').then(r => r.json()),
-  fetch('/api/tree').then(r => {
-    if (!r.ok) throw new Error('Failed to load tree');
-    return r.json();
-  })
-])
-  .then(function(results) {
-    var i18n = results[0];
-    var data = results[1];
-
-    t = {};
-    for (var key in i18n) {
-      t[key] = i18n[key][LANG] || i18n[key]['en'] || '';
-    }
-    applyStaticTranslations();
-
-    allData = data;
-    var initialQuery = document.getElementById('search').value.trim().toLowerCase();
-    renderTree(data, initialQuery, document.getElementById('hide-r18').checked);
-    scrollToHash();
-    updateGameCount(data);
-    buildRibbon(data);
-  })
-  .catch(err => {
-    document.getElementById('tree').innerHTML =
-      '<p class="no-results">Error: ' + err.message + '</p>';
-  });
+// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_COLOURS).
+// No API fetch needed — everything is baked into the HTML at serve time.
+if (typeof TREE_DATA !== 'undefined') {
+  allData = TREE_DATA;
+  var initialQuery = document.getElementById('search').value.trim().toLowerCase();
+  renderTree(TREE_DATA, initialQuery, document.getElementById('hide-r18').checked);
+  scrollToHash();
+  updateGameCount(TREE_DATA);
+  buildRibbon(TREE_DATA);
+}
 
 function applyStaticTranslations() {
-  setHtml('i18n-managed-by', t.managed_by);
-  setText('i18n-subtitle', t.subtitle);
-  setText('i18n-cta', t.cta);
-  setText('i18n-contribute', t.contribute);
-  setText('i18n-contribute-link', t.contribute_link);
-  var contributeLink = document.getElementById('i18n-contribute-link');
+  setHtml('lang-managed-by', t.managed_by);
+  setText('lang-subtitle', t.subtitle);
+  setText('lang-cta', t.cta);
+  setText('lang-contribute', t.contribute);
+  setText('lang-contribute-link', t.contribute_link);
+  var contributeLink = document.getElementById('lang-contribute-link');
   if (contributeLink && t.contribute_url) contributeLink.href = t.contribute_url;
-  setText('i18n-hide-r18', t.hide_r18);
+  setText('lang-hide-r18', t.hide_r18);
 
   const search = document.getElementById('search');
   if (search) search.placeholder = t.search_placeholder;
 
-  const cta = document.getElementById('i18n-cta');
+  const cta = document.getElementById('lang-cta');
   if (cta && t.engine_url) cta.href = t.engine_url;
 }
 
@@ -191,12 +177,14 @@ function renderTree(data, query, hideR18) {
       const isR18 = tags.includes('r18');
       const isNew = isNewGame(released);
 
-      const isAI = tags.includes('ai');
-
+      var tagColours = (typeof TAG_COLOURS !== 'undefined') ? TAG_COLOURS : {};
       let badges = '';
-      if (isR18) badges += '<span class="card-badge card-badge badge-r18">R18</span>';
-      if (isAI) badges += '<span class="card-badge card-badge badge-ai">AI</span>';
-      if (isNew) badges += '<span class="card-badge card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      tags.forEach(function(tag) {
+        var colour = tagColours[tag.toLowerCase()];
+        var style = colour ? ' style="background:' + colour + ';color:white"' : '';
+        badges += '<span class="card-badge"' + style + '>' + escapeHtml(tag.toUpperCase()) + '</span>';
+      });
+      if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
       a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;
@@ -285,6 +273,23 @@ function buildRibbon(data) {
 
   container.appendChild(buildTrack(row1, false));
   container.appendChild(buildTrack(row2, true));
+
+  // Ribbon starts invisible (CSS opacity:0). Fade in once 50% of images
+  // have loaded to avoid showing broken/placeholder images.
+  var ribbonImages = container.querySelectorAll('img');
+  var loaded = 0;
+  var total = ribbonImages.length;
+  var threshold = Math.floor(total * 0.5);
+  ribbonImages.forEach(function(img) {
+    if (img.complete) {
+      loaded++;
+    }
+    img.addEventListener('load', function() {
+      loaded++;
+      if (loaded >= threshold) container.classList.add('loaded');
+    });
+  });
+  if (loaded >= threshold) container.classList.add('loaded');
 }
 
 function updateGameCount(data) {
@@ -296,7 +301,7 @@ function updateGameCount(data) {
       }
     });
   }
-  const el = document.getElementById('i18n-game-count');
+  const el = document.getElementById('lang-game-count');
   if (el) el.innerHTML = (t.game_count || '{n} games and counting.').replace('{n}', count);
 }
 

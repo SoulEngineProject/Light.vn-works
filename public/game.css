@@ -151,11 +151,23 @@
 }
 
 .tag-link:hover {
-  opacity: 0.8;
+  color: inherit;
+  text-decoration: none;
 }
 
 .tags-none {
   color: var(--text-muted);
+}
+
+.tag-event-link {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.tag-event-link:hover {
+  color: var(--accent-hover);
 }
 
 .synopsis {
@@ -193,6 +205,10 @@
 }
 
 .more-creator {
+  margin-top: 1rem;
+}
+
+.more-creator:not(.more-creator + .more-creator) {
   margin-top: 2.5rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border);

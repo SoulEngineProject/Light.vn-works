@@ -1,3 +1,5 @@
+pub mod app;
+
 use pulldown_cmark::{html, Parser, Event};
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
@@ -6,7 +8,7 @@ use std::sync::OnceLock;
 pub const RELEASED_UNKNOWN: &str = "unknown";
 
 #[derive(Debug)]
-pub struct I18nStrings {
+pub struct LangStrings {
     pub more_from: String,
     pub share: String,
     pub copied: String,
@@ -16,27 +18,27 @@ pub struct I18nStrings {
     pub tags_label: String,
 }
 
-struct I18nPair {
-    en: I18nStrings,
-    ja: I18nStrings,
+struct LangPair {
+    en: LangStrings,
+    ja: LangStrings,
 }
 
-static I18N: OnceLock<I18nPair> = OnceLock::new();
+static LANG: OnceLock<LangPair> = OnceLock::new();
 
-fn load_i18n() -> &'static I18nPair {
-    I18N.get_or_init(|| {
+fn load_lang() -> &'static LangPair {
+    LANG.get_or_init(|| {
         let raw: HashMap<String, HashMap<String, String>> =
-            serde_json::from_str(include_str!("../public/lang.json"))
+            serde_json::from_str(include_str!("../config/lang.json"))
                 .expect("Failed to parse lang.json");
 
-        fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> I18nStrings {
+        fn extract(raw: &HashMap<String, HashMap<String, String>>, lang: &str) -> LangStrings {
             let get = |key: &str| -> String {
                 raw.get(key)
                     .and_then(|m| m.get(lang))
                     .cloned()
                     .unwrap_or_default()
             };
-            I18nStrings {
+            LangStrings {
                 more_from: get("more_from"),
                 share: get("share"),
                 copied: get("copied"),
@@ -47,19 +49,19 @@ fn load_i18n() -> &'static I18nPair {
             }
         }
 
-        I18nPair {
+        LangPair {
             en: extract(&raw, "en"),
             ja: extract(&raw, "ja"),
         }
     })
 }
 
-pub fn get_i18n(lang: &str) -> &'static I18nStrings {
-    let i18n = load_i18n();
+pub fn get_lang(lang: &str) -> &'static LangStrings {
+    let lang_data = load_lang();
     if lang.contains("ja") {
-        &i18n.ja
+        &lang_data.ja
     } else {
-        &i18n.en
+        &lang_data.en
     }
 }
 
@@ -254,6 +256,7 @@ pub fn get_related_games_by_creator<'a>(
     creator_field: &str,
     current_path: &str,
     limit: usize,
+    aliases: &HashMap<String, Vec<String>>,
 ) -> Vec<(String, Vec<&'a CreatorGame>)> {
     if creator_field.is_empty() {
         return Vec::new();
@@ -261,9 +264,27 @@ pub fn get_related_games_by_creator<'a>(
 
     let mut result = Vec::new();
     let mut seen_paths = std::collections::HashSet::new();
+    let mut seen_names = std::collections::HashSet::new();
     seen_paths.insert(current_path.to_string());
 
+    // Collect all names to look up: direct creators + their aliases
+    let mut names_to_check: Vec<String> = Vec::new();
     for name in split_creators(creator_field) {
+        let lower = name.to_lowercase();
+        if seen_names.insert(lower.clone()) {
+            names_to_check.push(name);
+        }
+        if let Some(alias_list) = aliases.get(&lower) {
+            for alias in alias_list {
+                let alias_lower = alias.to_lowercase();
+                if seen_names.insert(alias_lower) {
+                    names_to_check.push(alias.clone());
+                }
+            }
+        }
+    }
+
+    for name in names_to_check {
         if let Some(games) = index.get(&name.to_lowercase()) {
             let related: Vec<&CreatorGame> = games
                 .iter()
@@ -316,38 +337,131 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
     rows
 }
 
-/// Build the tags line HTML for a game page.
+/// Info for a special tag (colour, optional link).
+#[derive(Clone, Debug, Serialize)]
+pub struct TagInfo {
+    pub colour: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// Parse tag config YAML into a map of lowercased tag name → TagInfo.
+pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
+    #[derive(Deserialize)]
+    struct RawConfig {
+        #[serde(default)]
+        colours: HashMap<String, String>,
+        #[serde(default)]
+        tags: Vec<RawTagGroup>,
+    }
+    #[derive(Deserialize)]
+    struct RawTagGroup {
+        colour: String,
+        tags: Vec<String>,
+        url: Option<String>,
+        label: Option<String>,
+    }
+    let config: RawConfig = serde_yaml::from_str(yaml).unwrap_or(RawConfig {
+        colours: HashMap::new(),
+        tags: Vec::new(),
+    });
+    let mut map = HashMap::new();
+    for group in config.tags {
+        let resolved_colour = config.colours.get(&group.colour)
+            .cloned()
+            .unwrap_or(group.colour.clone());
+        for tag in &group.tags {
+            map.insert(tag.to_lowercase(), TagInfo {
+                colour: resolved_colour.clone(),
+                url: group.url.clone(),
+                label: group.label.clone(),
+            });
+        }
+    }
+    map
+}
+
+/// Get inline style for a tag badge, or None if unknown.
+pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<String> {
+    tag_config.get(&tag.to_lowercase()).map(|info| {
+        format!("background:{};color:white", info.colour)
+    })
+}
+
+/// Parse alias groups YAML into a bidirectional lookup map (lowercased).
+pub fn load_aliases(yaml: &str) -> HashMap<String, Vec<String>> {
+    let groups: Vec<Vec<String>> = serde_yaml::from_str(yaml).unwrap_or_default();
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for group in &groups {
+        for name in group {
+            let others: Vec<String> = group
+                .iter()
+                .filter(|n| n.to_lowercase() != name.to_lowercase())
+                .cloned()
+                .collect();
+            if !others.is_empty() {
+                map.insert(name.to_lowercase(), others);
+            }
+        }
+    }
+
+    map
+}
+
 pub fn build_tags_line(
     tags: &[String],
     tags_label: &str,
     lang_param: Option<&str>,
+    tag_config: &HashMap<String, TagInfo>,
+    released: &str,
 ) -> String {
     let tag_links: String = if tags.is_empty() {
         "<span class=\"tags-none\">\u{2014}</span>".to_string()
     } else {
         tags.iter().map(|tag| {
-            let class = match tag.as_str() {
-                "r18" => "tag-link badge-r18",
-                "ai" => "tag-link badge-ai",
-                _ => "tag-link tag-default",
+            let style_attr = match tag_style(tag, tag_config) {
+                Some(s) => format!(r#" style="{}""#, s),
+                None => String::new(),
             };
+            let class = if tag_style(tag, tag_config).is_some() { "tag-link" } else { "tag-link tag-default" };
             let href = if let Some(lang) = lang_param {
                 format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
             } else {
                 format!("/?search={}", html_escape(tag))
             };
             format!(
-                r#"<a href="{}" class="{}">{}</a>"#,
+                r#"<a href="{}" class="{}"{}>{}</a>"#,
                 href,
                 class,
+                style_attr,
                 html_escape(&tag.to_uppercase())
             )
         }).collect()
     };
+
+    // Build event links for tags that have url/label
+    let year = if released.len() >= 4 { &released[..4] } else { "" };
+    let event_links: String = tags.iter().filter_map(|tag| {
+        let info = tag_config.get(&tag.to_lowercase())?;
+        let url_template = info.url.as_deref()?;
+        let label_template = info.label.as_deref()?;
+        let url = url_template.replace("{year}", year).replace("{tag}", tag);
+        let label = label_template.replace("{year}", year).replace("{tag}", tag);
+        Some(format!(
+            r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
+            html_escape(&url),
+            html_escape(&label)
+        ))
+    }).collect();
+
     format!(
-        r#"<div class="tags-line"><span class="tags-label">{}</span> {}</div>"#,
+        r#"<div class="tags-line"><span class="tags-label">{}</span> {}{}</div>"#,
         html_escape(tags_label),
-        tag_links
+        tag_links,
+        if event_links.is_empty() { String::new() } else { format!(r#" {}"#, event_links) }
     )
 }
 

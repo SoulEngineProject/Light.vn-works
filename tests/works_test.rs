@@ -1,4 +1,5 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_i18n, gallery_rows, build_tags_line, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, TagInfo, RELEASED_UNKNOWN};
+use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -277,7 +278,7 @@ fn creator_index_excludes_current_game() {
     let index = build_creator_index(&entries);
 
     // when: getting related games for Game A
-    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4);
+    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &HashMap::new());
 
     // then: returns 1 creator group with 2 games, not including Game A
     assert_eq!(related.len(), 1);
@@ -295,7 +296,7 @@ fn creator_index_single_game_creator() {
     let index = build_creator_index(&entries);
 
     // when: getting related games
-    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4);
+    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4, &HashMap::new());
 
     // then: no related games
     assert!(related.is_empty());
@@ -325,7 +326,7 @@ fn creator_index_multi_creator_game() {
     let index = build_creator_index(&entries);
 
     // when: getting related games for the collab game
-    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4);
+    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
 
     // then: Bob's section shows Solo Game
     assert_eq!(related.len(), 1);
@@ -334,12 +335,12 @@ fn creator_index_multi_creator_game() {
 }
 
 #[test]
-fn i18n_json_parses_both_languages() {
+fn lang_json_parses_both_languages() {
     // given: i18n.json exists and is loaded
 
     // when: loading English and Japanese strings
-    let en = get_i18n("en");
-    let ja = get_i18n("ja");
+    let en = get_lang("en");
+    let ja = get_lang("ja");
 
     // then: all required fields are non-empty
     assert!(!en.more_from.is_empty());
@@ -378,7 +379,7 @@ fn tags_line_empty() {
     let tags: Vec<String> = vec![];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None);
+    let html = build_tags_line(&tags, "Tags:", None, &HashMap::new(), "");
 
     // then: shows em dash
     assert!(html.contains("tags-line"));
@@ -388,15 +389,16 @@ fn tags_line_empty() {
 
 #[test]
 fn tags_line_with_tags() {
-    // given: r18 and ai tags
+    // given: r18 and ai tags with config
+    let config = load_tag_config("colours:\n  c1: \"#dc2626\"\n  c2: \"#2563eb\"\ntags:\n  - colour: c1\n    tags: [r18]\n  - colour: c2\n    tags: [ai]");
     let tags = vec!["r18".to_string(), "ai".to_string()];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None);
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
 
-    // then: contains clickable links with correct classes
-    assert!(html.contains("badge-r18"));
-    assert!(html.contains("badge-ai"));
+    // then: contains clickable links with inline colours
+    assert!(html.contains("background:#dc2626"));
+    assert!(html.contains("background:#2563eb"));
     assert!(html.contains("R18"));
     assert!(html.contains("AI"));
     assert!(html.contains("/?search=r18"));
@@ -409,9 +411,97 @@ fn tags_line_with_lang() {
     let tags = vec!["r18".to_string()];
 
     // when: building tags line with Japanese
-    let html = build_tags_line(&tags, "タグ：", Some("ja"));
+    let html = build_tags_line(&tags, "タグ：", Some("ja"), &HashMap::new(), "2024/01/01");
 
     // then: link includes lang param
     assert!(html.contains("/?lang=ja&search=r18"));
     assert!(html.contains("タグ："));
+}
+
+#[test]
+fn alias_groups_resolve_bidirectionally() {
+    // given: an alias group
+    let json = r#"[["Alice", "アリス", "A-chan"]]"#;
+
+    // when: loading aliases
+    let aliases = load_aliases(json);
+
+    // then: each name maps to all others
+    assert_eq!(aliases.get("alice").unwrap().len(), 2);
+    assert_eq!(aliases.get("アリス").unwrap().len(), 2);
+    assert_eq!(aliases.get("a-chan").unwrap().len(), 2);
+    assert!(aliases.get("alice").unwrap().contains(&"アリス".to_string()));
+    assert!(aliases.get("alice").unwrap().contains(&"A-chan".to_string()));
+}
+
+#[test]
+fn related_games_via_alias() {
+    // given: two games by different names that are aliases
+    let entries = vec![
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("アリス".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
+    ];
+    let index = build_creator_index(&entries);
+    let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
+
+    // when: getting related games for Game A (by Alice)
+    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &aliases);
+
+    // then: finds Game B via alias アリス
+    assert_eq!(related.len(), 1);
+    assert_eq!(related[0].0, "アリス");
+    assert_eq!(related[0].1[0].title, "Game B");
+}
+
+#[test]
+fn alias_no_duplicate_games() {
+    // given: a game listed under both alias names (comma-separated creator)
+    let entries = vec![
+        ("Alice, アリス".to_string(), "Collab".to_string(), "/works/2024/Collab".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Solo".to_string(), "/works/2024/Solo".to_string(), None, "2024/06/01".to_string(), vec![]),
+    ];
+    let index = build_creator_index(&entries);
+    let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
+
+    // when: getting related games for Collab
+    let related = get_related_games_by_creator(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
+
+    // then: Solo appears only once (not duplicated across alias lookups)
+    let all_titles: Vec<&str> = related.iter().flat_map(|(_, games)| games.iter().map(|g| g.title.as_str())).collect();
+    assert_eq!(all_titles.iter().filter(|t| **t == "Solo").count(), 1);
+}
+
+#[test]
+fn special_tags_get_colour() {
+    // given: tag config with palette and groups
+    let yaml = "colours:\n  content: \"#dc2626\"\n  contest: \"#d97706\"\ntags:\n  - colour: content\n    tags: [r18]\n  - colour: contest\n    tags: [Summer Jam]";
+    let config = load_tag_config(yaml);
+    let tags = vec!["r18".to_string(), "Summer Jam".to_string(), "mystery".to_string()];
+
+    // when: building tags line
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
+
+    // then: r18 gets red, Summer Jam gets gold, mystery gets tag-default
+    assert!(html.contains("background:#dc2626"));
+    assert!(html.contains("background:#d97706"));
+    assert!(html.contains("tag-default"));
+    assert!(html.contains("R18"));
+    assert!(html.contains("SUMMER JAM"));
+    assert!(html.contains("MYSTERY"));
+}
+
+#[test]
+fn tag_with_url_renders_event_link() {
+    // given: tag config with url and label
+    let yaml = "colours:\n  contest: \"#d97706\"\ntags:\n  - colour: contest\n    tags: [TestFest]\n    url: \"https://example.com/{year}\"\n    label: \"{tag}{year} Entry\"";
+    let config = load_tag_config(yaml);
+    let tags = vec!["TestFest".to_string()];
+
+    // when: building tags line with released year
+    let html = build_tags_line(&tags, "Tags:", None, &config, "2025/06/01");
+
+    // then: event link rendered with resolved year and tag
+    assert!(html.contains("https://example.com/2025"));
+    assert!(html.contains("TestFest2025 Entry"));
+    assert!(html.contains("tag-event-link"));
 }

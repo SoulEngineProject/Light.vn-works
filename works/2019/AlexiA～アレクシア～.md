@@ -10,7 +10,7 @@ extra_links:
     url: "https://mobile.twitter.com/nobeope"
 tagline: 愛、嫌悪、否定、そして選択。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
 <img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/98d67de2-b73f-4cb5-bb02-ba6e0cb2c784" />

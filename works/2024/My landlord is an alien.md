@@ -4,7 +4,7 @@ released: 2024/09/29
 link_label: itch.io
 link_url: "https://recofiv3.itch.io/my-landlord-is-an-alien"
 tagline: "Hoshisora Runa, an ordinary space research student living in the midst of Tokyo, comes to a predictment after meeting her landlord."
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 

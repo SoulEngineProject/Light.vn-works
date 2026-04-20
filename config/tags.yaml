@@ -1,0 +1,27 @@
+colours:
+  content: "#dc2626"
+  ai: "#2563eb"
+  contest: "#a16207"
+
+tags:
+  # Content warnings
+  - colour: content
+    tags: [r18]
+
+  # AI-generated content
+  - colour: ai
+    tags: [ai]
+
+  # Contests / events
+  - colour: contest
+    tags: [らいとゔぃえん祭]
+    url: "https://matsuri.lvnstory.com/{year}"
+    label: "{tag}{year} 参加作品"
+
+  - colour: contest
+    tags: [Spooktober]
+    url: "https://itch.io/jam/spooktober-{year}"
+    label: "{tag} {year} Entry"
+
+  - colour: contest
+    tags: [Summer Jam, ノアフェス]

@@ -4,7 +4,7 @@ released: 2024/09/30
 link_label: itch.io
 link_url: "https://bridge-dragoon.itch.io/your-honor-shes-not-a-witch"
 tagline: "Be a lawyer on a witch trial!"
-tags: []
+tags: [Spooktober]
 thumbnail_index:
 ---
 
