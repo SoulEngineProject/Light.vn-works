@@ -310,6 +310,18 @@ async fn render_markdown(
     let tagline = meta.tagline.as_deref().unwrap_or("");
     let og_image = images.first().map(|s| s.as_str()).unwrap_or("");
 
+    // Editor mockup: show last screenshot inside the Light.vn editor frame
+    let editor_img = if detected_lang == "ja" { "editor_jp.webp" } else { "editor_en.webp" };
+    let editor_mockup = images.last().map(|url| {
+        format!(
+            r#"<div class="editor-mockup"><h2>{}</h2><div class="editor-mockup-frame"><img class="editor-frame" src="/{}" alt="" /><img class="editor-preview" src="{}" alt="{}" loading="lazy" /></div></div>"#,
+            html_escape(&lang.dev_example),
+            editor_img,
+            html_escape(url),
+            html_escape(&title_display)
+        )
+    }).unwrap_or_default();
+
     let current_path = format!("/works/{}/{}", &year, &title);
     let creator_field = meta.creator.as_deref().unwrap_or("");
     let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX, &state.aliases);
@@ -368,6 +380,7 @@ async fn render_markdown(
         .replace("{{extra_links_html}}", &extra_links_html)
         .replace("{{synopsis_html}}", &synopsis_html)
         .replace("{{gallery_html}}", &gallery_html)
+        .replace("{{editor_mockup}}", &editor_mockup)
         .replace("{{more_from_creator}}", &more_from_creator)
         .replace("{{lang_share}}", &lang.share)
         .replace("{{lang_copied}}", &lang.copied)
