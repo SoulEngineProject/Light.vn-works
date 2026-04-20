@@ -29,6 +29,7 @@ struct AppState {
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
     game_count: usize,
+    tree_json: Arc<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -251,6 +252,8 @@ async fn render_markdown(
 
     let tags = meta.tags.as_deref().unwrap_or(&[]);
     let is_r18 = tags.iter().any(|t| t == "r18");
+    // When navigating back from an R18 game page, uncheck "Hide R18" on the
+    // home page so the game is visible in the list.
     let home_suffix = match (lang_param.is_some(), is_r18) {
         (true, true) => format!("?lang={}&r18=0", detected_lang),
         (true, false) => format!("?lang={}", detected_lang),
@@ -398,6 +401,62 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
+fn build_tree_sync() -> Node {
+    let root_dir = FsPath::new("works");
+    let mut nodes: HashMap<String, Node> = HashMap::new();
+
+    for entry in WalkDir::new(root_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let full_path = entry.path();
+        if full_path == root_dir { continue; }
+
+        let rel_path = match full_path.strip_prefix(root_dir) {
+            Ok(stripped) => {
+                let path_str = stripped.to_string_lossy().replace('\\', "/").trim_matches('/').to_string();
+                if path_str.is_empty() { "/works".to_string() } else { format!("/works/{}", path_str) }
+            }
+            Err(_) => continue,
+        };
+
+        let name = full_path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let is_dir = full_path.is_dir();
+        let mut thumbnail = None;
+        let mut meta = None;
+
+        if !is_dir && full_path.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case("md")) {
+            if let Ok(content) = std::fs::read_to_string(full_path) {
+                let (parsed_meta, body) = parse_frontmatter(&content);
+                thumbnail = pick_thumbnail(body, parsed_meta.thumbnail_index);
+                meta = Some(parsed_meta);
+            }
+        }
+
+        nodes.insert(rel_path.clone(), Node {
+            name, path: rel_path, is_dir,
+            children: if is_dir { Some(Vec::new()) } else { None },
+            thumbnail, meta,
+        });
+    }
+
+    let mut root = nodes.remove("/works").unwrap_or(Node {
+        name: "works".to_string(), path: "/works".to_string(), is_dir: true,
+        children: Some(Vec::new()), thumbnail: None, meta: None,
+    });
+
+    let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
+    for path in nodes.keys() {
+        if let Some(parent) = parent_path(path) {
+            by_parent.entry(parent).or_default().push(path.clone());
+        }
+    }
+    for children in by_parent.values_mut() { children.sort(); }
+    attach_children(&mut root, &nodes, &by_parent);
+    root
+}
+
 fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
     let root_dir = FsPath::new("works");
     let mut entries = Vec::new();
@@ -443,14 +502,23 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
 }
 
 pub fn build_app() -> Router {
+    // Tree data, translations, and tag config are all embedded in the home page HTML
+    // at serve time. This eliminates client-side API fetches and renders the page
+    // instantly without a loading state. The /api/tree route is kept for external use.
+    let tree = build_tree_sync();
+    let tree_json = serde_json::to_string(&tree).unwrap_or_default();
     let (creator_index, game_count) = build_startup_index();
+    // Creator aliases: maps different names for the same person so "More from"
+    // sections find games across all their aliases.
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
+    // Tag config: defines colours and optional contest URLs per tag.
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     let state = AppState {
         creator_index: Arc::new(creator_index),
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
         game_count,
+        tree_json: Arc::new(tree_json),
     };
 
     let serve_dir = ServeDir::new("public").not_found_service(
@@ -475,7 +543,8 @@ async fn serve_home(State(state): State<AppState>) -> Html<String> {
                 .map(|(k, v)| (k.clone(), v.colour.clone()))
                 .collect();
             serde_json::to_string(&colours).unwrap_or_default()
-        });
+        })
+        .replace("{{tree_json}}", &state.tree_json);
     Html(page)
 }
 

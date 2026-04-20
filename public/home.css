@@ -116,7 +116,8 @@ header::before {
 .ribbon {
   overflow: hidden;
   margin: 1.5rem 0;
-  opacity: 0.5;
+  opacity: 0;
+  transition: opacity 0.5s ease;
   mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
   display: flex;
@@ -124,7 +125,11 @@ header::before {
   gap: 0.5rem;
 }
 
-.ribbon:hover {
+.ribbon.loaded {
+  opacity: 0.5;
+}
+
+.ribbon.loaded:hover {
   opacity: 0.7;
 }
 

@@ -28,32 +28,20 @@ if (typeof LANG_DATA !== 'undefined') {
   }
 }
 
-// Show loading text
-document.getElementById('tree').innerHTML = '<p class="loading-text">Loading...</p>';
-
 // Setup language toggle and apply translations immediately
 setupLangToggle();
 applyStaticTranslations();
 
-// Load data
-fetch('/api/tree')
-  .then(r => {
-    if (!r.ok) throw new Error('Failed to load tree');
-    return r.json();
-  })
-  .then(function(data) {
-
-    allData = data;
-    var initialQuery = document.getElementById('search').value.trim().toLowerCase();
-    renderTree(data, initialQuery, document.getElementById('hide-r18').checked);
-    scrollToHash();
-    updateGameCount(data);
-    buildRibbon(data);
-  })
-  .catch(err => {
-    document.getElementById('tree').innerHTML =
-      '<p class="no-results">Error: ' + err.message + '</p>';
-  });
+// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_COLOURS).
+// No API fetch needed — everything is baked into the HTML at serve time.
+if (typeof TREE_DATA !== 'undefined') {
+  allData = TREE_DATA;
+  var initialQuery = document.getElementById('search').value.trim().toLowerCase();
+  renderTree(TREE_DATA, initialQuery, document.getElementById('hide-r18').checked);
+  scrollToHash();
+  updateGameCount(TREE_DATA);
+  buildRibbon(TREE_DATA);
+}
 
 function applyStaticTranslations() {
   setHtml('lang-managed-by', t.managed_by);
@@ -285,6 +273,23 @@ function buildRibbon(data) {
 
   container.appendChild(buildTrack(row1, false));
   container.appendChild(buildTrack(row2, true));
+
+  // Ribbon starts invisible (CSS opacity:0). Fade in once 50% of images
+  // have loaded to avoid showing broken/placeholder images.
+  var ribbonImages = container.querySelectorAll('img');
+  var loaded = 0;
+  var total = ribbonImages.length;
+  var threshold = Math.floor(total * 0.5);
+  ribbonImages.forEach(function(img) {
+    if (img.complete) {
+      loaded++;
+    }
+    img.addEventListener('load', function() {
+      loaded++;
+      if (loaded >= threshold) container.classList.add('loaded');
+    });
+  });
+  if (loaded >= threshold) container.classList.add('loaded');
 }
 
 function updateGameCount(data) {
