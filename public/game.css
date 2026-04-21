@@ -204,6 +204,40 @@
   box-shadow: 0 0 24px rgba(192, 132, 252, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
+.editor-mockup {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border);
+}
+
+.editor-mockup h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 1rem;
+}
+
+.editor-mockup-frame {
+  position: relative;
+}
+
+.editor-frame {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+}
+
+.editor-preview {
+  position: absolute;
+  left: 13.7%;
+  top: 13.7%;
+  width: 50.0%;
+  height: 52.1%;
+  object-fit: contain;
+  background: black;
+}
+
 .more-creator {
   margin-top: 1rem;
 }

@@ -74,5 +74,9 @@
   "tags_label": {
     "en": "Tags:",
     "ja": "タグ："
+  },
+  "dev_example": {
+    "en": "Development Example",
+    "ja": "開発例"
   }
 }

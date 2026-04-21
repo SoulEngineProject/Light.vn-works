@@ -16,6 +16,7 @@ pub struct LangStrings {
     pub breadcrumb_works: String,
     pub engine_url: String,
     pub tags_label: String,
+    pub dev_example: String,
 }
 
 struct LangPair {
@@ -46,6 +47,7 @@ fn load_lang() -> &'static LangPair {
                 breadcrumb_works: get("breadcrumb_works"),
                 engine_url: get("engine_url"),
                 tags_label: get("tags_label"),
+                dev_example: get("dev_example"),
             }
         }
 
