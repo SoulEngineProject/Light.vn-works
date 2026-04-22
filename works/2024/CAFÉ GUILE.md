@@ -8,9 +8,9 @@ tags: [Spooktober]
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/3249151a-e89e-4472-869f-a1216172d367" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/e459be25-5d15-4c16-8291-ccb52d3ff5e5" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/84b8ea30-7d92-4424-bc66-adb7bcae4cc0" />
+<img width="794" height="446" alt="image" src="https://github.com/user-attachments/assets/78621764-ec86-43cf-9a5e-7ba1c5772679" />
+<img width="794" height="445" alt="image" src="https://github.com/user-attachments/assets/39ef7045-8039-4856-b86b-b739cbbed06e" />
+<img width="794" height="439" alt="image" src="https://github.com/user-attachments/assets/7f5fc357-f2ae-40df-aeb7-abe4b2db2a2f" />
 
 ---
 A hospital-themed café is actually a front for a group of witches who perform various deeds in the dead of night for their master!  
