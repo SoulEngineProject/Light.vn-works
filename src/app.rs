@@ -17,7 +17,7 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images, pick_thumbnail,
+    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images,
     markdown_to_html, html_escape, strip_img_tags, build_creator_index,
     get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases, load_tag_config,
     tag_style, get_lang,
@@ -359,11 +359,18 @@ async fn render_markdown(
                 .iter()
                 .map(|g| {
                     let thumb = g.thumbnail.as_deref().map(|url| {
-                        format!(
-                            r#"<img src="{}" alt="{}" loading="lazy" />"#,
-                            html_escape(url),
-                            html_escape(&g.title)
-                        )
+                        if g.thumbnail_composite {
+                            format!(
+                                r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
+                                html_escape(url)
+                            )
+                        } else {
+                            format!(
+                                r#"<img src="{}" alt="{}" loading="lazy" />"#,
+                                html_escape(url),
+                                html_escape(&g.title)
+                            )
+                        }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let badge: String = g.tags.iter().map(|tag| {
                         let style_attr = match tag_style(tag, &state.tag_config) {
@@ -527,7 +534,11 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
         let (meta, body) = parse_frontmatter(&content);
         let creator = meta.creator.unwrap_or_default();
         let released = meta.released.unwrap_or_default();
-        let thumbnail = pick_thumbnail(body, meta.thumbnail_index);
+        let images = extract_all_images(body);
+        let thumb_idx = meta.thumbnail_index.unwrap_or(0);
+        let thumb_img = images.get(thumb_idx).or(images.first());
+        let thumbnail = thumb_img.map(|img| img.url.clone());
+        let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
 
         let rel_path = path
             .strip_prefix(root_dir)
@@ -542,7 +553,7 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
         let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
 
         let tags = meta.tags.unwrap_or_default();
-        entries.push((creator, title, link_path, thumbnail, released, tags));
+        entries.push((creator, title, link_path, thumbnail, thumbnail_composite, released, tags));
     }
 
     let count = entries.len();

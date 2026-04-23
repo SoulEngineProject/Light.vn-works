@@ -119,16 +119,6 @@ pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
     }
 }
 
-pub fn pick_thumbnail(md: &str, index: Option<usize>) -> Option<String> {
-    match index {
-        Some(i) => {
-            let images = extract_all_images(md);
-            images.get(i).map(|img| img.url.clone()).or_else(|| images.first().map(|img| img.url.clone()))
-        }
-        None => extract_first_image(md),
-    }
-}
-
 pub fn extract_first_image(md: &str) -> Option<String> {
     let parser = Parser::new(md);
 
@@ -230,6 +220,7 @@ pub struct CreatorGame {
     pub title: String,
     pub path: String,
     pub thumbnail: Option<String>,
+    pub thumbnail_composite: bool,
     pub released: String,
     pub tags: Vec<String>,
 }
@@ -246,11 +237,11 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 /// Build an index of creator (lowercased) → list of their games.
 /// Creators with commas are split into separate entries.
 pub fn build_creator_index(
-    entries: &[(String, String, String, Option<String>, String, Vec<String>)], // (creator, title, path, thumbnail, released, tags)
+    entries: &[(String, String, String, Option<String>, bool, String, Vec<String>)], // (creator, title, path, thumbnail, composite, released, tags)
 ) -> HashMap<String, Vec<CreatorGame>> {
     let mut index: HashMap<String, Vec<CreatorGame>> = HashMap::new();
 
-    for (creator, title, path, thumbnail, released, tags) in entries {
+    for (creator, title, path, thumbnail, thumbnail_composite, released, tags) in entries {
         if creator.is_empty() {
             continue;
         }
@@ -259,6 +250,7 @@ pub fn build_creator_index(
             title: title.clone(),
             path: path.clone(),
             thumbnail: thumbnail.clone(),
+            thumbnail_composite: *thumbnail_composite,
             released: released.clone(),
             tags: tags.clone(),
         };
