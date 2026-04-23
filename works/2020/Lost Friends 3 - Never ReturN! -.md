@@ -12,10 +12,12 @@ extra_links:
     url: "https://twitter.com/Uzumeyahonpo"
 tagline: 可能性を試してみる短編ADV 人間と妖精の戦争が終結してから数年、都市部は目覚ましく復興したものの地方各地は未だ戦災から立ち直れずにいる。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e9c584a3-dde4-497b-8032-2d61fa9c95ac" />
+<img width="1271" height="711" alt="image" src="https://github.com/user-attachments/assets/97ca54f4-5c6e-4118-b55a-b1c679bfc44f" />
+<img width="1268" height="711" alt="image" src="https://github.com/user-attachments/assets/eda7dde9-2fb3-43ca-aa2b-e0d5aaa13b04" />
+<img width="1266" height="708" alt="image" src="https://github.com/user-attachments/assets/2db37904-3e52-4f94-b5e2-066d8767f9fb" />
 
 ---
 可能性を試してみる短編ADV  
