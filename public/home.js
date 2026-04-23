@@ -191,7 +191,10 @@ function renderTree(data, query, hideR18) {
       a.className = 'file-card';
 
       let thumbHtml;
-      if (item.thumbnail) {
+      if (item.thumbnail && item.thumbnail_composite) {
+        thumbHtml = '<div class="card-thumb">' + badges +
+          '<div class="card-thumb-composite" style="background-image:url(\'' + item.thumbnail + '\')"></div></div>';
+      } else if (item.thumbnail) {
         thumbHtml = '<div class="card-thumb">' + badges +
           '<img src="' + item.thumbnail + '" alt="' +
           escapeHtml(displayName) + '" loading="lazy" onerror="retryImage.call(this)" /></div>';
@@ -231,7 +234,7 @@ function buildRibbon(data) {
           let path = item.path;
           if (path.endsWith('.md')) path = path.slice(0, -3);
           const title = item.name.replace(/\.md$/i, '').trim();
-          items.push({ url: item.thumbnail, path: path, title: title });
+          items.push({ url: item.thumbnail, path: path, title: title, composite: !!item.thumbnail_composite });
         }
       });
     }
@@ -259,12 +262,19 @@ function buildRibbon(data) {
       const a = document.createElement('a');
       a.href = LANG_PARAM ? entry.path + '?lang=' + LANG : entry.path;
       a.title = entry.title;
-      const img = document.createElement('img');
-      img.src = entry.url;
-      img.loading = 'lazy';
-      img.alt = entry.title;
-      img.onerror = retryImage;
-      a.appendChild(img);
+      if (entry.composite) {
+        const div = document.createElement('div');
+        div.className = 'ribbon-thumb-composite';
+        div.style.backgroundImage = "url('" + entry.url + "')";
+        a.appendChild(div);
+      } else {
+        const img = document.createElement('img');
+        img.src = entry.url;
+        img.loading = 'lazy';
+        img.alt = entry.title;
+        img.onerror = retryImage;
+        a.appendChild(img);
+      }
       track.appendChild(a);
     });
 

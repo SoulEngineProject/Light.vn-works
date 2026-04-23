@@ -238,6 +238,18 @@
   background: black;
 }
 
+.editor-preview-crop {
+  position: absolute;
+  left: 13.7%;
+  top: 13.7%;
+  width: 50.0%;
+  height: 52.1%;
+  background-position: right center;
+  background-size: 300% auto;
+  background-repeat: no-repeat;
+  background-color: black;
+}
+
 .more-creator {
   margin-top: 1rem;
 }

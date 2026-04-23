@@ -99,8 +99,26 @@ Full synopsis here."#;
     // then: tagline and og_image data are available for OG tags
     assert_eq!(meta.tagline.as_deref(), Some("A short description."));
     assert!(!images.is_empty());
-    assert_eq!(images[0], "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(images[0].url, "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(images[0].width, Some(384));
+    assert_eq!(images[0].height, Some(216));
+    assert!(!images[0].is_composite());
     assert_eq!(images.len(), 2);
+}
+
+#[test]
+fn composite_image_detected() {
+    // given: a wide composite image (1170x216)
+    let md = r#"<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/abc123" />"#;
+
+    // when: extracting images
+    let images = extract_all_images(md);
+
+    // then: detected as composite
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].width, Some(1170));
+    assert_eq!(images[0].height, Some(216));
+    assert!(images[0].is_composite());
 }
 
 #[test]

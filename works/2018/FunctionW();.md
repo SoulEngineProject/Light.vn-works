@@ -14,7 +14,7 @@ extra_links:
     url: "https://twitter.com/meimgames"
 tagline: ――誰も居ない世界の、白い少女 女子高生『雲野黒柄(くもの　くろえ)』は、謎の病気で一年近く入院していた。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
 <img width="1595" height="892" alt="image" src="https://github.com/user-attachments/assets/cbb9cdee-1953-46c5-9c9d-c943753d76be" />

@@ -123,7 +123,7 @@ pub fn pick_thumbnail(md: &str, index: Option<usize>) -> Option<String> {
     match index {
         Some(i) => {
             let images = extract_all_images(md);
-            images.get(i).cloned().or_else(|| images.into_iter().next())
+            images.get(i).map(|img| img.url.clone()).or_else(|| images.first().map(|img| img.url.clone()))
         }
         None => extract_first_image(md),
     }
@@ -153,7 +153,31 @@ pub fn extract_first_image(md: &str) -> Option<String> {
     None
 }
 
-pub fn extract_all_images(md: &str) -> Vec<String> {
+#[derive(Clone, Debug)]
+pub struct ImageInfo {
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+impl ImageInfo {
+    /// Returns true if the image is a composite strip (width > height * 2).
+    pub fn is_composite(&self) -> bool {
+        match (self.width, self.height) {
+            (Some(w), Some(h)) if h > 0 => w > h * 2,
+            _ => false,
+        }
+    }
+}
+
+fn extract_attr_u32(tag: &str, attr: &str) -> Option<u32> {
+    let needle = format!("{}=\"", attr);
+    let start = tag.find(&needle)? + needle.len();
+    let end = start + tag[start..].find('"')?;
+    tag[start..end].parse().ok()
+}
+
+pub fn extract_all_images(md: &str) -> Vec<ImageInfo> {
     let parser = Parser::new(md);
     let mut images = Vec::new();
 
@@ -166,8 +190,16 @@ pub fn extract_all_images(md: &str) -> Vec<String> {
             {
                 let abs_start = search_from + src_start + 5;
                 if let Some(end_quote) = html_str[abs_start..].find('\"') {
-                    let url = &html_str[abs_start..abs_start + end_quote];
-                    images.push(url.to_string());
+                    let url = html_str[abs_start..abs_start + end_quote].to_string();
+                    // Find the tag boundaries to extract width/height
+                    let tag_start = html_str[..search_from + src_start].rfind('<').unwrap_or(0);
+                    let tag_end = abs_start + end_quote + html_str[abs_start + end_quote..].find('>').unwrap_or(0) + 1;
+                    let tag = &html_str[tag_start..tag_end];
+                    images.push(ImageInfo {
+                        url,
+                        width: extract_attr_u32(tag, "width"),
+                        height: extract_attr_u32(tag, "height"),
+                    });
                     search_from = abs_start + end_quote;
                 } else {
                     break;
