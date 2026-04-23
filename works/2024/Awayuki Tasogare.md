@@ -8,9 +8,9 @@ tags: [Spooktober]
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/79ea216d-6640-4385-a9cd-64eef44a998d" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/3833c71b-6c0d-42ea-ac49-83696484262c" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/9aad076a-7993-4f62-9858-c5b5bf46a5e1" />
+<img width="1294" height="732" alt="image" src="https://github.com/user-attachments/assets/9f39f351-5fc2-4463-8abd-4c0ac55f96b2" />
+<img width="1207" height="744" alt="image" src="https://github.com/user-attachments/assets/e5b98419-b01b-47b8-810a-1f06400afd28" />
+<img width="1296" height="732" alt="image" src="https://github.com/user-attachments/assets/40e71fee-8d6f-4ab9-83bc-43abf6ea2cbb" />
 
 ---
 What is death for the lifeless, and what is life for the deathless?  
