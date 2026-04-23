@@ -15,7 +15,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/2c4d1500-18c7-4289-b6ee-930bf82925d2" />
+<img width="1908" height="1073" alt="image" src="https://github.com/user-attachments/assets/8b4114da-5213-44e0-bb49-330b5fc5feda" />
+<img width="1907" height="1075" alt="image" src="https://github.com/user-attachments/assets/884eb9be-e184-441e-b653-9ca45bf21175" />
+<img width="1908" height="1072" alt="image" src="https://github.com/user-attachments/assets/2c1c5b1b-00f4-4939-bdfc-8ed939211a22" />
 
 ---
 ほのぼので胸糞な短編ADV  
