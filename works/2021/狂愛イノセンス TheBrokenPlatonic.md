@@ -15,7 +15,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/1dc1ccda-c709-4631-875b-264989fb7789" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/45cc6b19-6290-4e98-8e61-cf70d28a267d" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/f5eab231-80f0-4ed2-9490-d45b12f4c14c" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/36a0456e-53f2-4669-9336-04d0b3a32fe0" />
 
 ---
 俺はお前じゃないと○○できない  
