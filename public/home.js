@@ -181,8 +181,8 @@ function renderTree(data, query, hideR18) {
       let badges = '';
       tags.forEach(function(tag) {
         var colour = tagColours[tag.toLowerCase()];
-        var style = colour ? ' style="background:' + colour + ';color:white"' : '';
-        badges += '<span class="card-badge"' + style + '>' + escapeHtml(tag.toUpperCase()) + '</span>';
+        if (!colour) return;
+        badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(tag.toUpperCase()) + '</span>';
       });
       if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
