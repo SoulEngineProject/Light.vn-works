@@ -17,7 +17,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/3af024b1-be81-45e5-a265-b362c494f7f7" />
+<img width="1595" height="892" alt="image" src="https://github.com/user-attachments/assets/cbb9cdee-1953-46c5-9c9d-c943753d76be" />
+<img width="1589" height="886" alt="image" src="https://github.com/user-attachments/assets/d218fbac-db53-4048-a837-81c63e664729" />
+<img width="1589" height="892" alt="image" src="https://github.com/user-attachments/assets/523a7b0a-de3f-4cfd-8f4d-001e8c0bc19f" />
 
 ---
 ――誰も居ない世界の、白い少女  
