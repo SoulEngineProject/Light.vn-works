@@ -11,7 +11,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/0d1f8ce4-9f8b-4851-9886-15f488fc3d85" />
+<img width="1013" height="568" alt="image" src="https://github.com/user-attachments/assets/2b9051af-eb8e-4937-a86d-f3865d94d623" />
+<img width="1017" height="566" alt="image" src="https://github.com/user-attachments/assets/2bac388e-8015-4430-aa8a-0afb95e4af31" />
+<img width="1009" height="564" alt="image" src="https://github.com/user-attachments/assets/f151796f-9fb6-4bd3-8558-0b4a3a69da82" />
 
 ---
 全国有数のお嬢様が集まる天谷女学院高校。  
