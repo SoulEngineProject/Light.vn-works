@@ -9,6 +9,8 @@ thumbnail_index:
 ---
 
 <img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/95375686-32b3-466c-b749-ff8840d910ad" />
+<img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/f8577adb-d816-4433-8428-9037bc7ea567" />
+<img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/55180f6a-e979-4ef7-af40-640a7c96f564" />
 
 ---
 復活した魔王と対峙した伊織達はその圧倒的な力を前にしてもなお必ず奴らを倒すと心に誓っていた。  
