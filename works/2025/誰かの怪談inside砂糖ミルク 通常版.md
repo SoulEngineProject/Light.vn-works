@@ -8,9 +8,8 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/e54210cf-3460-44fc-9236-4744f35dd17f" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/cc05603c-8785-484d-90ac-45e307f54de7" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/778884e2-3e06-4032-aa63-a5038b9c4db8" />
+<img width="1000" height="1000" alt="image" src="https://github.com/user-attachments/assets/29dc9d51-4be5-495b-bb4d-ff5e6d32946f" />
+<img width="1500" height="1500" alt="image" src="https://github.com/user-attachments/assets/da3f7710-7f00-4f48-9876-582b4609c309" />
 
 ---
 オムニバス形式のホラーノベルです。  

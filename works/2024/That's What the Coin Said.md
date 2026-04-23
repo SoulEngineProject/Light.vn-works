@@ -8,9 +8,9 @@ tags: [Spooktober]
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/f8b4763d-2875-40cd-b8ed-f58984ff6b03" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/beb77a4c-65d1-4d5f-92ec-3614d3cf0541" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/a3fd9645-e71d-4d32-b41a-eb43a074a276" />
+<img width="1920" height="764" alt="image" src="https://github.com/user-attachments/assets/b39c4b07-d9ab-4cc9-b0cb-05ae9aa8e669" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/27bde61b-c1c7-4acc-bf10-5fa3a26b2f66" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2039f0eb-6464-4bf1-a24d-e5c90efaae7a" />
 
 ---
 Play as Miller in a horror Visual-Novel and march into the unknown on a halloween night. unaware of what might wait for you and your friends in the darkness.

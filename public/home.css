@@ -177,6 +177,20 @@ header::before {
   display: none;
 }
 
+.file-card:hover .card-thumb-composite {
+  background-size: 360% auto;
+}
+
+.ribbon-thumb-composite {
+  width: 120px;
+  height: 70px;
+  background-size: 340% auto;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0.4rem;
+  flex-shrink: 0;
+}
+
 @keyframes scroll-left {
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }

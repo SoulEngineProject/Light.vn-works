@@ -17,7 +17,7 @@ use tower_http::services::ServeDir;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images, pick_thumbnail,
+    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images,
     markdown_to_html, html_escape, strip_img_tags, build_creator_index,
     get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases, load_tag_config,
     tag_style, get_lang,
@@ -40,6 +40,8 @@ struct Node {
     children: Option<Vec<Node>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thumbnail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnail_composite: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     meta: Option<GameMeta>,
 }
@@ -85,6 +87,7 @@ async fn get_tree() -> Json<Node> {
         let is_dir = full_path.is_dir();
 
         let mut thumbnail = None;
+        let mut thumbnail_composite = None;
         let mut meta = None;
 
         if !is_dir
@@ -95,7 +98,14 @@ async fn get_tree() -> Json<Node> {
         {
             if let Ok(content) = fs::read_to_string(full_path).await {
                 let (parsed_meta, body) = parse_frontmatter(&content);
-                thumbnail = pick_thumbnail(body, parsed_meta.thumbnail_index);
+                let images = extract_all_images(body);
+                let thumb_idx = parsed_meta.thumbnail_index.unwrap_or(0);
+                if let Some(img) = images.get(thumb_idx).or(images.first()) {
+                    thumbnail = Some(img.url.clone());
+                    if img.is_composite() {
+                        thumbnail_composite = Some(true);
+                    }
+                }
                 meta = Some(parsed_meta);
             }
         }
@@ -106,6 +116,7 @@ async fn get_tree() -> Json<Node> {
             is_dir,
             children: if is_dir { Some(Vec::new()) } else { None },
             thumbnail,
+            thumbnail_composite,
             meta,
         };
 
@@ -118,6 +129,7 @@ async fn get_tree() -> Json<Node> {
         is_dir: true,
         children: Some(Vec::new()),
         thumbnail: None,
+        thumbnail_composite: None,
         meta: None,
     });
 
@@ -276,10 +288,10 @@ async fn render_markdown(
         }
     }
 
-    let hero_html = images.first().map(|url| {
+    let hero_html = images.first().map(|img| {
         format!(
             r#"<div class="hero-image"><img src="{}" alt="{}" /></div>"#,
-            html_escape(url),
+            html_escape(&img.url),
             html_escape(&title_display)
         )
     }).unwrap_or_default();
@@ -294,7 +306,7 @@ async fn render_markdown(
             for _ in 0..*cols {
                 html += &format!(
                     r#"<img src="{}" alt="Screenshot" loading="lazy" />"#,
-                    html_escape(&gallery_images[idx])
+                    html_escape(&gallery_images[idx].url)
                 );
                 idx += 1;
             }
@@ -311,17 +323,29 @@ async fn render_markdown(
     let tagline = meta.tagline.as_deref()
         .filter(|t| !t.is_empty())
         .unwrap_or(&title_display);
-    let og_image = images.first().map(|s| s.as_str()).unwrap_or("");
+    let og_image = images.first().map(|img| img.url.as_str()).unwrap_or("");
 
-    // Editor mockup: show last screenshot inside the Light.vn editor frame
+    // Editor mockup: show last screenshot inside the Light.vn editor frame.
+    // For composite images (width > height*2), crop to the rightmost third via CSS.
     let editor_img = if detected_lang == "ja" { "editor_jp.webp" } else { "editor_en.webp" };
-    let editor_mockup = images.last().map(|url| {
+    let editor_mockup = images.last().map(|img| {
+        let preview_html = if img.is_composite() {
+            format!(
+                r#"<div class="editor-preview-crop" style="background-image:url('{}')"></div>"#,
+                html_escape(&img.url)
+            )
+        } else {
+            format!(
+                r#"<img class="editor-preview" src="{}" alt="{}" loading="lazy" />"#,
+                html_escape(&img.url),
+                html_escape(&title_display)
+            )
+        };
         format!(
-            r#"<div class="editor-mockup"><h2>{}</h2><div class="editor-mockup-frame"><img class="editor-frame" src="/{}" alt="" /><img class="editor-preview" src="{}" alt="{}" loading="lazy" /></div></div>"#,
+            r#"<div class="editor-mockup"><h2>{}</h2><div class="editor-mockup-frame"><img class="editor-frame" src="/{}" alt="" />{}</div></div>"#,
             html_escape(&lang.dev_example),
             editor_img,
-            html_escape(url),
-            html_escape(&title_display)
+            preview_html
         )
     }).unwrap_or_default();
 
@@ -335,11 +359,18 @@ async fn render_markdown(
                 .iter()
                 .map(|g| {
                     let thumb = g.thumbnail.as_deref().map(|url| {
-                        format!(
-                            r#"<img src="{}" alt="{}" loading="lazy" />"#,
-                            html_escape(url),
-                            html_escape(&g.title)
-                        )
+                        if g.thumbnail_composite {
+                            format!(
+                                r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
+                                html_escape(url)
+                            )
+                        } else {
+                            format!(
+                                r#"<img src="{}" alt="{}" loading="lazy" />"#,
+                                html_escape(url),
+                                html_escape(&g.title)
+                            )
+                        }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let badge: String = g.tags.iter().map(|tag| {
                         let style_attr = match tag_style(tag, &state.tag_config) {
@@ -440,12 +471,20 @@ fn build_tree_sync() -> Node {
         let name = full_path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let is_dir = full_path.is_dir();
         let mut thumbnail = None;
+        let mut thumbnail_composite = None;
         let mut meta = None;
 
         if !is_dir && full_path.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case("md")) {
             if let Ok(content) = std::fs::read_to_string(full_path) {
                 let (parsed_meta, body) = parse_frontmatter(&content);
-                thumbnail = pick_thumbnail(body, parsed_meta.thumbnail_index);
+                let images = extract_all_images(body);
+                let thumb_idx = parsed_meta.thumbnail_index.unwrap_or(0);
+                if let Some(img) = images.get(thumb_idx).or(images.first()) {
+                    thumbnail = Some(img.url.clone());
+                    if img.is_composite() {
+                        thumbnail_composite = Some(true);
+                    }
+                }
                 meta = Some(parsed_meta);
             }
         }
@@ -453,13 +492,13 @@ fn build_tree_sync() -> Node {
         nodes.insert(rel_path.clone(), Node {
             name, path: rel_path, is_dir,
             children: if is_dir { Some(Vec::new()) } else { None },
-            thumbnail, meta,
+            thumbnail, thumbnail_composite, meta,
         });
     }
 
     let mut root = nodes.remove("/works").unwrap_or(Node {
         name: "works".to_string(), path: "/works".to_string(), is_dir: true,
-        children: Some(Vec::new()), thumbnail: None, meta: None,
+        children: Some(Vec::new()), thumbnail: None, thumbnail_composite: None, meta: None,
     });
 
     let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
@@ -495,7 +534,11 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
         let (meta, body) = parse_frontmatter(&content);
         let creator = meta.creator.unwrap_or_default();
         let released = meta.released.unwrap_or_default();
-        let thumbnail = pick_thumbnail(body, meta.thumbnail_index);
+        let images = extract_all_images(body);
+        let thumb_idx = meta.thumbnail_index.unwrap_or(0);
+        let thumb_img = images.get(thumb_idx).or(images.first());
+        let thumbnail = thumb_img.map(|img| img.url.clone());
+        let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
 
         let rel_path = path
             .strip_prefix(root_dir)
@@ -510,7 +553,7 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
         let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
 
         let tags = meta.tags.unwrap_or_default();
-        entries.push((creator, title, link_path, thumbnail, released, tags));
+        entries.push((creator, title, link_path, thumbnail, thumbnail_composite, released, tags));
     }
 
     let count = entries.len();

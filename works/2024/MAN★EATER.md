@@ -8,9 +8,9 @@ tags: [Spooktober]
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/5f9d5665-eb09-4e90-b176-7f902edd4c45" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/b40ab75f-e0b3-487b-91d7-ddcf8a0733f7" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/cd67e4f6-ced4-4210-a894-3117733e3c5a" />
+<img width="794" height="496" alt="image" src="https://github.com/user-attachments/assets/d4bce2fe-bad2-4b3d-9f80-2ea18ace23f1" />
+<img width="794" height="496" alt="image" src="https://github.com/user-attachments/assets/b4e43347-3e26-4015-a049-b3f4becc6a6e" />
+<img width="794" height="496" alt="image" src="https://github.com/user-attachments/assets/be265fbb-a1b2-4019-bf95-882bc7e67c73" />
 
 ---
 MAN★EATER is a short horror comedy visual novel created in a month for the 6th Annual Spooktober Visual Novel Jam made with Light.vn. You play as a girl-next-door type just trying to get home one Halloween night. Your surprisingly peaceful subway ride goes awry, though, when two odd strangers join you. Discover different endings with the choices you make.

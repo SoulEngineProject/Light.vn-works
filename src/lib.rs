@@ -119,16 +119,6 @@ pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
     }
 }
 
-pub fn pick_thumbnail(md: &str, index: Option<usize>) -> Option<String> {
-    match index {
-        Some(i) => {
-            let images = extract_all_images(md);
-            images.get(i).cloned().or_else(|| images.into_iter().next())
-        }
-        None => extract_first_image(md),
-    }
-}
-
 pub fn extract_first_image(md: &str) -> Option<String> {
     let parser = Parser::new(md);
 
@@ -153,7 +143,31 @@ pub fn extract_first_image(md: &str) -> Option<String> {
     None
 }
 
-pub fn extract_all_images(md: &str) -> Vec<String> {
+#[derive(Clone, Debug)]
+pub struct ImageInfo {
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+impl ImageInfo {
+    /// Returns true if the image is a composite strip (width > height * 2).
+    pub fn is_composite(&self) -> bool {
+        match (self.width, self.height) {
+            (Some(w), Some(h)) if h > 0 => w > h * 2,
+            _ => false,
+        }
+    }
+}
+
+fn extract_attr_u32(tag: &str, attr: &str) -> Option<u32> {
+    let needle = format!("{}=\"", attr);
+    let start = tag.find(&needle)? + needle.len();
+    let end = start + tag[start..].find('"')?;
+    tag[start..end].parse().ok()
+}
+
+pub fn extract_all_images(md: &str) -> Vec<ImageInfo> {
     let parser = Parser::new(md);
     let mut images = Vec::new();
 
@@ -166,8 +180,16 @@ pub fn extract_all_images(md: &str) -> Vec<String> {
             {
                 let abs_start = search_from + src_start + 5;
                 if let Some(end_quote) = html_str[abs_start..].find('\"') {
-                    let url = &html_str[abs_start..abs_start + end_quote];
-                    images.push(url.to_string());
+                    let url = html_str[abs_start..abs_start + end_quote].to_string();
+                    // Find the tag boundaries to extract width/height
+                    let tag_start = html_str[..search_from + src_start].rfind('<').unwrap_or(0);
+                    let tag_end = abs_start + end_quote + html_str[abs_start + end_quote..].find('>').unwrap_or(0) + 1;
+                    let tag = &html_str[tag_start..tag_end];
+                    images.push(ImageInfo {
+                        url,
+                        width: extract_attr_u32(tag, "width"),
+                        height: extract_attr_u32(tag, "height"),
+                    });
                     search_from = abs_start + end_quote;
                 } else {
                     break;
@@ -198,6 +220,7 @@ pub struct CreatorGame {
     pub title: String,
     pub path: String,
     pub thumbnail: Option<String>,
+    pub thumbnail_composite: bool,
     pub released: String,
     pub tags: Vec<String>,
 }
@@ -214,11 +237,11 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 /// Build an index of creator (lowercased) → list of their games.
 /// Creators with commas are split into separate entries.
 pub fn build_creator_index(
-    entries: &[(String, String, String, Option<String>, String, Vec<String>)], // (creator, title, path, thumbnail, released, tags)
+    entries: &[(String, String, String, Option<String>, bool, String, Vec<String>)], // (creator, title, path, thumbnail, composite, released, tags)
 ) -> HashMap<String, Vec<CreatorGame>> {
     let mut index: HashMap<String, Vec<CreatorGame>> = HashMap::new();
 
-    for (creator, title, path, thumbnail, released, tags) in entries {
+    for (creator, title, path, thumbnail, thumbnail_composite, released, tags) in entries {
         if creator.is_empty() {
             continue;
         }
@@ -227,6 +250,7 @@ pub fn build_creator_index(
             title: title.clone(),
             path: path.clone(),
             thumbnail: thumbnail.clone(),
+            thumbnail_composite: *thumbnail_composite,
             released: released.clone(),
             tags: tags.clone(),
         };

@@ -99,8 +99,26 @@ Full synopsis here."#;
     // then: tagline and og_image data are available for OG tags
     assert_eq!(meta.tagline.as_deref(), Some("A short description."));
     assert!(!images.is_empty());
-    assert_eq!(images[0], "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(images[0].url, "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(images[0].width, Some(384));
+    assert_eq!(images[0].height, Some(216));
+    assert!(!images[0].is_composite());
     assert_eq!(images.len(), 2);
+}
+
+#[test]
+fn composite_image_detected() {
+    // given: a wide composite image (1170x216)
+    let md = r#"<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/abc123" />"#;
+
+    // when: extracting images
+    let images = extract_all_images(md);
+
+    // then: detected as composite
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].width, Some(1170));
+    assert_eq!(images[0].height, Some(216));
+    assert!(images[0].is_composite());
 }
 
 #[test]
@@ -253,9 +271,9 @@ fn validate_all_markdown_files() {
 fn creator_index_groups_by_creator() {
     // given: 3 games by 2 different creators
     let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
-        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/03/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
+        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, false, "2024/03/01".to_string(), vec![]),
     ];
 
     // when: building the creator index
@@ -271,9 +289,9 @@ fn creator_index_groups_by_creator() {
 fn creator_index_excludes_current_game() {
     // given: creator with 3 games
     let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, "2024/12/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, false, "2024/12/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 
@@ -291,7 +309,7 @@ fn creator_index_excludes_current_game() {
 fn creator_index_single_game_creator() {
     // given: creator with only 1 game
     let entries = vec![
-        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None, "2024/01/01".to_string(), vec![]),
+        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None, false, "2024/01/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 
@@ -320,8 +338,8 @@ fn split_creators_comma_separated() {
 fn creator_index_multi_creator_game() {
     // given: a game with 2 creators, and another game by one of them
     let entries = vec![
-        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None, "2024/05/01".to_string(), vec![]),
-        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None, "2024/02/01".to_string(), vec![]),
+        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None, false, "2024/05/01".to_string(), vec![]),
+        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None, false, "2024/02/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
 
@@ -438,8 +456,8 @@ fn alias_groups_resolve_bidirectionally() {
 fn related_games_via_alias() {
     // given: two games by different names that are aliases
     let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, "2024/01/01".to_string(), vec![]),
-        ("アリス".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, "2024/06/01".to_string(), vec![]),
+        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
+        ("アリス".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
     let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
@@ -457,8 +475,8 @@ fn related_games_via_alias() {
 fn alias_no_duplicate_games() {
     // given: a game listed under both alias names (comma-separated creator)
     let entries = vec![
-        ("Alice, アリス".to_string(), "Collab".to_string(), "/works/2024/Collab".to_string(), None, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Solo".to_string(), "/works/2024/Solo".to_string(), None, "2024/06/01".to_string(), vec![]),
+        ("Alice, アリス".to_string(), "Collab".to_string(), "/works/2024/Collab".to_string(), None, false, "2024/01/01".to_string(), vec![]),
+        ("Alice".to_string(), "Solo".to_string(), "/works/2024/Solo".to_string(), None, false, "2024/06/01".to_string(), vec![]),
     ];
     let index = build_creator_index(&entries);
     let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);

@@ -12,10 +12,12 @@ extra_links:
     url: "https://twitter.com/Uzumeyahonpo"
 tagline: 奇跡って何だろう短編ADV リカルドは立派な庭師になることを夢見ているただの少年だ。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/4ed58f58-3928-4d2d-a69f-49bce64acf60" />
+<img width="1268" height="710" alt="image" src="https://github.com/user-attachments/assets/2d360744-8f08-488f-af93-cdbc9fc7e87f" />
+<img width="1271" height="712" alt="image" src="https://github.com/user-attachments/assets/842a1759-6093-43d2-b1e6-69e16718dcd5" />
+<img width="1270" height="711" alt="image" src="https://github.com/user-attachments/assets/f82e2fcd-da6a-4d4a-aa2b-89651d723bec" />
 
 ---
 奇跡って何だろう短編ADV  

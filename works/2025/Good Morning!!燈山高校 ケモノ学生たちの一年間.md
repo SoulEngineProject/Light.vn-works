@@ -5,10 +5,12 @@ link_label: DLsite
 link_url: "https://www.dlsite.com/maniax/work/=/product_id/RJ01315596.html"
 tagline: 獣人世界の高校を男子高校生になって好きに過ごすアドベンチャー。
 tags: [r18]
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/e04b87d4-c651-4659-b63a-026c0affd18d" />
+<img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/21cf7fe5-6fc7-4862-b8cc-51336197f4ad" />
+<img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/eaf7bb0f-7653-4b61-bb20-e4782aa3c0ff" />
+<img width="560" height="420" alt="image" src="https://github.com/user-attachments/assets/facec549-2773-4854-aa45-cd22810bf198" />
 
 ---
 ケモノだらけの世界で、日本のような街中の学校に入学して一年を過ごそう!  
