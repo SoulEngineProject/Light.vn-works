@@ -195,9 +195,9 @@ function renderTree(data, query, hideR18) {
         thumbHtml = '<div class="card-thumb">' + badges +
           '<div class="card-thumb-composite" style="background-image:url(\'' + item.thumbnail + '\')"></div></div>';
       } else if (item.thumbnail) {
+        // alt="" is intentional: .card-title below is the accessible label, and empty alt avoids flashing game titles in the image box during slow loads.
         thumbHtml = '<div class="card-thumb">' + badges +
-          '<img src="' + item.thumbnail + '" alt="' +
-          escapeHtml(displayName) + '" loading="lazy" onerror="retryImage.call(this)" /></div>';
+          '<img src="' + item.thumbnail + '" alt="" loading="lazy" onerror="retryImage.call(this)" /></div>';
       } else {
         thumbHtml = '<div class="card-thumb-placeholder">' + badges + '\u2728</div>';
       }
@@ -261,7 +261,9 @@ function buildRibbon(data) {
     all.forEach(entry => {
       const a = document.createElement('a');
       a.href = LANG_PARAM ? entry.path + '?lang=' + LANG : entry.path;
+      // aria-label is the accessible name for the link; title is the sighted-hover tooltip. img below uses alt="" since this link already carries the name.
       a.title = entry.title;
+      a.setAttribute('aria-label', entry.title);
       if (entry.composite) {
         const div = document.createElement('div');
         div.className = 'ribbon-thumb-composite';
@@ -271,7 +273,7 @@ function buildRibbon(data) {
         const img = document.createElement('img');
         img.src = entry.url;
         img.loading = 'lazy';
-        img.alt = entry.title;
+        img.alt = '';
         img.onerror = retryImage;
         a.appendChild(img);
       }
@@ -285,21 +287,30 @@ function buildRibbon(data) {
   container.appendChild(buildTrack(row2, true));
 
   // Ribbon starts invisible (CSS opacity:0). Fade in once 50% of images
-  // have loaded to avoid showing broken/placeholder images.
+  // have settled (loaded or permanently failed) to avoid progressive
+  // pop-in. 6s hard fallback caps worst-case latency on bad networks.
   var ribbonImages = container.querySelectorAll('img');
   var loaded = 0;
   var total = ribbonImages.length;
   var threshold = Math.floor(total * 0.5);
+  function tick() {
+    loaded++;
+    if (loaded >= threshold) container.classList.add('loaded');
+  }
   ribbonImages.forEach(function(img) {
     if (img.complete) {
       loaded++;
+      return;
     }
-    img.addEventListener('load', function() {
-      loaded++;
-      if (loaded >= threshold) container.classList.add('loaded');
+    img.addEventListener('load', tick);
+    img.addEventListener('error', function() {
+      // retryImage sets data-error='1' only on the final failed retry;
+      // intermediate errors are still retrying and shouldn't count.
+      if (img.dataset.error === '1') tick();
     });
   });
   if (loaded >= threshold) container.classList.add('loaded');
+  setTimeout(function() { container.classList.add('loaded'); }, 6000);
 }
 
 function updateGameCount(data) {
