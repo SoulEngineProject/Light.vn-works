@@ -1,5 +1,6 @@
 # Failure Considerations
 
+Self Note: Think of this like an interview question. "What can fail?" "Any single points of failures?"
 Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavior without understanding the reasoning.
 
 ## Ribbon & image loading
