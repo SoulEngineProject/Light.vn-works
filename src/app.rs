@@ -2,24 +2,30 @@ use axum::{
     routing::get,
     routing::get_service,
     Router,
+    body::Body,
     extract::Path as AxumPath,
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     extract::{Query, State},
 };
+use dashmap::DashMap;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path as FsPath;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
+use tokio::sync::Semaphore;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, ParsedGame, TagInfo, parse_frontmatter, extract_all_images,
-    markdown_to_html, html_escape, encode_path, strip_img_tags, build_creator_paths,
+    GameMeta, ParsedGame, TagInfo, ThumbSize, extract_user_attachment_uuid,
+    parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
+    game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
     tag_style, get_lang,
 };
@@ -31,6 +37,19 @@ struct AppState {
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
     tree_json: Arc<String>,
+    // Thumbnail proxy state
+    thumb_cache: Arc<DashMap<(String, ThumbSize), Vec<u8>>>,
+    thumb_in_flight: Arc<Mutex<HashSet<(String, ThumbSize)>>>,
+    thumb_originals: Arc<HashMap<String, String>>,
+    thumb_semaphore: Arc<Semaphore>,
+    // Observability: wall-clock time since the first populate was spawned, a
+    // running count of successful populates, and cumulative time spent in the
+    // GitHub HTTP fetch portion (vs. decode/resize/encode). Lets you see how
+    // much of warmup cost is network vs. local CPU work.
+    thumb_populate_start: Arc<OnceLock<Instant>>,
+    thumb_populate_count: Arc<AtomicUsize>,
+    thumb_fetch_millis: Arc<AtomicU64>,
+    http_client: reqwest::Client,
 }
 
 #[derive(Serialize, Clone)]
@@ -41,6 +60,8 @@ struct Node {
     children: Option<Vec<Node>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thumbnail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    thumbnail_ribbon: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     thumbnail_composite: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,11 +92,7 @@ async fn render_markdown(
         _ => if accept_lang.contains("ja") { "ja" } else { "en" },
     };
     let lang = get_lang(detected_lang);
-    let lang_suffix = if lang_param.is_some() {
-        format!("?lang={}", detected_lang)
-    } else {
-        String::new()
-    };
+    let incoming_r18_zero = params.get("r18").map(|s| s.as_str()) == Some("0");
 
     if year.len() > 20
         || title.len() > 300
@@ -128,14 +145,10 @@ async fn render_markdown(
 
     let tags = meta.tags.as_deref().unwrap_or(&[]);
     let is_r18 = tags.iter().any(|t| t == "r18");
-    // When navigating back from an R18 game page, uncheck "Hide R18" on the
-    // home page so the game is visible in the list.
-    let home_suffix = match (lang_param.is_some(), is_r18) {
-        (true, true) => format!("?lang={}&r18=0", detected_lang),
-        (true, false) => format!("?lang={}", detected_lang),
-        (false, true) => "?r18=0".to_string(),
-        (false, false) => String::new(),
-    };
+    // Back-link (to homepage): forces r18=0 if this page is R18 so the game
+    // stays visible in the list. Forward-link (more-from cards): preserves
+    // whatever r18 state the user arrived with.
+    let (home_suffix, fwd_suffix) = game_page_suffixes(lang_param, is_r18, incoming_r18_zero);
     let released = meta.released.as_deref().unwrap_or("");
     let tags_line = build_tags_line(tags, &lang.tags_label, lang_param, &state.tag_config, released);
 
@@ -152,14 +165,21 @@ async fn render_markdown(
         }
     }
 
+    // alt="" intentional: the <h1>{title}</h1> directly below is the accessible
+    // label for this page's hero image. Empty alt avoids flashing the title as
+    // overlay text during slow loads.
     let hero_html = images.first().map(|img| {
         format!(
-            r#"<div class="hero-image"><div class="hero-frame"><img src="{}" alt="{}" /></div></div>"#,
-            html_escape(&img.url),
-            html_escape(&title_display)
+            r#"<div class="hero-image"><div class="hero-frame"><img src="{}" alt="" /></div></div>"#,
+            html_escape(&img.url)
         )
     }).unwrap_or_default();
 
+    // alt="" intentional: gallery screenshots are decorative in the context
+    // of a page that already has tagline, synopsis, and hero for descriptive
+    // content. We have no meaningful per-image description to provide; a
+    // generic "Screenshot" adds nothing for screen readers and flashes as
+    // overlay text during slow loads.
     let gallery_html = if images.len() > 1 {
         let gallery_images = &images[1..];
         let rows = gallery_rows(gallery_images.len());
@@ -169,7 +189,7 @@ async fn render_markdown(
             html += &format!(r#"<div class="gallery gallery-{}">"#, cols);
             for _ in 0..*cols {
                 html += &format!(
-                    r#"<img src="{}" alt="Screenshot" loading="lazy" />"#,
+                    r#"<img src="{}" alt="" loading="lazy" />"#,
                     html_escape(&gallery_images[idx].url)
                 );
                 idx += 1;
@@ -199,10 +219,12 @@ async fn render_markdown(
                 html_escape(&img.url)
             )
         } else {
+            // alt="" intentional: the game page already has <h1>{title_display}</h1>,
+            // so this image is decorative. Empty alt avoids flashing the title
+            // as overlay text during slow loads.
             format!(
-                r#"<img class="editor-preview" src="{}" alt="{}" loading="lazy" />"#,
-                html_escape(&img.url),
-                html_escape(&title_display)
+                r#"<img class="editor-preview" src="{}" alt="" loading="lazy" />"#,
+                html_escape(&img.url)
             )
         };
         format!(
@@ -229,10 +251,12 @@ async fn render_markdown(
                                 html_escape(url)
                             )
                         } else {
+                            // alt="" intentional: .more-creator-title below is
+                            // the link's accessible name; empty alt avoids
+                            // flashing title during slow loads.
                             format!(
-                                r#"<img src="{}" alt="{}" loading="lazy" />"#,
-                                html_escape(url),
-                                html_escape(&g.title)
+                                r#"<img src="{}" alt="" loading="lazy" />"#,
+                                html_escape(url)
                             )
                         }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
@@ -251,7 +275,7 @@ async fn render_markdown(
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&encode_path(&g.path)),
-                        lang_suffix,
+                        fwd_suffix,
                         badge,
                         thumb,
                         html_escape(&g.title)
@@ -286,7 +310,6 @@ async fn render_markdown(
         .replace("{{lang_footer}}", &lang.footer)
         .replace("{{lang_breadcrumb_works}}", &lang.breadcrumb_works)
         .replace("{{lang_detected_lang}}", detected_lang)
-        .replace("{{lang_suffix}}", &lang_suffix)
         .replace("{{home_suffix}}", &home_suffix);
 
     (StatusCode::OK, Html(page))
@@ -318,9 +341,15 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
 // catch_unwind so a panic in one file logs + skips, rather than crashing the
 // server. The bad file is missing from the index; the rest of the catalog
 // serves normally. Request for the skipped file yields 404.
-fn build_games_index() -> HashMap<String, ParsedGame> {
+//
+// Also builds the `thumb_originals` map: for each thumbnail that's a GitHub
+// user-attachment URL, records (UUID → original URL) so the `/thumb/:uuid/:size`
+// handler knows what to fetch/proxy. Thumbnails get their URLs rewritten to
+// `/thumb/UUID/{card,ribbon}` form.
+fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>) {
     let root_dir = FsPath::new("works");
     let mut games = HashMap::new();
+    let mut thumb_originals: HashMap<String, String> = HashMap::new();
 
     for entry in WalkDir::new(root_dir)
         .follow_links(false)
@@ -360,9 +389,24 @@ fn build_games_index() -> HashMap<String, ParsedGame> {
             let body_html = markdown_to_html(body);
             let thumb_idx = meta.thumbnail_index.unwrap_or(0);
             let thumb_img = images.get(thumb_idx).or(images.first());
-            let thumbnail = thumb_img.map(|img| img.url.clone());
+            let original_thumbnail = thumb_img.map(|img| img.url.clone());
             let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
-            ParsedGame {
+
+            // Rewrite GitHub user-attachment URLs to the proxy form; pass
+            // through anything else unchanged.
+            let (thumbnail, thumbnail_ribbon, uuid_to_register) = match original_thumbnail
+                .as_deref()
+                .and_then(extract_user_attachment_uuid)
+            {
+                Some(uuid) => (
+                    Some(format!("/thumb/{}/card", uuid)),
+                    Some(format!("/thumb/{}/ribbon", uuid)),
+                    Some((uuid.to_string(), original_thumbnail.clone().unwrap())),
+                ),
+                None => (original_thumbnail.clone(), original_thumbnail, None),
+            };
+
+            let game = ParsedGame {
                 year: year.clone(),
                 title: title.clone(),
                 path: canonical_path.clone(),
@@ -370,19 +414,26 @@ fn build_games_index() -> HashMap<String, ParsedGame> {
                 body_html,
                 images,
                 thumbnail,
+                thumbnail_ribbon,
                 thumbnail_composite,
-            }
+            };
+            (game, uuid_to_register)
         }));
 
         match parsed {
-            Ok(game) => { games.insert(canonical_path, game); }
+            Ok((game, uuid_to_register)) => {
+                if let Some((uuid, orig)) = uuid_to_register {
+                    thumb_originals.insert(uuid, orig);
+                }
+                games.insert(canonical_path, game);
+            }
             Err(_) => {
                 eprintln!("[startup] panic parsing {}; skipping", path.display());
             }
         }
     }
 
-    games
+    (games, thumb_originals)
 }
 
 // Build Node tree from pre-parsed games, grouped by year. Directory shape is
@@ -399,6 +450,7 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
             is_dir: false,
             children: None,
             thumbnail: game.thumbnail.clone(),
+            thumbnail_ribbon: game.thumbnail_ribbon.clone(),
             thumbnail_composite: if game.thumbnail_composite { Some(true) } else { None },
             meta: Some(game.meta.clone()),
         });
@@ -416,6 +468,7 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
             is_dir: true,
             children: Some(games),
             thumbnail: None,
+            thumbnail_ribbon: None,
             thumbnail_composite: None,
             meta: None,
         })
@@ -427,8 +480,175 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
         is_dir: true,
         children: Some(year_nodes),
         thumbnail: None,
+        thumbnail_ribbon: None,
         thumbnail_composite: None,
         meta: None,
+    }
+}
+
+// Thumbnail proxy handler.
+// - Cache hit: serve resized JPEG bytes from memory with aggressive caching.
+// - Cache miss: respond 302 to the original GitHub URL (no-store so the
+//   browser re-hits us once cache is warm), and spawn a background populate
+//   task if one isn't already running for this (uuid, size).
+async fn serve_thumb(
+    State(state): State<AppState>,
+    AxumPath((uuid, size_str)): AxumPath<(String, String)>,
+) -> Response {
+    let size = match ThumbSize::parse(&size_str) {
+        Some(s) => s,
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let original_url = match state.thumb_originals.get(&uuid) {
+        Some(url) => url.clone(),
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+    let key = (uuid.clone(), size);
+
+    if let Some(bytes) = state.thumb_cache.get(&key) {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "image/webp")
+            .header(header::CACHE_CONTROL, "public, max-age=31536000, immutable")
+            .body(Body::from(bytes.clone()))
+            .unwrap();
+    }
+
+    // Miss path. Debounce: only spawn a populate if this (uuid, size) isn't
+    // already in flight. Prevents thundering herd on first visit.
+    let should_spawn = {
+        let mut in_flight = state.thumb_in_flight.lock().unwrap();
+        in_flight.insert(key.clone())
+    };
+    if should_spawn {
+        let state_clone = state.clone();
+        tokio::spawn(populate_thumbnail(state_clone, key, original_url.clone()));
+    }
+
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header(header::LOCATION, original_url)
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(Body::empty())
+        .unwrap()
+}
+
+// Fetch the original from GitHub, decode, resize, re-encode as JPEG q=80,
+// insert into cache. Semaphore caps concurrent populates to avoid saturating
+// free-tier CPU when many misses arrive in a burst. Failures are logged and
+// the in-flight slot released so the next miss retries.
+async fn populate_thumbnail(
+    state: AppState,
+    key: (String, ThumbSize),
+    original_url: String,
+) {
+    // Record the first populate's start time for cumulative progress logging.
+    // OnceLock::set is a no-op after the first call.
+    let _ = state.thumb_populate_start.set(Instant::now());
+    let _permit = state.thumb_semaphore.acquire().await.ok();
+    let (uuid, size) = key.clone();
+
+    let result = async {
+        let fetch_start = Instant::now();
+        // One retry on transient network errors. "Connection closed before
+        // message complete" is the common flake from HTTP/2 pooled connections
+        // being reused as the server-side closes them; a retry almost always
+        // succeeds. Covers errors from both send() and body read. 4xx/5xx
+        // responses aren't retried (they're not transient).
+        let fetch_once = || async {
+            state
+                .http_client
+                .get(&original_url)
+                .send()
+                .await?
+                .error_for_status()?
+                .bytes()
+                .await
+        };
+        let bytes = match fetch_once().await {
+            Ok(b) => b,
+            Err(_) => {
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                fetch_once().await?
+            }
+        };
+        state
+            .thumb_fetch_millis
+            .fetch_add(fetch_start.elapsed().as_millis() as u64, Ordering::Relaxed);
+
+        let img = image::load_from_memory(&bytes)
+            .map_err(|e| format!("decode: {}", e))?;
+        let resized = resize_thumbnail(&img, size);
+        // WebP q=80 lossy via libwebp. Smaller than JPEG at equivalent visual
+        // quality, and preserves alpha channels (JPEG would flatten them).
+        let out: Vec<u8> = if resized.color().has_alpha() {
+            let rgba = resized.to_rgba8();
+            webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height())
+                .encode(80.0)
+                .to_vec()
+        } else {
+            let rgb = resized.to_rgb8();
+            webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height())
+                .encode(80.0)
+                .to_vec()
+        };
+        Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(out)
+    }
+    .await;
+
+    match result {
+        Ok(bytes) => {
+            state.thumb_cache.insert(key.clone(), bytes);
+            let count = state.thumb_populate_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if let Some(start) = state.thumb_populate_start.get() {
+                let secs = start.elapsed().as_secs_f32();
+                let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
+                let avg_fetch_secs = (fetch_ms as f32 / count as f32) / 1000.0;
+                let total = state.thumb_originals.len() * 2;
+                eprintln!(
+                    "[thumb] {} / {} images cached. Took {:.1}s (avg fetch {:.1}s/img)",
+                    count, total, secs, avg_fetch_secs
+                );
+            }
+        }
+        Err(e) => {
+            // Walk the error's source chain so we see the underlying cause
+            // (connect/DNS/TLS/timeout/etc.) not just reqwest's wrapper.
+            let mut msg = e.to_string();
+            let mut src: Option<&(dyn std::error::Error + 'static)> = e.source();
+            while let Some(inner) = src {
+                msg.push_str(" | ");
+                msg.push_str(&inner.to_string());
+                src = inner.source();
+            }
+            eprintln!("[thumb] populate failed for {}/{:?}: {}", uuid, size, msg);
+        }
+    }
+    state.thumb_in_flight.lock().unwrap().remove(&key);
+}
+
+// Background warmup: spawn a populate for every (uuid, size) pair that isn't
+// already cached. Reuses populate_thumbnail + in-flight debouncing, so races
+// with user requests are harmless (either the warmer or the user spawns the
+// task, never both). Semaphore throttles actual concurrency; spawning all
+// tasks up front just queues them.
+async fn warm_all_thumbnails(state: AppState) {
+    for (uuid, original_url) in state.thumb_originals.iter() {
+        for size in [ThumbSize::Card, ThumbSize::Ribbon] {
+            let key = (uuid.clone(), size);
+            if state.thumb_cache.contains_key(&key) {
+                continue;
+            }
+            let should_spawn = {
+                let mut in_flight = state.thumb_in_flight.lock().unwrap();
+                in_flight.insert(key.clone())
+            };
+            if should_spawn {
+                let state_clone = state.clone();
+                let url_clone = original_url.clone();
+                tokio::spawn(populate_thumbnail(state_clone, key, url_clone));
+            }
+        }
     }
 }
 
@@ -436,7 +656,7 @@ pub fn build_app() -> Router {
     // Walk works/ once, parse every markdown file into a ParsedGame. All
     // derived data (creator index, tree JSON for home-page embedding) is built
     // from this single source of truth.
-    let games = build_games_index();
+    let (games, thumb_originals) = build_games_index();
     let creator_paths = build_creator_paths(&games);
     let tree = build_tree_from_games(&games);
     let tree_json = serde_json::to_string(&tree).unwrap_or_default();
@@ -451,7 +671,26 @@ pub fn build_app() -> Router {
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
         tree_json: Arc::new(tree_json),
+        thumb_cache: Arc::new(DashMap::new()),
+        thumb_in_flight: Arc::new(Mutex::new(HashSet::new())),
+        thumb_originals: Arc::new(thumb_originals),
+        thumb_semaphore: Arc::new(Semaphore::new(8)),
+        thumb_populate_start: Arc::new(OnceLock::new()),
+        thumb_populate_count: Arc::new(AtomicUsize::new(0)),
+        thumb_fetch_millis: Arc::new(AtomicU64::new(0)),
+        http_client: reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            // Drop idle pooled connections sooner than GitHub's ~60s. Reusing
+            // a stale HTTP/2 connection is the typical cause of
+            // "connection closed before message complete" errors.
+            .pool_idle_timeout(std::time::Duration::from_secs(20))
+            .build()
+            .expect("build reqwest client"),
     };
+
+    // Kick off background warmup. Runs concurrently with request handling;
+    // server is already listening by the time the spawned task progresses.
+    tokio::spawn(warm_all_thumbnails(state.clone()));
 
     let serve_dir = ServeDir::new("public").not_found_service(
         ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
@@ -461,10 +700,11 @@ pub fn build_app() -> Router {
     // Last-Modified header that ServeDir emits, browsers send conditional
     // requests and get 304 Not Modified (no body) for unchanged static files.
     // Zero stale-content risk; no build-time versioning needed.
-    // Applied router-wide: dynamic routes get the header too, but without
-    // ETag/Last-Modified the effect is identical to today (full response every
-    // request) — no harm, and future ETag support would get free 304s.
-    let cache_control = SetResponseHeaderLayer::overriding(
+    //
+    // `if_not_present` (not `overriding`) so handlers that set their own
+    // Cache-Control keep theirs — notably /thumb/:uuid/:size uses
+    // `immutable` since UUID-keyed URLs never change.
+    let cache_control = SetResponseHeaderLayer::if_not_present(
         header::CACHE_CONTROL,
         HeaderValue::from_static("no-cache"),
     );
@@ -473,6 +713,7 @@ pub fn build_app() -> Router {
         .route("/", get(serve_home))
         .route("/api/tree", get(get_tree))
         .route("/works/:year/:title", get(render_markdown))
+        .route("/thumb/:uuid/:size", get(serve_thumb))
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
         .layer(cache_control)

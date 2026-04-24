@@ -10,9 +10,7 @@ Ordered by impact.
 
 ### Trim initial ribbon image fetches
 
-`public/home.js::buildRibbon` kicks off up to 30 image requests on load. Even with `loading="lazy"`, browsers fetch most of them because the ribbon is above the fold.
-
-**Fix:** cap at ~12–16 visible thumbs for the marquee, or preload only the first row and let the second lazy-load when it scrolls into view.
+`public/home.js::buildRibbon` kicks off up to 30 image requests on load. Largely defanged by the `/thumb` proxy — ribbon thumbs are now ~11KB WebP instead of ~150KB full-size, so total ribbon bandwidth is ~330KB on cold browser cache. Only worth revisiting if the ribbon becomes measurably slow on mobile or catalogs scale to thousands of items.
 
 ## Low priority (watch as the catalog grows)
 

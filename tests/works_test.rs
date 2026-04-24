@@ -1,7 +1,188 @@
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
+
+#[test]
+fn build_query_empty_input() {
+    assert_eq!(build_query(&[]), "");
+}
+
+#[test]
+fn build_query_all_empty_values_returns_empty() {
+    assert_eq!(build_query(&[("lang", ""), ("r18", "")]), "");
+}
+
+#[test]
+fn build_query_single_pair() {
+    assert_eq!(build_query(&[("lang", "ja")]), "?lang=ja");
+}
+
+#[test]
+fn build_query_multiple_pairs_joined_with_ampersand() {
+    assert_eq!(build_query(&[("lang", "ja"), ("r18", "0")]), "?lang=ja&r18=0");
+}
+
+#[test]
+fn build_query_filters_empty_values() {
+    assert_eq!(build_query(&[("lang", "en"), ("r18", "")]), "?lang=en");
+    assert_eq!(build_query(&[("lang", ""), ("r18", "0")]), "?r18=0");
+}
+
+#[test]
+fn game_page_suffixes_non_r18_no_params() {
+    // non-R18 game, nothing incoming → both suffixes empty
+    let (back, fwd) = game_page_suffixes(None, false, false);
+    assert_eq!(back, "");
+    assert_eq!(fwd, "");
+}
+
+#[test]
+fn game_page_suffixes_r18_game_forces_back_r18() {
+    // R18 game with no incoming params → back forces r18=0, fwd empty
+    let (back, fwd) = game_page_suffixes(None, true, false);
+    assert_eq!(back, "?r18=0");
+    assert_eq!(fwd, "");
+}
+
+#[test]
+fn game_page_suffixes_propagates_incoming_r18() {
+    // Non-R18 game, r18=0 incoming → both carry r18=0
+    let (back, fwd) = game_page_suffixes(None, false, true);
+    assert_eq!(back, "?r18=0");
+    assert_eq!(fwd, "?r18=0");
+}
+
+#[test]
+fn game_page_suffixes_combines_lang_and_r18() {
+    // R18 game with lang=ja → both carry lang, back forces r18=0
+    let (back, fwd) = game_page_suffixes(Some("ja"), true, false);
+    assert_eq!(back, "?lang=ja&r18=0");
+    assert_eq!(fwd, "?lang=ja");
+}
+
+#[test]
+fn extract_uuid_from_user_attachment_url() {
+    // Real-shape URL
+    assert_eq!(
+        extract_user_attachment_uuid(
+            "https://github.com/user-attachments/assets/abc-def-123"
+        ),
+        Some("abc-def-123")
+    );
+}
+
+#[test]
+fn extract_uuid_rejects_non_github_urls() {
+    assert_eq!(
+        extract_user_attachment_uuid("https://example.com/image.png"),
+        None
+    );
+    assert_eq!(
+        extract_user_attachment_uuid("https://raw.githubusercontent.com/user/repo/main/a.png"),
+        None
+    );
+}
+
+#[test]
+fn extract_uuid_rejects_malformed_paths() {
+    // Extra path segments
+    assert_eq!(
+        extract_user_attachment_uuid(
+            "https://github.com/user-attachments/assets/abc/extra"
+        ),
+        None
+    );
+    // Query string
+    assert_eq!(
+        extract_user_attachment_uuid(
+            "https://github.com/user-attachments/assets/abc?x=1"
+        ),
+        None
+    );
+    // Fragment
+    assert_eq!(
+        extract_user_attachment_uuid(
+            "https://github.com/user-attachments/assets/abc#frag"
+        ),
+        None
+    );
+    // Empty UUID
+    assert_eq!(
+        extract_user_attachment_uuid("https://github.com/user-attachments/assets/"),
+        None
+    );
+}
+
+#[test]
+fn thumb_size_parses_valid_variants() {
+    assert_eq!(ThumbSize::parse("ribbon"), Some(ThumbSize::Ribbon));
+    assert_eq!(ThumbSize::parse("card"), Some(ThumbSize::Card));
+}
+
+#[test]
+fn thumb_size_rejects_invalid_variants() {
+    assert_eq!(ThumbSize::parse(""), None);
+    assert_eq!(ThumbSize::parse("Ribbon"), None); // case-sensitive
+    assert_eq!(ThumbSize::parse("thumb"), None);
+    assert_eq!(ThumbSize::parse("ribbon/extra"), None);
+}
+
+#[test]
+fn thumb_size_dimensions() {
+    assert_eq!(ThumbSize::Ribbon.dimensions(), (240, 140));
+    assert_eq!(ThumbSize::Card.dimensions(), (600, 400));
+}
+
+#[test]
+fn composite_detection_threshold() {
+    assert!(is_composite_dimensions(1600, 400));  // 4:1 → composite
+    assert!(is_composite_dimensions(2001, 1000)); // just over 2:1 → composite
+    assert!(!is_composite_dimensions(2000, 1000));// exactly 2:1 → not composite
+    assert!(!is_composite_dimensions(1280, 720)); // 16:9 → normal
+    assert!(!is_composite_dimensions(1000, 1000));// square → normal
+    assert!(!is_composite_dimensions(100, 0));    // zero height → guard
+}
+
+#[test]
+fn resize_thumbnail_preserves_composite_card_no_upscale() {
+    // given: typical 1170x216 composite, card target (1600, 400)
+    let img = image::DynamicImage::new_rgb8(1170, 216);
+
+    // when: resized
+    let resized = resize_thumbnail(&img, ThumbSize::Card);
+
+    // then: source fits within the target envelope — kept as-is (no upscale
+    // would introduce interpolation blur before the CSS zoom).
+    assert_eq!(resized.width(), 1170);
+    assert_eq!(resized.height(), 216);
+}
+
+#[test]
+fn resize_thumbnail_shrinks_composite_for_ribbon() {
+    // given: 1170x216 composite, ribbon target (900, 400)
+    let img = image::DynamicImage::new_rgb8(1170, 216);
+
+    // when: resized
+    let resized = resize_thumbnail(&img, ThumbSize::Ribbon);
+
+    // then: scaled to fit within (900, 400), preserving 5.4:1 aspect
+    assert_eq!(resized.width(), 900);
+    assert_eq!(resized.height(), 166);  // 900 * 216/1170 ≈ 166
+}
+
+#[test]
+fn resize_thumbnail_fills_normal_aspect() {
+    // given: a 1280x720 normal screenshot, target is card (600x400)
+    let img = image::DynamicImage::new_rgb8(1280, 720);
+
+    // when: resized
+    let resized = resize_thumbnail(&img, ThumbSize::Card);
+
+    // then: filled to exact target dimensions (crops excess to cover 600x400)
+    assert_eq!(resized.width(), 600);
+    assert_eq!(resized.height(), 400);
+}
 
 #[test]
 fn encode_path_handles_reserved_chars() {
@@ -25,6 +206,7 @@ fn make_game(year: &str, title: &str, creator: &str, released: &str) -> ParsedGa
         body_html: String::new(),
         images: vec![],
         thumbnail: None,
+        thumbnail_ribbon: None,
         thumbnail_composite: false,
     }
 }

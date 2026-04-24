@@ -93,6 +93,17 @@ function encodePath(path) {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
+// Build an href that preserves lang + r18 state so navigation doesn't silently
+// reset the user's filter. Reads live checkbox state each call so mid-session
+// toggles are reflected on re-render.
+function buildHref(linkPath) {
+  var parts = [];
+  if (LANG_PARAM) parts.push('lang=' + LANG);
+  var hideR18 = document.getElementById('hide-r18');
+  if (hideR18 && !hideR18.checked) parts.push('r18=0');
+  return encodePath(linkPath) + (parts.length ? '?' + parts.join('&') : '');
+}
+
 document.getElementById('search').addEventListener('input', rerender);
 document.getElementById('hide-r18').addEventListener('change', rerender);
 
@@ -193,7 +204,7 @@ function renderTree(data, query, hideR18) {
       if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
-      a.href = LANG_PARAM ? encodePath(linkPath) + '?lang=' + LANG : encodePath(linkPath);
+      a.href = buildHref(linkPath);
       a.className = 'file-card';
 
       let thumbHtml;
@@ -240,7 +251,10 @@ function buildRibbon(data) {
           let path = item.path;
           if (path.endsWith('.md')) path = path.slice(0, -3);
           const title = item.name.replace(/\.md$/i, '').trim();
-          items.push({ url: item.thumbnail, path: path, title: title, composite: !!item.thumbnail_composite });
+          // thumbnail_ribbon is the smaller (240x140) proxy URL for GitHub
+          // user-attachments; falls back to thumbnail for non-proxied URLs.
+          const url = item.thumbnail_ribbon || item.thumbnail;
+          items.push({ url: url, path: path, title: title, composite: !!item.thumbnail_composite });
         }
       });
     }
@@ -266,7 +280,7 @@ function buildRibbon(data) {
     const all = entries.concat(entries);
     all.forEach(entry => {
       const a = document.createElement('a');
-      a.href = LANG_PARAM ? encodePath(entry.path) + '?lang=' + LANG : encodePath(entry.path);
+      a.href = buildHref(entry.path);
       // aria-label is the accessible name for the link; title is the sighted-hover tooltip. img below uses alt="" since this link already carries the name.
       a.title = entry.title;
       a.setAttribute('aria-label', entry.title);
