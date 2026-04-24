@@ -19,9 +19,10 @@ tags: []
 thumbnail_index: 2
 ---
 
-<img width="960" height="540" alt="image" src="https://github.com/user-attachments/assets/8ee3566b-0d9c-449d-9399-fc21f7a0b7bf" />
-<img width="960" height="540" alt="image" src="https://github.com/user-attachments/assets/99e57574-11fd-484f-89a9-29bf54600fb2" />
-<img width="960" height="540" alt="image" src="https://github.com/user-attachments/assets/932a3438-aa28-47ce-a0f0-6245488f68fb" />
+<img width="1468" height="957" alt="image" src="https://github.com/user-attachments/assets/59cf0ff9-d930-4dcf-9e26-ed9500ebdefa" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/f7f1fde7-1f13-4278-8819-4aea8572c9f2" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/e8a5d2a3-12bc-4888-895b-c468f344f9f1" />
+
 
 ---
 「元」天使と天使、そして人間たちが織り成す、少し変わった物語。  
