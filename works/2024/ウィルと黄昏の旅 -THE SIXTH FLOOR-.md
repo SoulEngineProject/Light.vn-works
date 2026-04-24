@@ -10,13 +10,14 @@ extra_links:
     url: "https://x.com/Uzumeyahonpo"
 tagline: この作品は「ウィルと黄昏の旅」全7階層のうちの第六階層の物語のみを収録したものです。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/d8ee8d6a-244b-4e5c-ae94-8305880c9ce7" />
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/0dda86f3-79cb-4e3e-aaef-4041d50d191e" />
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/a5cc1336-efbd-4fe9-af2c-f9917d172b1c" />
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/daeb5758-c04e-44f7-9038-829e4f7778c2" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/034500e8-75f5-410c-acc9-e60d06e148d5" />
+<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/8ce3389d-859f-4d79-b1d1-d2bfdc1c38a3" />
+<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/3536e53a-dd79-4611-99e8-1447103eb01b" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/cb7a7b29-9d9f-40a3-a7e5-44904163a412" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/20237ae8-137b-433d-8d24-998f3bbfbf9b" />
 
 ---
 この作品は「ウィルと黄昏の旅」全7階層のうちの第六階層の物語のみを収録したものです。OP～第一階層は「THE FIRST FLOOR:」、第二階層は「THE SECOND FLOOR:」、第三階層は「THE THIRD FLOOR:」、第四階層は「THE FOURTH FLOOR:」、第五階層は「THE FIFTH FLOOR:」に収録されています。  

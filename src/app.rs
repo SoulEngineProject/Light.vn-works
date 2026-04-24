@@ -1,34 +1,35 @@
 use axum::{
     routing::get,
     routing::get_service,
-    Json,
     Router,
     extract::Path as AxumPath,
     response::{Html, IntoResponse},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     extract::{Query, State},
 };
 use serde::Serialize;
-use std::collections::HashMap;
-use std::path::{Path as FsPath, PathBuf};
+use std::collections::{BTreeMap, HashMap};
+use std::panic::{self, AssertUnwindSafe};
+use std::path::Path as FsPath;
 use std::sync::Arc;
-use tokio::fs;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, CreatorGame, TagInfo, parse_frontmatter, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_index,
-    get_related_games_by_creator, gallery_rows, build_tags_line, load_aliases, load_tag_config,
+    GameMeta, ParsedGame, TagInfo, parse_frontmatter, extract_all_images,
+    markdown_to_html, html_escape, encode_path, strip_img_tags, build_creator_paths,
+    get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
     tag_style, get_lang,
 };
 
 #[derive(Clone)]
 struct AppState {
-    creator_index: Arc<HashMap<String, Vec<CreatorGame>>>,
+    games: Arc<HashMap<String, ParsedGame>>,
+    creator_paths: Arc<HashMap<String, Vec<String>>>,
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
-    game_count: usize,
     tree_json: Arc<String>,
 }
 
@@ -46,140 +47,11 @@ struct Node {
     meta: Option<GameMeta>,
 }
 
-async fn get_tree() -> Json<Node> {
-    let root_dir = FsPath::new("works");
-
-    let mut nodes: HashMap<String, Node> = HashMap::new();
-
-    for entry in WalkDir::new(root_dir)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let full_path = entry.path();
-
-        if full_path == root_dir {
-            continue;
-        }
-
-        let rel_path = match full_path.strip_prefix(root_dir) {
-            Ok(stripped) => {
-                let path_str = stripped
-                    .to_string_lossy()
-                    .replace('\\', "/")
-                    .trim_matches('/')
-                    .to_string();
-
-                if path_str.is_empty() {
-                    "/works".to_string()
-                } else {
-                    format!("/works/{}", path_str)
-                }
-            }
-            Err(_) => continue,
-        };
-
-        let name = full_path
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-
-        let is_dir = full_path.is_dir();
-
-        let mut thumbnail = None;
-        let mut thumbnail_composite = None;
-        let mut meta = None;
-
-        if !is_dir
-            && full_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map_or(false, |e| e.eq_ignore_ascii_case("md"))
-        {
-            if let Ok(content) = fs::read_to_string(full_path).await {
-                let (parsed_meta, body) = parse_frontmatter(&content);
-                let images = extract_all_images(body);
-                let thumb_idx = parsed_meta.thumbnail_index.unwrap_or(0);
-                if let Some(img) = images.get(thumb_idx).or(images.first()) {
-                    thumbnail = Some(img.url.clone());
-                    if img.is_composite() {
-                        thumbnail_composite = Some(true);
-                    }
-                }
-                meta = Some(parsed_meta);
-            }
-        }
-
-        let node = Node {
-            name,
-            path: rel_path.clone(),
-            is_dir,
-            children: if is_dir { Some(Vec::new()) } else { None },
-            thumbnail,
-            thumbnail_composite,
-            meta,
-        };
-
-        nodes.insert(rel_path, node);
-    }
-
-    let mut root = nodes.remove("/works").unwrap_or(Node {
-        name: "works".to_string(),
-        path: "/works".to_string(),
-        is_dir: true,
-        children: Some(Vec::new()),
-        thumbnail: None,
-        thumbnail_composite: None,
-        meta: None,
-    });
-
-    let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
-
-    for path in nodes.keys() {
-        if let Some(parent) = parent_path(path) {
-            by_parent.entry(parent).or_default().push(path.clone());
-        }
-    }
-
-    for children in by_parent.values_mut() {
-        children.sort();
-    }
-
-    attach_children(&mut root, &nodes, &by_parent);
-
-    Json(root)
-}
-
-fn parent_path(path: &str) -> Option<String> {
-    let path = path.trim_end_matches('/');
-    let last_slash = path.rfind('/')?;
-    if last_slash == 0 {
-        None
-    } else {
-        Some(path[..last_slash].to_string())
-    }
-}
-
-fn attach_children(
-    node: &mut Node,
-    all_nodes: &HashMap<String, Node>,
-    by_parent: &HashMap<String, Vec<String>>,
-) {
-    if let Some(child_paths) = by_parent.get(&node.path) {
-        let mut children = Vec::new();
-        for child_path in child_paths {
-            if let Some(child) = all_nodes.get(child_path) {
-                let mut child_clone = child.clone();
-                attach_children(&mut child_clone, all_nodes, by_parent);
-                children.push(child_clone);
-            }
-        }
-        node.children = if children.is_empty() {
-            None
-        } else {
-            Some(children)
-        };
-    }
+async fn get_tree(State(state): State<AppState>) -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "application/json")],
+        state.tree_json.to_string(),
+    )
 }
 
 async fn render_markdown(
@@ -218,22 +90,14 @@ async fn render_markdown(
         );
     }
 
-    let file_path = PathBuf::from("works")
-        .join(&year)
-        .join(format!("{}.md", title));
-
-    if !file_path.starts_with("works/") || !file_path.is_file() {
-        return not_found_html(&year, &title);
-    }
-
-    let content = match fs::read_to_string(&file_path).await {
-        Ok(c) => c,
-        Err(_) => return not_found_html(&year, &title),
+    let canonical_path = format!("/works/{}/{}", &year, &title);
+    let game = match state.games.get(&canonical_path) {
+        Some(g) => g,
+        None => return not_found_html(&year, &title),
     };
-
-    let (meta, body) = parse_frontmatter(&content);
-    let images = extract_all_images(body);
-    let md_html = markdown_to_html(body);
+    let meta = &game.meta;
+    let images = &game.images;
+    let md_html = game.body_html.as_str();
 
     let title_display = title.clone();
 
@@ -290,7 +154,7 @@ async fn render_markdown(
 
     let hero_html = images.first().map(|img| {
         format!(
-            r#"<div class="hero-image"><img src="{}" alt="{}" /></div>"#,
+            r#"<div class="hero-image"><div class="hero-frame"><img src="{}" alt="{}" /></div></div>"#,
             html_escape(&img.url),
             html_escape(&title_display)
         )
@@ -349,14 +213,14 @@ async fn render_markdown(
         )
     }).unwrap_or_default();
 
-    let current_path = format!("/works/{}/{}", &year, &title);
     let creator_field = meta.creator.as_deref().unwrap_or("");
-    let related_by_creator = get_related_games_by_creator(&state.creator_index, creator_field, &current_path, usize::MAX, &state.aliases);
-    let more_from_creator: String = related_by_creator
+    let related = get_related_paths(&state.creator_paths, creator_field, &canonical_path, usize::MAX, &state.aliases);
+    let more_from_creator: String = related
         .iter()
-        .map(|(name, games)| {
-            let cards: String = games
+        .map(|(name, paths)| {
+            let cards: String = paths
                 .iter()
+                .filter_map(|p| state.games.get(*p))
                 .map(|g| {
                     let thumb = g.thumbnail.as_deref().map(|url| {
                         if g.thumbnail_composite {
@@ -372,7 +236,8 @@ async fn render_markdown(
                             )
                         }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
-                    let badge: String = g.tags.iter().map(|tag| {
+                    let tags = g.meta.tags.as_deref().unwrap_or(&[]);
+                    let badge: String = tags.iter().map(|tag| {
                         let style_attr = match tag_style(tag, &state.tag_config) {
                             Some(s) => format!(r#" style="{}""#, s),
                             None => String::new(),
@@ -385,7 +250,7 @@ async fn render_markdown(
                     }).collect();
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
-                        html_escape(&g.path),
+                        html_escape(&encode_path(&g.path)),
                         lang_suffix,
                         badge,
                         thumb,
@@ -448,73 +313,14 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
-fn build_tree_sync() -> Node {
+// Walk works/ once at startup. Parses each .md into a ParsedGame and keys by
+// canonical path ("/works/YYYY/title"). Per-file parse is wrapped in
+// catch_unwind so a panic in one file logs + skips, rather than crashing the
+// server. The bad file is missing from the index; the rest of the catalog
+// serves normally. Request for the skipped file yields 404.
+fn build_games_index() -> HashMap<String, ParsedGame> {
     let root_dir = FsPath::new("works");
-    let mut nodes: HashMap<String, Node> = HashMap::new();
-
-    for entry in WalkDir::new(root_dir)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        let full_path = entry.path();
-        if full_path == root_dir { continue; }
-
-        let rel_path = match full_path.strip_prefix(root_dir) {
-            Ok(stripped) => {
-                let path_str = stripped.to_string_lossy().replace('\\', "/").trim_matches('/').to_string();
-                if path_str.is_empty() { "/works".to_string() } else { format!("/works/{}", path_str) }
-            }
-            Err(_) => continue,
-        };
-
-        let name = full_path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let is_dir = full_path.is_dir();
-        let mut thumbnail = None;
-        let mut thumbnail_composite = None;
-        let mut meta = None;
-
-        if !is_dir && full_path.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case("md")) {
-            if let Ok(content) = std::fs::read_to_string(full_path) {
-                let (parsed_meta, body) = parse_frontmatter(&content);
-                let images = extract_all_images(body);
-                let thumb_idx = parsed_meta.thumbnail_index.unwrap_or(0);
-                if let Some(img) = images.get(thumb_idx).or(images.first()) {
-                    thumbnail = Some(img.url.clone());
-                    if img.is_composite() {
-                        thumbnail_composite = Some(true);
-                    }
-                }
-                meta = Some(parsed_meta);
-            }
-        }
-
-        nodes.insert(rel_path.clone(), Node {
-            name, path: rel_path, is_dir,
-            children: if is_dir { Some(Vec::new()) } else { None },
-            thumbnail, thumbnail_composite, meta,
-        });
-    }
-
-    let mut root = nodes.remove("/works").unwrap_or(Node {
-        name: "works".to_string(), path: "/works".to_string(), is_dir: true,
-        children: Some(Vec::new()), thumbnail: None, thumbnail_composite: None, meta: None,
-    });
-
-    let mut by_parent: HashMap<String, Vec<String>> = HashMap::new();
-    for path in nodes.keys() {
-        if let Some(parent) = parent_path(path) {
-            by_parent.entry(parent).or_default().push(path.clone());
-        }
-    }
-    for children in by_parent.values_mut() { children.sort(); }
-    attach_children(&mut root, &nodes, &by_parent);
-    root
-}
-
-fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
-    let root_dir = FsPath::new("works");
-    let mut entries = Vec::new();
+    let mut games = HashMap::new();
 
     for entry in WalkDir::new(root_dir)
         .follow_links(false)
@@ -526,62 +332,141 @@ fn build_startup_index() -> (HashMap<String, Vec<CreatorGame>>, usize) {
             continue;
         }
 
+        let rel_path = match path.strip_prefix(root_dir) {
+            Ok(p) => p.to_string_lossy().replace('\\', "/"),
+            Err(_) => continue,
+        };
+
+        // Expect shape "YYYY/title.md"
+        let (year, _rest) = match rel_path.split_once('/') {
+            Some(parts) => parts,
+            None => continue,
+        };
+        let title = match path.file_stem().and_then(|s| s.to_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        let year = year.to_string();
+        let canonical_path = format!("/works/{}/{}", year, title);
+
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(_) => continue,
         };
 
-        let (meta, body) = parse_frontmatter(&content);
-        let creator = meta.creator.unwrap_or_default();
-        let released = meta.released.unwrap_or_default();
-        let images = extract_all_images(body);
-        let thumb_idx = meta.thumbnail_index.unwrap_or(0);
-        let thumb_img = images.get(thumb_idx).or(images.first());
-        let thumbnail = thumb_img.map(|img| img.url.clone());
-        let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
+        let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
+            let (meta, body) = parse_frontmatter(&content);
+            let images = extract_all_images(body);
+            let body_html = markdown_to_html(body);
+            let thumb_idx = meta.thumbnail_index.unwrap_or(0);
+            let thumb_img = images.get(thumb_idx).or(images.first());
+            let thumbnail = thumb_img.map(|img| img.url.clone());
+            let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
+            ParsedGame {
+                year: year.clone(),
+                title: title.clone(),
+                path: canonical_path.clone(),
+                meta,
+                body_html,
+                images,
+                thumbnail,
+                thumbnail_composite,
+            }
+        }));
 
-        let rel_path = path
-            .strip_prefix(root_dir)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default();
-
-        let title = path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-
-        let link_path = format!("/works/{}", rel_path.trim_end_matches(".md"));
-
-        let tags = meta.tags.unwrap_or_default();
-        entries.push((creator, title, link_path, thumbnail, thumbnail_composite, released, tags));
+        match parsed {
+            Ok(game) => { games.insert(canonical_path, game); }
+            Err(_) => {
+                eprintln!("[startup] panic parsing {}; skipping", path.display());
+            }
+        }
     }
 
-    let count = entries.len();
-    (build_creator_index(&entries), count)
+    games
+}
+
+// Build Node tree from pre-parsed games, grouped by year. Directory shape is
+// always works/YYYY/file.md, so no recursive traversal is needed. The output
+// JSON shape matches the legacy walker (node names and paths keep their .md
+// suffix for client compat).
+fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
+    let mut by_year: BTreeMap<String, Vec<Node>> = BTreeMap::new();
+
+    for game in games.values() {
+        by_year.entry(game.year.clone()).or_default().push(Node {
+            name: format!("{}.md", game.title),
+            path: format!("{}.md", game.path),
+            is_dir: false,
+            children: None,
+            thumbnail: game.thumbnail.clone(),
+            thumbnail_composite: if game.thumbnail_composite { Some(true) } else { None },
+            meta: Some(game.meta.clone()),
+        });
+    }
+
+    for nodes in by_year.values_mut() {
+        nodes.sort_by(|a, b| a.name.cmp(&b.name));
+    }
+
+    let year_nodes: Vec<Node> = by_year
+        .into_iter()
+        .map(|(year, games)| Node {
+            name: year.clone(),
+            path: format!("/works/{}", year),
+            is_dir: true,
+            children: Some(games),
+            thumbnail: None,
+            thumbnail_composite: None,
+            meta: None,
+        })
+        .collect();
+
+    Node {
+        name: "works".to_string(),
+        path: "/works".to_string(),
+        is_dir: true,
+        children: Some(year_nodes),
+        thumbnail: None,
+        thumbnail_composite: None,
+        meta: None,
+    }
 }
 
 pub fn build_app() -> Router {
-    // Tree data, translations, and tag config are all embedded in the home page HTML
-    // at serve time. This eliminates client-side API fetches and renders the page
-    // instantly without a loading state. The /api/tree route is kept for external use.
-    let tree = build_tree_sync();
+    // Walk works/ once, parse every markdown file into a ParsedGame. All
+    // derived data (creator index, tree JSON for home-page embedding) is built
+    // from this single source of truth.
+    let games = build_games_index();
+    let creator_paths = build_creator_paths(&games);
+    let tree = build_tree_from_games(&games);
     let tree_json = serde_json::to_string(&tree).unwrap_or_default();
-    let (creator_index, game_count) = build_startup_index();
     // Creator aliases: maps different names for the same person so "More from"
     // sections find games across all their aliases.
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
     // Tag config: defines colours and optional contest URLs per tag.
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     let state = AppState {
-        creator_index: Arc::new(creator_index),
+        games: Arc::new(games),
+        creator_paths: Arc::new(creator_paths),
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
-        game_count,
         tree_json: Arc::new(tree_json),
     };
 
     let serve_dir = ServeDir::new("public").not_found_service(
         ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
+    );
+
+    // "no-cache" means "cache, but revalidate every time". Combined with the
+    // Last-Modified header that ServeDir emits, browsers send conditional
+    // requests and get 304 Not Modified (no body) for unchanged static files.
+    // Zero stale-content risk; no build-time versioning needed.
+    // Applied router-wide: dynamic routes get the header too, but without
+    // ETag/Last-Modified the effect is identical to today (full response every
+    // request) — no harm, and future ETag support would get free 304s.
+    let cache_control = SetResponseHeaderLayer::overriding(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("no-cache"),
     );
 
     Router::new()
@@ -590,12 +475,14 @@ pub fn build_app() -> Router {
         .route("/works/:year/:title", get(render_markdown))
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
+        .layer(cache_control)
+        .layer(CompressionLayer::new())
         .with_state(state)
 }
 
 async fn serve_home(State(state): State<AppState>) -> Html<String> {
     let page = include_str!("../public/index.html")
-        .replace("{{game_count}}", &state.game_count.to_string())
+        .replace("{{game_count}}", &state.games.len().to_string())
         .replace("{{lang_json}}", include_str!("../config/lang.json"))
         .replace("{{tag_colours_json}}", &{
             let colours: HashMap<String, String> = state.tag_config.iter()

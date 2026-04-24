@@ -40,6 +40,20 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
   transition: background-size 0.4s ease;
 }
 
+.file-card:hover .card-thumb-composite,
+.more-creator-card:hover .more-creator-thumb-composite {
+  background-size: 360% auto;
+}
+
+/* Dark gradient under every thumbnail container. Prevents the browser's
+   default white empty-img rendering from flashing through while lazy-loaded
+   thumbnails are still fetching. The img covers this once loaded. */
+.card-thumb,
+.ribbon-track img,
+.more-creator-thumb {
+  background: linear-gradient(135deg, var(--surface), var(--card));
+}
+
 .lang-toggle {
   position: fixed;
   top: 0.75rem;

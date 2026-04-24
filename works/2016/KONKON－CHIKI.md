@@ -8,7 +8,10 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/e8e33dcd-7204-4b83-b231-e50be8aac262" />
+<img width="574" height="314" alt="image" src="https://github.com/user-attachments/assets/0171a54c-e3d5-4fee-b5b1-d0eb24b959ba" />
+<img width="1517" height="846" alt="image" src="https://github.com/user-attachments/assets/45ec2209-a913-4262-81d5-f86c07d096e2" />
+<img width="1517" height="846" alt="image" src="https://github.com/user-attachments/assets/29c7af76-63c6-4810-9054-57fcb0a0d9ec" />
+
 
 ---
 海に行こうぜ鉄仮面ブス！  

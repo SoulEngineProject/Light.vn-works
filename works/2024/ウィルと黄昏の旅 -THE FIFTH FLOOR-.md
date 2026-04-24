@@ -10,12 +10,12 @@ extra_links:
     url: "https://x.com/Uzumeyahonpo"
 tagline: この作品は「ウィルと黄昏の旅」全7階層のうちの第五階層の物語のみを収録したものです。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/ec946249-3b91-4469-9981-c65ef4305d95" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/c109d98e-e69e-46c1-9584-5c1eab67e88d" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/96fc153b-6ed2-4db1-b826-b84024786c8a" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/d93e3004-883c-468b-b46c-d73df49a82e6" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/ce7c343d-3a30-4d3e-acd0-380fb6490bee" />
+<img width="2562" height="1440" alt="image" src="https://github.com/user-attachments/assets/b46440cf-bbc7-452c-8272-1793eff302e5" />
 
 ---
 この作品は「ウィルと黄昏の旅」全7階層のうちの第五階層の物語のみを収録したものです。  

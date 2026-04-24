@@ -13,7 +13,9 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/61cfe8b6-d09b-4c54-abcf-27980982bd57" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/7c3bfe72-203b-4749-807e-e4d335329083" />
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/01f2625f-1df2-40cc-926c-23bafab41279" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/d64682a3-2624-459d-80a7-b13a0850b0fe" />
 
 ---
 間違えたら即エンド!?　脱出を目指すADVゲーム  

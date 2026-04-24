@@ -119,30 +119,6 @@ pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
     }
 }
 
-pub fn extract_first_image(md: &str) -> Option<String> {
-    let parser = Parser::new(md);
-
-    for event in parser {
-        if let Event::Html(html) = event {
-            let html_str = html.to_string();
-
-            if let Some(src_start) =
-                html_str.find("src=\"https://github.com/user-attachments/")
-            {
-                let rest = &html_str[src_start + 5..];
-                if let Some(end_quote) = rest.find('\"') {
-                    let src_value = &rest[..end_quote];
-                    if src_value.starts_with("https://github.com/user-attachments/") {
-                        return Some(src_value.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
 #[derive(Clone, Debug)]
 pub struct ImageInfo {
     pub url: String,
@@ -215,14 +191,34 @@ pub fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Percent-encode reserved URL characters in a path. Preserves '/' (so callers
+/// can pass "/works/2021/title") and encodes everything else that's not an
+/// unreserved character per RFC 3986. Titles starting with '#' or containing
+/// '?' would otherwise be mis-parsed by the browser.
+pub fn encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", byte)),
+        }
+    }
+    out
+}
+
+/// A parsed markdown game file. Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
-pub struct CreatorGame {
-    pub title: String,
-    pub path: String,
+pub struct ParsedGame {
+    pub year: String,                // directory name
+    pub title: String,               // file stem, no .md
+    pub path: String,                // "/works/YYYY/title", no .md
+    pub meta: GameMeta,
+    pub body_html: String,           // pre-rendered markdown
+    pub images: Vec<ImageInfo>,
     pub thumbnail: Option<String>,
     pub thumbnail_composite: bool,
-    pub released: String,
-    pub tags: Vec<String>,
 }
 
 /// Split a creator field into individual creator names.
@@ -234,40 +230,32 @@ pub fn split_creators(creator: &str) -> Vec<String> {
         .collect()
 }
 
-/// Build an index of creator (lowercased) → list of their games.
-/// Creators with commas are split into separate entries.
-pub fn build_creator_index(
-    entries: &[(String, String, String, Option<String>, bool, String, Vec<String>)], // (creator, title, path, thumbnail, composite, released, tags)
-) -> HashMap<String, Vec<CreatorGame>> {
-    let mut index: HashMap<String, Vec<CreatorGame>> = HashMap::new();
+/// Build creator → paths index. Paths are sorted by release date descending
+/// (unknown last). Creators with commas are split into separate entries.
+pub fn build_creator_paths(
+    games: &HashMap<String, ParsedGame>,
+) -> HashMap<String, Vec<String>> {
+    let mut index: HashMap<String, Vec<String>> = HashMap::new();
 
-    for (creator, title, path, thumbnail, thumbnail_composite, released, tags) in entries {
-        if creator.is_empty() {
-            continue;
-        }
-
-        let game = CreatorGame {
-            title: title.clone(),
-            path: path.clone(),
-            thumbnail: thumbnail.clone(),
-            thumbnail_composite: *thumbnail_composite,
-            released: released.clone(),
-            tags: tags.clone(),
+    for game in games.values() {
+        let creator = match game.meta.creator.as_deref() {
+            Some(c) if !c.is_empty() => c,
+            _ => continue,
         };
 
         for name in split_creators(creator) {
             index
                 .entry(name.to_lowercase())
                 .or_default()
-                .push(game.clone());
+                .push(game.path.clone());
         }
     }
 
-    // Sort each creator's games by release date (newest first, "unknown" last)
-    for games in index.values_mut() {
-        games.sort_by(|a, b| {
-            let a_date = if a.released == RELEASED_UNKNOWN { "" } else { &a.released };
-            let b_date = if b.released == RELEASED_UNKNOWN { "" } else { &b.released };
+    // Sort each creator's paths by release date (newest first, "unknown" last)
+    for paths in index.values_mut() {
+        paths.sort_by(|a, b| {
+            let a_date = released_for_sort(games.get(a));
+            let b_date = released_for_sort(games.get(b));
             b_date.cmp(a_date)
         });
     }
@@ -275,15 +263,22 @@ pub fn build_creator_index(
     index
 }
 
-/// Get related games by the same creator(s), excluding the current game.
-/// Returns a list of (creator_name, games) pairs for each creator that has other games.
-pub fn get_related_games_by_creator<'a>(
-    index: &'a HashMap<String, Vec<CreatorGame>>,
+fn released_for_sort(game: Option<&ParsedGame>) -> &str {
+    match game.and_then(|g| g.meta.released.as_deref()) {
+        Some(r) if r != RELEASED_UNKNOWN => r,
+        _ => "",
+    }
+}
+
+/// Get related paths by the same creator(s), excluding the current path.
+/// Returns (creator_name, paths) pairs for each creator that has other games.
+pub fn get_related_paths<'a>(
+    index: &'a HashMap<String, Vec<String>>,
     creator_field: &str,
     current_path: &str,
     limit: usize,
     aliases: &HashMap<String, Vec<String>>,
-) -> Vec<(String, Vec<&'a CreatorGame>)> {
+) -> Vec<(String, Vec<&'a str>)> {
     if creator_field.is_empty() {
         return Vec::new();
     }
@@ -311,16 +306,17 @@ pub fn get_related_games_by_creator<'a>(
     }
 
     for name in names_to_check {
-        if let Some(games) = index.get(&name.to_lowercase()) {
-            let related: Vec<&CreatorGame> = games
+        if let Some(paths) = index.get(&name.to_lowercase()) {
+            let related: Vec<&str> = paths
                 .iter()
-                .filter(|g| !seen_paths.contains(&g.path))
+                .map(|s| s.as_str())
+                .filter(|p| !seen_paths.contains(*p))
                 .take(limit)
                 .collect();
 
             if !related.is_empty() {
-                for g in &related {
-                    seen_paths.insert(g.path.clone());
+                for p in &related {
+                    seen_paths.insert(p.to_string());
                 }
                 result.push((name, related));
             }

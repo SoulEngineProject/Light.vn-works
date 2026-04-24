@@ -1,7 +1,37 @@
-use lightvn_works::{parse_frontmatter, extract_first_image, extract_all_images, strip_img_tags, html_escape, build_creator_index, get_related_games_by_creator, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, TagInfo, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
+
+#[test]
+fn encode_path_handles_reserved_chars() {
+    // given: a path with a '#' in the title (real case: works/2021/#水卜大作戦【デモ版】)
+    // when/then: '#' becomes %23, '/' is preserved, Japanese bytes are percent-encoded
+    assert_eq!(encode_path("/works/2021/#title"), "/works/2021/%23title");
+    assert_eq!(encode_path("/works/2021/foo?bar"), "/works/2021/foo%3Fbar");
+    assert_eq!(encode_path("/works/2021/plain-title"), "/works/2021/plain-title");
+}
+
+fn make_game(year: &str, title: &str, creator: &str, released: &str) -> ParsedGame {
+    ParsedGame {
+        year: year.to_string(),
+        title: title.to_string(),
+        path: format!("/works/{}/{}", year, title),
+        meta: GameMeta {
+            creator: Some(creator.to_string()),
+            released: Some(released.to_string()),
+            ..Default::default()
+        },
+        body_html: String::new(),
+        images: vec![],
+        thumbnail: None,
+        thumbnail_composite: false,
+    }
+}
+
+fn games_map(games: Vec<ParsedGame>) -> HashMap<String, ParsedGame> {
+    games.into_iter().map(|g| (g.path.clone(), g)).collect()
+}
 
 #[test]
 fn parse_frontmatter_basic() {
@@ -65,12 +95,12 @@ fn first_image_extraction() {
 ---
 Synopsis."#;
 
-    // when: extracting the first image
-    let img = extract_first_image(md);
+    // when: extracting all images and taking the first
+    let first_url = extract_all_images(md).first().map(|img| img.url.clone());
 
     // then: the GitHub image URL is returned
     assert_eq!(
-        img.as_deref(),
+        first_url.as_deref(),
         Some("https://github.com/user-attachments/assets/abc123")
     );
 }
@@ -270,14 +300,14 @@ fn validate_all_markdown_files() {
 #[test]
 fn creator_index_groups_by_creator() {
     // given: 3 games by 2 different creators
-    let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
-        ("Bob".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, false, "2024/03/01".to_string(), vec![]),
-    ];
+    let games = games_map(vec![
+        make_game("2024", "Game A", "Alice", "2024/01/01"),
+        make_game("2024", "Game B", "Alice", "2024/06/01"),
+        make_game("2024", "Game C", "Bob", "2024/03/01"),
+    ]);
 
-    // when: building the creator index
-    let index = build_creator_index(&entries);
+    // when: building the creator paths index
+    let index = build_creator_paths(&games);
 
     // then: 2 creators, Alice has 2 games, Bob has 1
     assert_eq!(index.len(), 2);
@@ -288,33 +318,33 @@ fn creator_index_groups_by_creator() {
 #[test]
 fn creator_index_excludes_current_game() {
     // given: creator with 3 games
-    let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
-        ("Alice".to_string(), "Game C".to_string(), "/works/2024/Game C".to_string(), None, false, "2024/12/01".to_string(), vec![]),
-    ];
-    let index = build_creator_index(&entries);
+    let games = games_map(vec![
+        make_game("2024", "Game A", "Alice", "2024/01/01"),
+        make_game("2024", "Game B", "Alice", "2024/06/01"),
+        make_game("2024", "Game C", "Alice", "2024/12/01"),
+    ]);
+    let index = build_creator_paths(&games);
 
-    // when: getting related games for Game A
-    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &HashMap::new());
+    // when: getting related paths for Game A
+    let related = get_related_paths(&index, "Alice", "/works/2024/Game A", 4, &HashMap::new());
 
-    // then: returns 1 creator group with 2 games, not including Game A
+    // then: returns 1 creator group with 2 paths, not including Game A
     assert_eq!(related.len(), 1);
     assert_eq!(related[0].0, "Alice");
     assert_eq!(related[0].1.len(), 2);
-    assert!(related[0].1.iter().all(|g| g.path != "/works/2024/Game A"));
+    assert!(related[0].1.iter().all(|p| *p != "/works/2024/Game A"));
 }
 
 #[test]
 fn creator_index_single_game_creator() {
     // given: creator with only 1 game
-    let entries = vec![
-        ("Solo".to_string(), "Only Game".to_string(), "/works/2024/Only Game".to_string(), None, false, "2024/01/01".to_string(), vec![]),
-    ];
-    let index = build_creator_index(&entries);
+    let games = games_map(vec![
+        make_game("2024", "Only Game", "Solo", "2024/01/01"),
+    ]);
+    let index = build_creator_paths(&games);
 
-    // when: getting related games
-    let related = get_related_games_by_creator(&index, "Solo", "/works/2024/Only Game", 4, &HashMap::new());
+    // when: getting related paths
+    let related = get_related_paths(&index, "Solo", "/works/2024/Only Game", 4, &HashMap::new());
 
     // then: no related games
     assert!(related.is_empty());
@@ -337,19 +367,19 @@ fn split_creators_comma_separated() {
 #[test]
 fn creator_index_multi_creator_game() {
     // given: a game with 2 creators, and another game by one of them
-    let entries = vec![
-        ("Alice, Bob".to_string(), "Collab Game".to_string(), "/works/2024/Collab".to_string(), None, false, "2024/05/01".to_string(), vec![]),
-        ("Bob".to_string(), "Solo Game".to_string(), "/works/2024/Solo".to_string(), None, false, "2024/02/01".to_string(), vec![]),
-    ];
-    let index = build_creator_index(&entries);
+    let games = games_map(vec![
+        make_game("2024", "Collab", "Alice, Bob", "2024/05/01"),
+        make_game("2024", "Solo", "Bob", "2024/02/01"),
+    ]);
+    let index = build_creator_paths(&games);
 
-    // when: getting related games for the collab game
-    let related = get_related_games_by_creator(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
+    // when: getting related paths for the collab game
+    let related = get_related_paths(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
 
-    // then: Bob's section shows Solo Game
+    // then: Bob's section shows Solo
     assert_eq!(related.len(), 1);
     assert_eq!(related[0].0, "Bob");
-    assert_eq!(related[0].1[0].title, "Solo Game");
+    assert_eq!(related[0].1[0], "/works/2024/Solo");
 }
 
 #[test]
@@ -455,38 +485,38 @@ fn alias_groups_resolve_bidirectionally() {
 #[test]
 fn related_games_via_alias() {
     // given: two games by different names that are aliases
-    let entries = vec![
-        ("Alice".to_string(), "Game A".to_string(), "/works/2024/Game A".to_string(), None, false, "2024/01/01".to_string(), vec![]),
-        ("アリス".to_string(), "Game B".to_string(), "/works/2024/Game B".to_string(), None, false, "2024/06/01".to_string(), vec![]),
-    ];
-    let index = build_creator_index(&entries);
+    let games = games_map(vec![
+        make_game("2024", "Game A", "Alice", "2024/01/01"),
+        make_game("2024", "Game B", "アリス", "2024/06/01"),
+    ]);
+    let index = build_creator_paths(&games);
     let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
 
-    // when: getting related games for Game A (by Alice)
-    let related = get_related_games_by_creator(&index, "Alice", "/works/2024/Game A", 4, &aliases);
+    // when: getting related paths for Game A (by Alice)
+    let related = get_related_paths(&index, "Alice", "/works/2024/Game A", 4, &aliases);
 
     // then: finds Game B via alias アリス
     assert_eq!(related.len(), 1);
     assert_eq!(related[0].0, "アリス");
-    assert_eq!(related[0].1[0].title, "Game B");
+    assert_eq!(related[0].1[0], "/works/2024/Game B");
 }
 
 #[test]
 fn alias_no_duplicate_games() {
     // given: a game listed under both alias names (comma-separated creator)
-    let entries = vec![
-        ("Alice, アリス".to_string(), "Collab".to_string(), "/works/2024/Collab".to_string(), None, false, "2024/01/01".to_string(), vec![]),
-        ("Alice".to_string(), "Solo".to_string(), "/works/2024/Solo".to_string(), None, false, "2024/06/01".to_string(), vec![]),
-    ];
-    let index = build_creator_index(&entries);
+    let games = games_map(vec![
+        make_game("2024", "Collab", "Alice, アリス", "2024/01/01"),
+        make_game("2024", "Solo", "Alice", "2024/06/01"),
+    ]);
+    let index = build_creator_paths(&games);
     let aliases = load_aliases(r#"[["Alice", "アリス"]]"#);
 
-    // when: getting related games for Collab
-    let related = get_related_games_by_creator(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
+    // when: getting related paths for Collab
+    let related = get_related_paths(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
 
     // then: Solo appears only once (not duplicated across alias lookups)
-    let all_titles: Vec<&str> = related.iter().flat_map(|(_, games)| games.iter().map(|g| g.title.as_str())).collect();
-    assert_eq!(all_titles.iter().filter(|t| **t == "Solo").count(), 1);
+    let all_paths: Vec<&str> = related.iter().flat_map(|(_, paths)| paths.iter().copied()).collect();
+    assert_eq!(all_paths.iter().filter(|p| **p == "/works/2024/Solo").count(), 1);
 }
 
 #[test]
