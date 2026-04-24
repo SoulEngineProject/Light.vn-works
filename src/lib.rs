@@ -191,6 +191,23 @@ pub fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Percent-encode reserved URL characters in a path. Preserves '/' (so callers
+/// can pass "/works/2021/title") and encodes everything else that's not an
+/// unreserved character per RFC 3986. Titles starting with '#' or containing
+/// '?' would otherwise be mis-parsed by the browser.
+pub fn encode_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    for byte in path.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", byte)),
+        }
+    }
+    out
+}
+
 /// A parsed markdown game file. Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
 pub struct ParsedGame {

@@ -19,7 +19,7 @@ use walkdir::WalkDir;
 
 use crate::{
     GameMeta, ParsedGame, TagInfo, parse_frontmatter, extract_all_images,
-    markdown_to_html, html_escape, strip_img_tags, build_creator_paths,
+    markdown_to_html, html_escape, encode_path, strip_img_tags, build_creator_paths,
     get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
     tag_style, get_lang,
 };
@@ -154,7 +154,7 @@ async fn render_markdown(
 
     let hero_html = images.first().map(|img| {
         format!(
-            r#"<div class="hero-image"><img src="{}" alt="{}" /></div>"#,
+            r#"<div class="hero-image"><div class="hero-frame"><img src="{}" alt="{}" /></div></div>"#,
             html_escape(&img.url),
             html_escape(&title_display)
         )
@@ -250,7 +250,7 @@ async fn render_markdown(
                     }).collect();
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
-                        html_escape(&g.path),
+                        html_escape(&encode_path(&g.path)),
                         lang_suffix,
                         badge,
                         thumb,

@@ -87,6 +87,12 @@ function setHtml(id, html) {
   if (el && html) el.innerHTML = html;
 }
 
+// Percent-encode each path segment individually so reserved chars like '#'
+// in titles don't get interpreted as fragment separators by the browser.
+function encodePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
 document.getElementById('search').addEventListener('input', rerender);
 document.getElementById('hide-r18').addEventListener('change', rerender);
 
@@ -187,7 +193,7 @@ function renderTree(data, query, hideR18) {
       if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
 
       const a = document.createElement('a');
-      a.href = LANG_PARAM ? linkPath + '?lang=' + LANG : linkPath;
+      a.href = LANG_PARAM ? encodePath(linkPath) + '?lang=' + LANG : encodePath(linkPath);
       a.className = 'file-card';
 
       let thumbHtml;
@@ -260,7 +266,7 @@ function buildRibbon(data) {
     const all = entries.concat(entries);
     all.forEach(entry => {
       const a = document.createElement('a');
-      a.href = LANG_PARAM ? entry.path + '?lang=' + LANG : entry.path;
+      a.href = LANG_PARAM ? encodePath(entry.path) + '?lang=' + LANG : encodePath(entry.path);
       // aria-label is the accessible name for the link; title is the sighted-hover tooltip. img below uses alt="" since this link already carries the name.
       a.title = entry.title;
       a.setAttribute('aria-label', entry.title);

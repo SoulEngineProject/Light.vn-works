@@ -1,7 +1,16 @@
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
+
+#[test]
+fn encode_path_handles_reserved_chars() {
+    // given: a path with a '#' in the title (real case: works/2021/#水卜大作戦【デモ版】)
+    // when/then: '#' becomes %23, '/' is preserved, Japanese bytes are percent-encoded
+    assert_eq!(encode_path("/works/2021/#title"), "/works/2021/%23title");
+    assert_eq!(encode_path("/works/2021/foo?bar"), "/works/2021/foo%3Fbar");
+    assert_eq!(encode_path("/works/2021/plain-title"), "/works/2021/plain-title");
+}
 
 fn make_game(year: &str, title: &str, creator: &str, released: &str) -> ParsedGame {
     ParsedGame {

@@ -82,7 +82,7 @@ header::before {
   margin-top: 1rem;
   padding: 0.6rem 1.5rem;
   background: var(--accent);
-  color: #0d0b12;
+  color: var(--bg);
   font-weight: 600;
   font-size: 0.95rem;
   border-radius: 2rem;
@@ -93,7 +93,7 @@ header::before {
 .cta-btn:hover {
   background: var(--accent-hover);
   transform: translateY(-1px);
-  color: #0d0b12;
+  color: var(--bg);
 }
 
 .contribute {
@@ -169,16 +169,9 @@ header::before {
   flex-shrink: 0;
 }
 
-.ribbon-track img[data-error] {
-  display: none;
-}
-
+.ribbon-track img[data-error],
 .card-thumb img[data-error] {
   display: none;
-}
-
-.file-card:hover .card-thumb-composite {
-  background-size: 360% auto;
 }
 
 .ribbon-thumb-composite {

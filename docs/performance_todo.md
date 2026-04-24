@@ -1,6 +1,6 @@
 # Performance TODO
 
-Items surfaced during an audit. Ordered by impact.
+Ordered by impact.
 
 ## Medium impact
 

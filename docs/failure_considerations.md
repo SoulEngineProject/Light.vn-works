@@ -16,6 +16,9 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 - **`retryImage` backoff: 1s then 3s, max 2 retries** (`public/home.js::retryImage`).
   - Why: GitHub user-attachments occasionally flakes; most transient failures resolve within ~5s.
 
+- **Dark gradient background under thumbnail containers** (`public/style.css`, combined rule targeting `.card-thumb`, `.ribbon-track img`, `.more-creator-thumb`).
+  - Why: browsers render empty `<img>` elements as native-default white before content loads. On the dark UI, that flashes a visible white frame during lazy-load or year-section expansion. The gradient fills the pre-load state so the transition is "dark → image" instead of "white → image". Don't remove thinking it's dead code — the img covers it once loaded.
+
 ## Accessibility
 
 - **`alt=""` on homepage card thumbnails** (`public/home.js`, card path).
