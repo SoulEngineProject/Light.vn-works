@@ -16,7 +16,7 @@ extra_links:
     url: "https://ci-en.net/creator/206"
 tagline: 「元」天使と天使、そして人間たちが織り成す、少し変わった物語。
 tags: []
-thumbnail_index:
+thumbnail_index: 2
 ---
 
 <img width="960" height="540" alt="image" src="https://github.com/user-attachments/assets/8ee3566b-0d9c-449d-9399-fc21f7a0b7bf" />
