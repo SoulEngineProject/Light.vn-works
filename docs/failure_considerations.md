@@ -5,11 +5,8 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 
 ## Ribbon & image loading
 
-- **Ribbon fades in after 6s regardless of image state** (`public/home.js::buildRibbon`).
-  - Why: on bad networks, image fetches can hang for minutes per attempt. The wall-clock fallback guarantees the ribbon appears.
-
-- **Permanent-failure count only after retries exhausted** (`public/home.js`, `error` listener checks `data-error='1'`).
-  - Why: intermediate errors are still retrying. Counting them immediately would reveal a broken-looking ribbon and defeat the 50% threshold.
+- **Ribbon reveals on first image load, with 6s wall-clock fallback** (`public/home.js::buildRibbon`).
+  - Why: pairs with `fetchpriority="high"` on the visible-at-rest imgs to reveal as soon as content is ready (typically <200ms). The 6s fallback covers networks where every fetch hangs — without it, the ribbon could stay invisible forever if all images permanently fail to load.
 
 - **Broken images hidden via CSS, not replaced** (`public/home.css`: `img[data-error] { display: none }`).
   - Why: collapsing the space degrades more gracefully than showing a torn-page icon.
