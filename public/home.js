@@ -356,10 +356,13 @@ function buildRibbon(data) {
   container.appendChild(buildTrack(row1, false));
   container.appendChild(buildTrack(row2, true));
 
-  // Reveal as soon as the first image is ready — pairs with fetchpriority
-  // on the visible ones, so the ribbon appears with visible content already
-  // populated. classList.add is idempotent; multiple calls are safe.
-  // 6s wall-clock fallback caps worst-case latency on bad networks.
+  // Reveal when there's content to show. The first image's `load` event
+  // triggers fade-in — pairs with fetchpriority on visible imgs so content
+  // is already populated by reveal time. Composite-only ribbon: reveal
+  // immediately since composites don't fire load events but do have content.
+  // If every image fails permanently, ribbon stays hidden — correct, since
+  // a "revealed" empty container looks identical to a hidden one (opacity
+  // doesn't affect layout, container has no visible chrome of its own).
   var ribbonImages = container.querySelectorAll('img');
   function reveal() {
     container.classList.add('loaded');
@@ -374,7 +377,6 @@ function buildRibbon(data) {
       img.addEventListener('load', reveal, { once: true });
     }
   });
-  setTimeout(reveal, 6000);
 }
 
 function updateGameCount(data) {
