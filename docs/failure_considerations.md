@@ -5,11 +5,10 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 
 ## Ribbon & image loading
 
-- **Ribbon fades in after 6s regardless of image state** (`public/home.js::buildRibbon`).
-  - Why: on bad networks, image fetches can hang for minutes per attempt. The wall-clock fallback guarantees the ribbon appears.
-
-- **Permanent-failure count only after retries exhausted** (`public/home.js`, `error` listener checks `data-error='1'`).
-  - Why: intermediate errors are still retrying. Counting them immediately would reveal a broken-looking ribbon and defeat the 50% threshold.
+- **Ribbon reveals on first image load** (`public/home.js::buildRibbon`).
+  - Why: pairs with `fetchpriority="high"` on the visible-at-rest imgs so the ribbon fades in (~50–500ms) with content already populated.
+  - If every image fails permanently, the ribbon stays hidden — this is the correct visual state, not a bug. `opacity` doesn't affect layout, and the ribbon container has no visible chrome of its own, so a "revealed" empty container looks identical to a hidden one. Don't add a fallback timer.
+  - Composite-only ribbon (no `<img>` elements) is handled by a synchronous `if (ribbonImages.length === 0) reveal()` guard — composites have content but don't fire load events.
 
 - **Broken images hidden via CSS, not replaced** (`public/home.css`: `img[data-error] { display: none }`).
   - Why: collapsing the space degrades more gracefully than showing a torn-page icon.

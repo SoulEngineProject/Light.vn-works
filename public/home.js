@@ -50,19 +50,27 @@ function applyStaticTranslations() {
   setText('lang-contribute', t.contribute);
   setText('lang-contribute-link', t.contribute_link);
   var contributeLink = document.getElementById('lang-contribute-link');
-  if (contributeLink && t.contribute_url) contributeLink.href = t.contribute_url;
+  if (contributeLink && t.contribute_url) {
+    contributeLink.href = t.contribute_url;
+  }
   setText('lang-hide-r18', t.hide_r18);
 
   const search = document.getElementById('search');
-  if (search) search.placeholder = t.search_placeholder;
+  if (search) {
+    search.placeholder = t.search_placeholder;
+  }
 
   const cta = document.getElementById('lang-cta');
-  if (cta && t.engine_url) cta.href = t.engine_url;
+  if (cta && t.engine_url) {
+    cta.href = t.engine_url;
+  }
 }
 
 function setupLangToggle() {
   const btn = document.getElementById('lang-toggle');
-  if (!btn) return;
+  if (!btn) {
+    return;
+  }
   btn.textContent = LANG === 'ja' ? 'English' : '日本語';
   btn.addEventListener('click', function() {
     const other = LANG === 'ja' ? 'en' : 'ja';
@@ -79,12 +87,16 @@ function setupLangToggle() {
 
 function setText(id, text) {
   const el = document.getElementById(id);
-  if (el && text) el.textContent = text;
+  if (el && text) {
+    el.textContent = text;
+  }
 }
 
 function setHtml(id, html) {
   const el = document.getElementById(id);
-  if (el && html) el.innerHTML = html;
+  if (el && html) {
+    el.innerHTML = html;
+  }
 }
 
 // Percent-encode each path segment individually so reserved chars like '#'
@@ -98,9 +110,13 @@ function encodePath(path) {
 // toggles are reflected on re-render.
 function buildHref(linkPath) {
   var parts = [];
-  if (LANG_PARAM) parts.push('lang=' + LANG);
+  if (LANG_PARAM) {
+    parts.push('lang=' + LANG);
+  }
   var hideR18 = document.getElementById('hide-r18');
-  if (hideR18 && !hideR18.checked) parts.push('r18=0');
+  if (hideR18 && !hideR18.checked) {
+    parts.push('r18=0');
+  }
   return encodePath(linkPath) + (parts.length ? '?' + parts.join('&') : '');
 }
 
@@ -116,9 +132,13 @@ function rerender() {
 }
 
 function isNewGame(released) {
-  if (!released) return false;
+  if (!released) {
+    return false;
+  }
   const parts = released.split('/');
-  if (parts.length < 3) return false;
+  if (parts.length < 3) {
+    return false;
+  }
   const date = new Date(parts[0], parts[1] - 1, parts[2]);
   const now = new Date();
   return (now - date) / (1000 * 60 * 60 * 24) <= NEW_THRESHOLD_DAYS;
@@ -142,12 +162,18 @@ function renderTree(data, query, hideR18) {
 
   sortedYears.forEach((year, index) => {
     let items = (year.children || []).filter(item => {
-      if (item.is_dir) return false;
+      if (item.is_dir) {
+        return false;
+      }
 
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
-      if (hideR18 && tags.includes('r18')) return false;
+      if (hideR18 && tags.includes('r18')) {
+        return false;
+      }
 
-      if (!query) return true;
+      if (!query) {
+        return true;
+      }
 
       const name = item.name.replace(/\.md$/i, '').toLowerCase();
       const creator = (item.meta && item.meta.creator) ? item.meta.creator.toLowerCase() : '';
@@ -161,7 +187,9 @@ function renderTree(data, query, hideR18) {
       return rb.localeCompare(ra);
     });
 
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      return;
+    }
     totalVisible += items.length;
 
     const section = document.createElement('div');
@@ -185,7 +213,9 @@ function renderTree(data, query, hideR18) {
     items.forEach((item, cardIndex) => {
       const displayName = item.name.replace(/\.md$/i, '').trim();
       let linkPath = item.path;
-      if (linkPath.endsWith('.md')) linkPath = linkPath.slice(0, -3);
+      if (linkPath.endsWith('.md')) {
+        linkPath = linkPath.slice(0, -3);
+      }
 
       const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
       const tagline = (item.meta && item.meta.tagline) ? item.meta.tagline : '';
@@ -198,10 +228,14 @@ function renderTree(data, query, hideR18) {
       let badges = '';
       tags.forEach(function(tag) {
         var colour = tagColours[tag.toLowerCase()];
-        if (!colour) return;
+        if (!colour) {
+          return;
+        }
         badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(tag.toUpperCase()) + '</span>';
       });
-      if (isNew) badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      if (isNew) {
+        badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      }
 
       const a = document.createElement('a');
       a.href = buildHref(linkPath);
@@ -216,7 +250,7 @@ function renderTree(data, query, hideR18) {
         thumbHtml = '<div class="card-thumb">' + badges +
           '<img src="' + item.thumbnail + '" alt="" loading="lazy" onerror="retryImage.call(this)" /></div>';
       } else {
-        thumbHtml = '<div class="card-thumb-placeholder">' + badges + '\u2728</div>';
+        thumbHtml = '<div class="card-thumb-placeholder">' + badges + '✨</div>';
       }
 
       a.innerHTML = thumbHtml +
@@ -241,7 +275,9 @@ function renderTree(data, query, hideR18) {
 
 function buildRibbon(data) {
   const container = document.getElementById('ribbon');
-  if (!container || !data.children) return;
+  if (!container || !data.children) {
+    return;
+  }
 
   const items = [];
   data.children.forEach(year => {
@@ -249,7 +285,9 @@ function buildRibbon(data) {
       year.children.forEach(item => {
         if (item.thumbnail) {
           let path = item.path;
-          if (path.endsWith('.md')) path = path.slice(0, -3);
+          if (path.endsWith('.md')) {
+            path = path.slice(0, -3);
+          }
           const title = item.name.replace(/\.md$/i, '').trim();
           // thumbnail_ribbon is the smaller (240x140) proxy URL for GitHub
           // user-attachments; falls back to thumbnail for non-proxied URLs.
@@ -260,7 +298,9 @@ function buildRibbon(data) {
     }
   });
 
-  if (items.length < 6) return;
+  if (items.length < 6) {
+    return;
+  }
 
   // Shuffle and cap to reduce initial image load
   for (let i = items.length - 1; i > 0; i--) {
@@ -276,6 +316,12 @@ function buildRibbon(data) {
   function buildTrack(entries, reverse) {
     const track = document.createElement('div');
     track.className = 'ribbon-track' + (reverse ? ' reverse' : '');
+
+    // Track the first N <img> elements per row — they're visible at rest and
+    // worth fetching before the off-screen ones. Composites are skipped (they
+    // use background-image, not <img>, so fetchpriority doesn't apply).
+    const HIGH_PRIORITY_LIMIT = 3;
+    let imgIdx = 0;
 
     const all = entries.concat(entries);
     all.forEach(entry => {
@@ -295,6 +341,10 @@ function buildRibbon(data) {
         img.loading = 'lazy';
         img.alt = '';
         img.onerror = retryImage;
+        // First ~3 visible at start get priority; the rest are off-screen
+        // and revealed via marquee scroll. Older browsers ignore the hint.
+        img.fetchPriority = imgIdx < HIGH_PRIORITY_LIMIT ? 'high' : 'low';
+        imgIdx++;
         a.appendChild(img);
       }
       track.appendChild(a);
@@ -306,31 +356,27 @@ function buildRibbon(data) {
   container.appendChild(buildTrack(row1, false));
   container.appendChild(buildTrack(row2, true));
 
-  // Ribbon starts invisible (CSS opacity:0). Fade in once 50% of images
-  // have settled (loaded or permanently failed) to avoid progressive
-  // pop-in. 6s hard fallback caps worst-case latency on bad networks.
+  // Reveal when there's content to show. The first image's `load` event
+  // triggers fade-in — pairs with fetchpriority on visible imgs so content
+  // is already populated by reveal time. Composite-only ribbon: reveal
+  // immediately since composites don't fire load events but do have content.
+  // If every image fails permanently, ribbon stays hidden — correct, since
+  // a "revealed" empty container looks identical to a hidden one (opacity
+  // doesn't affect layout, container has no visible chrome of its own).
   var ribbonImages = container.querySelectorAll('img');
-  var loaded = 0;
-  var total = ribbonImages.length;
-  var threshold = Math.floor(total * 0.5);
-  function tick() {
-    loaded++;
-    if (loaded >= threshold) container.classList.add('loaded');
+  function reveal() {
+    container.classList.add('loaded');
+  }
+  if (ribbonImages.length === 0) {
+    reveal();
   }
   ribbonImages.forEach(function(img) {
     if (img.complete) {
-      loaded++;
-      return;
+      reveal();
+    } else {
+      img.addEventListener('load', reveal, { once: true });
     }
-    img.addEventListener('load', tick);
-    img.addEventListener('error', function() {
-      // retryImage sets data-error='1' only on the final failed retry;
-      // intermediate errors are still retrying and shouldn't count.
-      if (img.dataset.error === '1') tick();
-    });
   });
-  if (loaded >= threshold) container.classList.add('loaded');
-  setTimeout(function() { container.classList.add('loaded'); }, 6000);
 }
 
 function updateGameCount(data) {
@@ -343,12 +389,16 @@ function updateGameCount(data) {
     });
   }
   const el = document.getElementById('lang-game-count');
-  if (el) el.innerHTML = (t.game_count || '{n} games and counting.').replace('{n}', count);
+  if (el) {
+    el.innerHTML = (t.game_count || '{n} games and counting.').replace('{n}', count);
+  }
 }
 
 function scrollToHash() {
   const hash = location.hash.replace('#', '');
-  if (!hash) return;
+  if (!hash) {
+    return;
+  }
   const el = document.getElementById(hash);
   if (el) {
     el.classList.add('open');
