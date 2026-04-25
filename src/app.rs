@@ -30,6 +30,12 @@ use crate::{
     tag_style, get_lang,
 };
 
+// Inlined into <head> on both index.html and game.html so the very first
+// frame paints with the dark theme even before external CSS arrives. Without
+// this, slow CSS loads (e.g., Render free-tier cold start) cause a white
+// flash. Hex values mirror --bg and --text in style.css.
+const CRITICAL_CSS: &str = "<style>html,body{background:#0d0b12;color:#ede9fe}</style>";
+
 #[derive(Clone)]
 struct AppState {
     games: Arc<HashMap<String, ParsedGame>>,
@@ -291,6 +297,7 @@ async fn render_markdown(
         .collect();
 
     let page = include_str!("../public/game.html")
+        .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{title_display}}", &html_escape(&title_display))
         .replace("{{year}}", &html_escape(&year))
         .replace("{{tagline}}", &html_escape(tagline))
@@ -723,6 +730,7 @@ pub fn build_app() -> Router {
 
 async fn serve_home(State(state): State<AppState>) -> Html<String> {
     let page = include_str!("../public/index.html")
+        .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{game_count}}", &state.games.len().to_string())
         .replace("{{lang_json}}", include_str!("../config/lang.json"))
         .replace("{{tag_colours_json}}", &{
