@@ -127,12 +127,50 @@ pub struct ImageInfo {
 }
 
 impl ImageInfo {
-    /// Returns true if the image is a composite strip (width > height * 2).
+    /// Returns true if the image is a composite strip (see `is_composite_dimensions`).
     pub fn is_composite(&self) -> bool {
         match (self.width, self.height) {
-            (Some(w), Some(h)) if h > 0 => w > h * 2,
+            (Some(w), Some(h)) => is_composite_dimensions(w, h),
             _ => false,
         }
+    }
+}
+
+/// A composite thumbnail is a wide-aspect strip (width more than 2× height),
+/// typically a side-by-side title screen. The site renders these with CSS
+/// `background-size: 340%` + center crop; preserving that wide aspect matters
+/// at every step (resize, detection, rendering). Single source of truth for
+/// the threshold so a future tweak only changes one place.
+pub fn is_composite_dimensions(width: u32, height: u32) -> bool {
+    height > 0 && width > height * 2
+}
+
+/// Resize a decoded image for the thumbnail proxy.
+///
+/// - **Normal thumbnails**: `resize_to_fill` to the target dimensions, cleanly
+///   filling the card/ribbon area without letterboxing.
+/// - **Composites** (wide-aspect strips): rendered via CSS `background-size:
+///   340%` zoom/crop, which needs enough source resolution to survive retina
+///   + zoom without upsampling blur. Uses wider composite-specific targets
+///   and *never upscales* — if the source already fits, it's kept as-is.
+///
+/// Triangle filter is 2–4× faster than Lanczos3 with imperceptible quality
+/// loss at thumbnail sizes.
+pub fn resize_thumbnail(img: &image::DynamicImage, size: ThumbSize) -> image::DynamicImage {
+    let filter = image::imageops::FilterType::Triangle;
+    if is_composite_dimensions(img.width(), img.height()) {
+        let (tw, th) = match size {
+            ThumbSize::Ribbon => (900, 400),
+            ThumbSize::Card => (1600, 400),
+        };
+        if img.width() <= tw && img.height() <= th {
+            img.clone()
+        } else {
+            img.resize(tw, th, filter)
+        }
+    } else {
+        let (w, h) = size.dimensions();
+        img.resize_to_fill(w, h, filter)
     }
 }
 
@@ -208,6 +246,42 @@ pub fn encode_path(path: &str) -> String {
     out
 }
 
+/// Build a URL query string from (key, value) pairs. Empty values are
+/// filtered out. Returns "" for no non-empty pairs, or "?k1=v1&k2=v2".
+pub fn build_query(params: &[(&str, &str)]) -> String {
+    let parts: Vec<String> = params
+        .iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("?{}", parts.join("&"))
+    }
+}
+
+/// Compute the breadcrumb-back suffix and the forward-link suffix for a game
+/// page. Both propagate `lang`. Back-suffix forces `r18=0` if this page is R18
+/// (so the homepage shows it); forward-suffix only carries `r18=0` if the
+/// incoming request had it.
+pub fn game_page_suffixes(
+    lang_param: Option<&str>,
+    is_r18: bool,
+    incoming_r18_zero: bool,
+) -> (String, String) {
+    let lang = lang_param.unwrap_or("");
+    let back = build_query(&[
+        ("lang", lang),
+        ("r18", if is_r18 || incoming_r18_zero { "0" } else { "" }),
+    ]);
+    let fwd = build_query(&[
+        ("lang", lang),
+        ("r18", if incoming_r18_zero { "0" } else { "" }),
+    ]);
+    (back, fwd)
+}
+
 /// A parsed markdown game file. Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
 pub struct ParsedGame {
@@ -217,8 +291,47 @@ pub struct ParsedGame {
     pub meta: GameMeta,
     pub body_html: String,           // pre-rendered markdown
     pub images: Vec<ImageInfo>,
-    pub thumbnail: Option<String>,
+    pub thumbnail: Option<String>,           // card-size URL: "/thumb/UUID/card" or passthrough
+    pub thumbnail_ribbon: Option<String>,    // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
     pub thumbnail_composite: bool,
+}
+
+/// Size variant for the thumbnail proxy. Rendered dimensions are 2× display
+/// size for retina screens. The actual encoded output is JPEG q=80.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ThumbSize {
+    Ribbon,
+    Card,
+}
+
+impl ThumbSize {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "ribbon" => Some(Self::Ribbon),
+            "card" => Some(Self::Card),
+            _ => None,
+        }
+    }
+
+    /// Target dimensions (width, height) for resize_to_fill.
+    pub fn dimensions(self) -> (u32, u32) {
+        match self {
+            Self::Ribbon => (240, 140),
+            Self::Card => (600, 400),
+        }
+    }
+}
+
+/// Extract the UUID from a GitHub user-attachment URL.
+/// `https://github.com/user-attachments/assets/<UUID>` -> Some("<UUID>").
+/// Returns None for any other URL shape (non-GitHub hosts, different paths, etc).
+pub fn extract_user_attachment_uuid(url: &str) -> Option<&str> {
+    let rest = url.strip_prefix("https://github.com/user-attachments/assets/")?;
+    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
+        None
+    } else {
+        Some(rest)
+    }
 }
 
 /// Split a creator field into individual creator names.
