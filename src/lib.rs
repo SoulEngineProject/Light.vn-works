@@ -439,36 +439,18 @@ pub fn get_related_paths<'a>(
     result
 }
 
-/// Compute gallery row sizes. Fills rows of 3, avoids orphan (1 image alone)
-/// by converting the last [3, 1] into [2, 2].
+/// Compute gallery row sizes — max 2 per row. Bigger thumbnails for
+/// screenshot detail. Orphan (single trailing image) is handled upstream by
+/// promoting it to the editor mockup, so this function is typically called
+/// with even `n` in production.
 pub fn gallery_rows(n: usize) -> Vec<usize> {
     if n == 0 {
         return vec![];
     }
-    if n <= 3 {
-        return vec![n];
+    let mut rows = vec![2; n / 2];
+    if n % 2 == 1 {
+        rows.push(1);
     }
-
-    let mut rows = Vec::new();
-    let mut remaining = n;
-
-    while remaining > 0 {
-        if remaining == 4 {
-            rows.push(2);
-            rows.push(2);
-            remaining = 0;
-        } else if remaining == 2 {
-            rows.push(2);
-            remaining = 0;
-        } else if remaining >= 3 {
-            rows.push(3);
-            remaining -= 3;
-        } else {
-            rows.push(remaining);
-            remaining = 0;
-        }
-    }
-
     rows
 }
 

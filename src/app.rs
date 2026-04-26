@@ -181,13 +181,27 @@ async fn render_markdown(
         )
     }).unwrap_or_default();
 
+    // Gallery layout: max 2 per row. If a trailing single image (orphan)
+    // would result, strip it from the gallery — it becomes the editor
+    // mockup's source instead via images.last() below. Half of all games
+    // (those with even total image count) get a unique editor image this way
+    // instead of duplicating the last gallery thumbnail.
+    let gallery_count = match images.len() {
+        0 | 1 => 0,
+        n => {
+            let g = n - 1;            // exclude hero
+            if g % 2 == 1 { g - 1 }   // strip orphan; promoted to editor mockup
+            else { g }
+        }
+    };
+
     // alt="" intentional: gallery screenshots are decorative in the context
     // of a page that already has tagline, synopsis, and hero for descriptive
     // content. We have no meaningful per-image description to provide; a
     // generic "Screenshot" adds nothing for screen readers and flashes as
     // overlay text during slow loads.
-    let gallery_html = if images.len() > 1 {
-        let gallery_images = &images[1..];
+    let gallery_html = if gallery_count > 0 {
+        let gallery_images = &images[1..1 + gallery_count];
         let rows = gallery_rows(gallery_images.len());
         let mut idx = 0;
         let mut html = String::new();

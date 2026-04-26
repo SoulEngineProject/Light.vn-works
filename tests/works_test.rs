@@ -590,17 +590,19 @@ fn lang_json_parses_both_languages() {
 
 #[test]
 fn gallery_rows_layout() {
-    // given/when/then: verify row splits for all counts 1-9
+    // given/when/then: max 2 per row. Odd counts produce a trailing [1]; in
+    // production the orphan is stripped upstream and promoted to the editor
+    // mockup, so this function is typically called with even n.
     assert_eq!(gallery_rows(0), Vec::<usize>::new());
     assert_eq!(gallery_rows(1), vec![1]);
     assert_eq!(gallery_rows(2), vec![2]);
-    assert_eq!(gallery_rows(3), vec![3]);
+    assert_eq!(gallery_rows(3), vec![2, 1]);
     assert_eq!(gallery_rows(4), vec![2, 2]);
-    assert_eq!(gallery_rows(5), vec![3, 2]);
-    assert_eq!(gallery_rows(6), vec![3, 3]);
-    assert_eq!(gallery_rows(7), vec![3, 2, 2]);
-    assert_eq!(gallery_rows(8), vec![3, 3, 2]);
-    assert_eq!(gallery_rows(9), vec![3, 3, 3]);
+    assert_eq!(gallery_rows(5), vec![2, 2, 1]);
+    assert_eq!(gallery_rows(6), vec![2, 2, 2]);
+    assert_eq!(gallery_rows(7), vec![2, 2, 2, 1]);
+    assert_eq!(gallery_rows(8), vec![2, 2, 2, 2]);
+    assert_eq!(gallery_rows(9), vec![2, 2, 2, 2, 1]);
 }
 
 #[test]
