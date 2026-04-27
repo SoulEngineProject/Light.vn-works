@@ -1,6 +1,6 @@
 ---
 creator: 秋色コズミック, 玖珂琴和
-released: 2017/07/15
+released: 2021/07/15
 link_label: Booth
 link_url: "https://ai-cosmic.booth.pm/"
 extra_links:
