@@ -10,10 +10,16 @@ extra_links:
     url: "https://mobile.twitter.com/Raika_Tsukuyomi"
 tagline: 「戦火に囚われし者よ。
 tags: []
-thumbnail_index:
+thumbnail_index: 1
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/39237ac3-c2f5-4cab-8eb3-96d22519f443" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/c24253f8-563b-4135-bf02-b553b6c430ea" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/c90270db-a6f7-4dc4-940f-0e5d855a8f66" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/c0bd1fb1-9597-461a-a5d5-fbe3c3f2071f" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/bf9cb6dc-2699-477a-9f8c-4083f299791d" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/5228cccb-f651-4fc4-9123-bab2f6229a0a" />
+<img width="2559" height="1440" alt="image" src="https://github.com/user-attachments/assets/fbb248d1-ad9c-48fc-9283-1554a0dd908a" />
+
 
 ---
 「戦火に囚われし者よ。悲劇の終わりを望むか？」  
