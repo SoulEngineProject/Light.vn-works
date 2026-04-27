@@ -28,7 +28,14 @@ a:hover { color: var(--accent-hover); }
 
 html { scroll-behavior: smooth; overflow-x: hidden; }
 
-.badge-new { background: #16a34a; color: white; }
+/* AI badge (or any badge that should explicitly sit top-left) overrides the
+   default `.card-badge { right: 0.5rem }` to anchor on the left side.
+   Selector is `.card-badge.card-badge-left` (specificity 0,2,0) so it beats
+   `.card-badge` rules in home.css regardless of cascade order. */
+.card-badge.card-badge-left {
+  right: auto;
+  left: 0.5rem;
+}
 
 .card-thumb-composite,
 .more-creator-thumb-composite {

@@ -27,7 +27,7 @@ use crate::{
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
-    tag_style, get_lang,
+    pick_priority_tag, tag_style, get_lang,
 };
 
 // Inlined into <head> on both index.html and game.html so the very first
@@ -181,13 +181,27 @@ async fn render_markdown(
         )
     }).unwrap_or_default();
 
+    // Gallery layout: max 2 per row. If a trailing single image (orphan)
+    // would result, strip it from the gallery — it becomes the editor
+    // mockup's source instead via images.last() below. Half of all games
+    // (those with even total image count) get a unique editor image this way
+    // instead of duplicating the last gallery thumbnail.
+    let gallery_count = match images.len() {
+        0 | 1 => 0,
+        n => {
+            let g = n - 1;            // exclude hero
+            if g % 2 == 1 { g - 1 }   // strip orphan; promoted to editor mockup
+            else { g }
+        }
+    };
+
     // alt="" intentional: gallery screenshots are decorative in the context
     // of a page that already has tagline, synopsis, and hero for descriptive
     // content. We have no meaningful per-image description to provide; a
     // generic "Screenshot" adds nothing for screen readers and flashes as
     // overlay text during slow loads.
-    let gallery_html = if images.len() > 1 {
-        let gallery_images = &images[1..];
+    let gallery_html = if gallery_count > 0 {
+        let gallery_images = &images[1..1 + gallery_count];
         let rows = gallery_rows(gallery_images.len());
         let mut idx = 0;
         let mut html = String::new();
@@ -267,17 +281,28 @@ async fn render_markdown(
                         }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let tags = g.meta.tags.as_deref().unwrap_or(&[]);
-                    let badge: String = tags.iter().map(|tag| {
-                        let style_attr = match tag_style(tag, &state.tag_config) {
+                    // Two-slot layout: priority badge (top-right) + AI (top-left).
+                    // See pick_priority_tag() docs for priority order.
+                    let mut badge = String::new();
+                    if let Some(t) = pick_priority_tag(tags, &state.tag_config) {
+                        let style_attr = match tag_style(t, &state.tag_config) {
                             Some(s) => format!(r#" style="{}""#, s),
                             None => String::new(),
                         };
-                        format!(
+                        badge.push_str(&format!(
                             r#"<span class="card-badge"{}>{}</span>"#,
                             style_attr,
-                            html_escape(&tag.to_uppercase())
-                        )
-                    }).collect();
+                            html_escape(&t.to_uppercase())
+                        ));
+                    }
+                    if tags.iter().any(|t| t.eq_ignore_ascii_case("ai")) {
+                        if let Some(style) = tag_style("ai", &state.tag_config) {
+                            badge.push_str(&format!(
+                                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
+                                style
+                            ));
+                        }
+                    }
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&encode_path(&g.path)),

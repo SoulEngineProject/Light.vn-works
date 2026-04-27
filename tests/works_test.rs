@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -588,19 +588,112 @@ fn lang_json_parses_both_languages() {
     assert!(!ja.engine_url.is_empty());
 }
 
+fn make_priority_config() -> std::collections::HashMap<String, lightvn_works::TagInfo> {
+    // Use the real production config so tests track config changes. If a tag
+    // is removed (e.g. "Terrace and Ray"), the relevant priority test should
+    // start failing — that's a feature, not a bug.
+    load_tag_config(include_str!("../config/tags.yaml"))
+}
+
+#[test]
+fn priority_r18_always_wins() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&["r18".into()], &cfg), Some("r18"));
+    assert_eq!(pick_priority_tag(&["r18".into(), "ai".into()], &cfg), Some("r18"));
+    assert_eq!(pick_priority_tag(&["ai".into(), "r18".into()], &cfg), Some("r18"));
+    assert_eq!(pick_priority_tag(&["r18".into(), "Terrace and Ray".into()], &cfg), Some("r18"));
+}
+
+#[test]
+fn priority_terrace_and_ray_second() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&["Terrace and Ray".into()], &cfg), Some("Terrace and Ray"));
+    assert_eq!(pick_priority_tag(&["Terrace and Ray".into(), "Spooktober".into()], &cfg), Some("Terrace and Ray"));
+    assert_eq!(pick_priority_tag(&["ai".into(), "Terrace and Ray".into()], &cfg), Some("Terrace and Ray"));
+}
+
+#[test]
+fn priority_other_configured_third() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&["Spooktober".into()], &cfg), Some("Spooktober"));
+    assert_eq!(pick_priority_tag(&["ai".into(), "Spooktober".into()], &cfg), Some("Spooktober"));
+}
+
+#[test]
+fn priority_ai_alone_yields_none() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&["ai".into()], &cfg), None);
+}
+
+#[test]
+fn priority_unconfigured_yields_none() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&["한국어".into()], &cfg), None);
+    assert_eq!(pick_priority_tag(&["ai".into(), "한국어".into()], &cfg), None);
+}
+
+#[test]
+fn priority_empty_yields_none() {
+    let cfg = make_priority_config();
+    assert_eq!(pick_priority_tag(&[], &cfg), None);
+}
+
+#[test]
+fn cards_emit_at_most_one_left_and_one_right_badge() {
+    // given: every configured colour-category tag thrown at the system at once
+    let cfg = make_priority_config();
+    let tags: Vec<String> = vec![
+        "r18".into(),
+        "ai".into(),
+        "Terrace and Ray".into(),
+        "Spooktober".into(),
+        "한국어".into(),       // unconfigured noise
+    ];
+
+    // when: deriving the two badge slots the way the renderers do
+    let right_slot = pick_priority_tag(&tags, &cfg);
+    let left_slot = tags.iter().any(|t| t.eq_ignore_ascii_case("ai"));
+
+    // then: priority returns a single tag (Option enforces this by type),
+    // and AI detection is a single boolean (also type-bounded).
+    // R18 wins the priority cascade even with everything else present.
+    assert_eq!(right_slot, Some("r18"));
+    assert!(left_slot, "AI detected in left slot");
+
+    // total badges rendered = at most 1 (right) + at most 1 (left) = max 2
+    let total_badges = right_slot.is_some() as usize + left_slot as usize;
+    assert_eq!(total_badges, 2, "exactly two badges rendered for this input");
+    assert!(total_badges <= 2, "badge count is bounded at 2");
+}
+
+#[test]
+fn cards_emit_zero_badges_when_no_tag_qualifies() {
+    let cfg = make_priority_config();
+    // Only an unconfigured tag; AI absent. Both slots empty.
+    let tags: Vec<String> = vec!["한국어".into()];
+
+    let right_slot = pick_priority_tag(&tags, &cfg);
+    let left_slot = tags.iter().any(|t| t.eq_ignore_ascii_case("ai"));
+
+    assert_eq!(right_slot, None);
+    assert!(!left_slot);
+}
+
 #[test]
 fn gallery_rows_layout() {
-    // given/when/then: verify row splits for all counts 1-9
+    // given/when/then: max 2 per row. Odd counts produce a trailing [1]; in
+    // production the orphan is stripped upstream and promoted to the editor
+    // mockup, so this function is typically called with even n.
     assert_eq!(gallery_rows(0), Vec::<usize>::new());
     assert_eq!(gallery_rows(1), vec![1]);
     assert_eq!(gallery_rows(2), vec![2]);
-    assert_eq!(gallery_rows(3), vec![3]);
+    assert_eq!(gallery_rows(3), vec![2, 1]);
     assert_eq!(gallery_rows(4), vec![2, 2]);
-    assert_eq!(gallery_rows(5), vec![3, 2]);
-    assert_eq!(gallery_rows(6), vec![3, 3]);
-    assert_eq!(gallery_rows(7), vec![3, 2, 2]);
-    assert_eq!(gallery_rows(8), vec![3, 3, 2]);
-    assert_eq!(gallery_rows(9), vec![3, 3, 3]);
+    assert_eq!(gallery_rows(5), vec![2, 2, 1]);
+    assert_eq!(gallery_rows(6), vec![2, 2, 2]);
+    assert_eq!(gallery_rows(7), vec![2, 2, 2, 1]);
+    assert_eq!(gallery_rows(8), vec![2, 2, 2, 2]);
+    assert_eq!(gallery_rows(9), vec![2, 2, 2, 2, 1]);
 }
 
 #[test]

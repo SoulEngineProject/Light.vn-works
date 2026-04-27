@@ -2,6 +2,7 @@ colours:
   content: "#dc2626"
   ai: "#2563eb"
   contest: "#a16207"
+  publisher: "#0891b2"
 
 tags:
   # Content warnings
@@ -25,3 +26,7 @@ tags:
 
   - colour: contest
     tags: [Summer Jam, ノアフェス]
+
+  # Publishers
+  - colour: publisher
+    tags: [Terrace and Ray]

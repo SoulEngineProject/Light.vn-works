@@ -439,36 +439,18 @@ pub fn get_related_paths<'a>(
     result
 }
 
-/// Compute gallery row sizes. Fills rows of 3, avoids orphan (1 image alone)
-/// by converting the last [3, 1] into [2, 2].
+/// Compute gallery row sizes — max 2 per row. Bigger thumbnails for
+/// screenshot detail. Orphan (single trailing image) is handled upstream by
+/// promoting it to the editor mockup, so this function is typically called
+/// with even `n` in production.
 pub fn gallery_rows(n: usize) -> Vec<usize> {
     if n == 0 {
         return vec![];
     }
-    if n <= 3 {
-        return vec![n];
+    let mut rows = vec![2; n / 2];
+    if n % 2 == 1 {
+        rows.push(1);
     }
-
-    let mut rows = Vec::new();
-    let mut remaining = n;
-
-    while remaining > 0 {
-        if remaining == 4 {
-            rows.push(2);
-            rows.push(2);
-            remaining = 0;
-        } else if remaining == 2 {
-            rows.push(2);
-            remaining = 0;
-        } else if remaining >= 3 {
-            rows.push(3);
-            remaining -= 3;
-        } else {
-            rows.push(remaining);
-            remaining = 0;
-        }
-    }
-
     rows
 }
 
@@ -523,6 +505,30 @@ pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<Str
     tag_config.get(&tag.to_lowercase()).map(|info| {
         format!("background:{};color:white", info.colour)
     })
+}
+
+/// Pick the tag for the top-right priority badge slot. AI is excluded — it
+/// has its own dedicated top-left slot. Priority order:
+///   1. R18 (content warning)
+///   2. "Terrace and Ray" (publisher identity)
+///   3. First other configured tag (≠ AI)
+///   4. None — no fallback to non-configured tags. Empty slot is acceptable.
+pub fn pick_priority_tag<'a>(
+    tags: &'a [String],
+    config: &HashMap<String, TagInfo>,
+) -> Option<&'a str> {
+    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("r18")) {
+        return Some(t.as_str());
+    }
+    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("terrace and ray")) {
+        return Some(t.as_str());
+    }
+    if let Some(t) = tags.iter().find(|t| {
+        !t.eq_ignore_ascii_case("ai") && config.contains_key(&t.to_lowercase())
+    }) {
+        return Some(t.as_str());
+    }
+    None
 }
 
 /// Parse alias groups YAML into a bidirectional lookup map (lowercased).

@@ -1,7 +1,6 @@
 let allData = null;
 let t = {}; // translations
 
-const NEW_THRESHOLD_DAYS = 90;
 const LANG_PARAM = new URLSearchParams(location.search).get('lang');
 const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
   ? LANG_PARAM
@@ -131,17 +130,23 @@ function rerender() {
   }
 }
 
-function isNewGame(released) {
-  if (!released) {
-    return false;
+// Pick the tag for the top-right priority badge slot. AI is excluded — it
+// has its own dedicated top-left slot. Mirrors src/lib.rs::pick_priority_tag.
+// Priority order: R18 → Terrace and Ray → first other configured tag.
+function pickPriorityTag(tags, tagColours) {
+  let t = tags.find(x => x.toLowerCase() === 'r18');
+  if (t) {
+    return t;
   }
-  const parts = released.split('/');
-  if (parts.length < 3) {
-    return false;
+  t = tags.find(x => x.toLowerCase() === 'terrace and ray');
+  if (t) {
+    return t;
   }
-  const date = new Date(parts[0], parts[1] - 1, parts[2]);
-  const now = new Date();
-  return (now - date) / (1000 * 60 * 60 * 24) <= NEW_THRESHOLD_DAYS;
+  t = tags.find(x => {
+    const l = x.toLowerCase();
+    return l !== 'ai' && tagColours[l];
+  });
+  return t || null;
 }
 
 function renderTree(data, query, hideR18) {
@@ -158,7 +163,6 @@ function renderTree(data, query, hideR18) {
     .sort((a, b) => b.name.localeCompare(a.name));
 
   let totalVisible = 0;
-  const newBadgeText = t.new_badge || 'New';
 
   sortedYears.forEach((year, index) => {
     let items = (year.children || []).filter(item => {
@@ -210,7 +214,7 @@ function renderTree(data, query, hideR18) {
     const filesDiv = document.createElement('div');
     filesDiv.className = 'files';
 
-    items.forEach((item, cardIndex) => {
+    items.forEach(item => {
       const displayName = item.name.replace(/\.md$/i, '').trim();
       let linkPath = item.path;
       if (linkPath.endsWith('.md')) {
@@ -219,22 +223,19 @@ function renderTree(data, query, hideR18) {
 
       const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
       const tagline = (item.meta && item.meta.tagline) ? item.meta.tagline : '';
-      const released = (item.meta && item.meta.released) ? item.meta.released : '';
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
-      const isR18 = tags.includes('r18');
-      const isNew = isNewGame(released);
 
       var tagColours = (typeof TAG_COLOURS !== 'undefined') ? TAG_COLOURS : {};
+      // Two-slot layout: priority badge (top-right) + AI (top-left).
+      // See pickPriorityTag() for priority order.
       let badges = '';
-      tags.forEach(function(tag) {
-        var colour = tagColours[tag.toLowerCase()];
-        if (!colour) {
-          return;
-        }
-        badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(tag.toUpperCase()) + '</span>';
-      });
-      if (isNew) {
-        badges += '<span class="card-badge badge-new">' + escapeHtml(newBadgeText) + '</span>';
+      const priorityTag = pickPriorityTag(tags, tagColours);
+      if (priorityTag) {
+        const colour = tagColours[priorityTag.toLowerCase()];
+        badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(priorityTag.toUpperCase()) + '</span>';
+      }
+      if (tags.some(x => x.toLowerCase() === 'ai') && tagColours['ai']) {
+        badges += '<span class="card-badge card-badge-left" style="background:' + tagColours['ai'] + ';color:white">AI</span>';
       }
 
       const a = document.createElement('a');
