@@ -309,6 +309,7 @@
 }
 
 .more-creator-thumb .card-badge-left {
+  right: auto;
   left: 0.3rem;
 }
 

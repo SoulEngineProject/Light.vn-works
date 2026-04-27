@@ -214,7 +214,7 @@ function renderTree(data, query, hideR18) {
     const filesDiv = document.createElement('div');
     filesDiv.className = 'files';
 
-    items.forEach((item, cardIndex) => {
+    items.forEach(item => {
       const displayName = item.name.replace(/\.md$/i, '').trim();
       let linkPath = item.path;
       if (linkPath.endsWith('.md')) {
@@ -224,7 +224,6 @@ function renderTree(data, query, hideR18) {
       const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
       const tagline = (item.meta && item.meta.tagline) ? item.meta.tagline : '';
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
-      const isR18 = tags.includes('r18');
 
       var tagColours = (typeof TAG_COLOURS !== 'undefined') ? TAG_COLOURS : {};
       // Two-slot layout: priority badge (top-right) + AI (top-left).
