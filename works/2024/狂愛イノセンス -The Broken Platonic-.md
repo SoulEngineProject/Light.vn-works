@@ -4,13 +4,14 @@ released: 2024/03/13
 link_label: Steam
 link_url: "https://store.steampowered.com/app/2780390/_The_Broken_Platonic/"
 tagline: Light.vn公式パブリッシング作品の第2弾
-tags: []
+tags: [テラサレ]
 thumbnail_index:
 ---
 
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/8486d543-3a5b-4ee2-aa1e-1da0ec05eeb6" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/2d26266f-6b97-4385-b8d7-34bc388a1b07" />
-<img width="384" height="216" alt="image" src="https://github.com/user-attachments/assets/39199073-9e7c-4098-8215-db3f94365cc6" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/391d8ba7-9bb4-4c34-8877-fe225ea63641" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/88eb0b23-3220-4dcb-8549-be5a82f649cf" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/0c9d4c23-cc7a-4650-b35d-8e88ced76df8" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/43cf8681-12cc-4af5-b8aa-eec862306109" />
 
 ---
 Light.vn公式パブリッシング作品の第2弾。  
