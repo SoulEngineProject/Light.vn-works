@@ -27,7 +27,7 @@ use crate::{
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
-    tag_style, get_lang,
+    pick_priority_tag, tag_style, get_lang,
 };
 
 // Inlined into <head> on both index.html and game.html so the very first
@@ -281,17 +281,28 @@ async fn render_markdown(
                         }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let tags = g.meta.tags.as_deref().unwrap_or(&[]);
-                    let badge: String = tags.iter().map(|tag| {
-                        let style_attr = match tag_style(tag, &state.tag_config) {
+                    // Two-slot layout: priority badge (top-right) + AI (top-left).
+                    // See pick_priority_tag() docs for priority order.
+                    let mut badge = String::new();
+                    if let Some(t) = pick_priority_tag(tags, &state.tag_config) {
+                        let style_attr = match tag_style(t, &state.tag_config) {
                             Some(s) => format!(r#" style="{}""#, s),
                             None => String::new(),
                         };
-                        format!(
+                        badge.push_str(&format!(
                             r#"<span class="card-badge"{}>{}</span>"#,
                             style_attr,
-                            html_escape(&tag.to_uppercase())
-                        )
-                    }).collect();
+                            html_escape(&t.to_uppercase())
+                        ));
+                    }
+                    if tags.iter().any(|t| t.eq_ignore_ascii_case("ai")) {
+                        if let Some(style) = tag_style("ai", &state.tag_config) {
+                            badge.push_str(&format!(
+                                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
+                                style
+                            ));
+                        }
+                    }
                     format!(
                         r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
                         html_escape(&encode_path(&g.path)),

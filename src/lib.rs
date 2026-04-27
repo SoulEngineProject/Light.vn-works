@@ -507,6 +507,30 @@ pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<Str
     })
 }
 
+/// Pick the tag for the top-right priority badge slot. AI is excluded — it
+/// has its own dedicated top-left slot. Priority order:
+///   1. R18 (content warning)
+///   2. "Terrace and Ray" (publisher identity)
+///   3. First other configured tag (≠ AI)
+///   4. None — no fallback to non-configured tags. Empty slot is acceptable.
+pub fn pick_priority_tag<'a>(
+    tags: &'a [String],
+    config: &HashMap<String, TagInfo>,
+) -> Option<&'a str> {
+    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("r18")) {
+        return Some(t.as_str());
+    }
+    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("terrace and ray")) {
+        return Some(t.as_str());
+    }
+    if let Some(t) = tags.iter().find(|t| {
+        !t.eq_ignore_ascii_case("ai") && config.contains_key(&t.to_lowercase())
+    }) {
+        return Some(t.as_str());
+    }
+    None
+}
+
 /// Parse alias groups YAML into a bidirectional lookup map (lowercased).
 pub fn load_aliases(yaml: &str) -> HashMap<String, Vec<String>> {
     let groups: Vec<Vec<String>> = serde_yaml::from_str(yaml).unwrap_or_default();
