@@ -13,7 +13,13 @@ tags: []
 thumbnail_index:
 ---
 
-<img width="1170" height="216" alt="image" src="https://github.com/user-attachments/assets/288b3a1d-ef02-4d7a-b731-fc4c94c584bb" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/6a2b6de5-85cb-4023-aa16-1e8743195089" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/20bfdb71-002e-426f-a299-81476ec46fec" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/98031bc1-0d62-4d73-98ff-1356193c2964" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/694771c4-2750-4b40-b938-503f99bbed49" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/8feb3be5-56c1-482c-af70-72fe11b161bf" />
+<img width="2561" height="1440" alt="image" src="https://github.com/user-attachments/assets/52a5a672-8f19-490c-aa22-fbfc8d500b53" />
+
 
 ---
 「これは、繰り返される強者達の遊戯〈ひげき〉」  
