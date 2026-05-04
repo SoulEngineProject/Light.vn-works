@@ -4,7 +4,7 @@ released: 2024/10/07
 link_label: Steam
 link_url: "https://store.steampowered.com/app/2818450/_1stcutThe_Reason_She_Must_Perish/"
 tagline: 「――俺は、人間じゃない。
-tags: []
+tags: [English, 한국어, 中文]
 thumbnail_index:
 ---
 

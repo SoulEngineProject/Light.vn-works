@@ -152,7 +152,7 @@ pub fn is_composite_dimensions(width: u32, height: u32) -> bool {
 /// - **Composites** (wide-aspect strips): rendered via CSS `background-size:
 ///   340%` zoom/crop, which needs enough source resolution to survive retina
 ///   + zoom without upsampling blur. Uses wider composite-specific targets
-///   and *never upscales* — if the source already fits, it's kept as-is.
+///     and *never upscales* — if the source already fits, it's kept as-is.
 ///
 /// Triangle filter is 2–4× faster than Lanczos3 with imperceptible quality
 /// loss at thumbnail sizes.
@@ -455,13 +455,19 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
 }
 
 /// Info for a special tag (colour, optional link).
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct TagInfo {
     pub colour: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Original yaml casing (e.g. "Terrace and Ray"). Map keys are lowercased
+    /// for case-insensitive lookup; this preserves the canonical display form.
+    pub display_name: String,
     pub url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Whether this tag is eligible for the card's priority (right-slot) badge.
+    /// `false` means the tag exists for filtering/discovery (e.g. languages,
+    /// AI which has its own dedicated left slot) but should not promote into
+    /// the priority cascade. Defaults to `true` when the yaml omits it.
+    pub card_priority_badge: bool,
 }
 
 /// Parse tag config YAML into a map of lowercased tag name → TagInfo.
@@ -479,6 +485,7 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
         tags: Vec<String>,
         url: Option<String>,
         label: Option<String>,
+        card_priority_badge: Option<bool>,
     }
     let config: RawConfig = serde_yaml::from_str(yaml).unwrap_or(RawConfig {
         colours: HashMap::new(),
@@ -489,15 +496,89 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
         let resolved_colour = config.colours.get(&group.colour)
             .cloned()
             .unwrap_or(group.colour.clone());
+        let card_priority_badge = group.card_priority_badge.unwrap_or(true);
         for tag in &group.tags {
             map.insert(tag.to_lowercase(), TagInfo {
                 colour: resolved_colour.clone(),
+                display_name: tag.clone(),
                 url: group.url.clone(),
                 label: group.label.clone(),
+                card_priority_badge,
             });
         }
     }
     map
+}
+
+/// One row of the homepage tag-filter bar.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct TagBarEntry {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub colour: Option<String>,
+    pub count: usize,
+}
+
+/// Build the tag-filter bar entries: union of yaml-configured tags and tags
+/// found in game frontmatter, deduped case-insensitively. Counts are total
+/// games per tag (not affected by R18 toggle or current search). `r18` is
+/// excluded — already covered by the dedicated toggle. Sort: count desc,
+/// then name asc (case-insensitive). Configured tags use the yaml display
+/// casing; unconfigured (md-only) tags use first-seen casing.
+pub fn build_tag_index(
+    games: &HashMap<String, ParsedGame>,
+    config: &HashMap<String, TagInfo>,
+) -> Vec<TagBarEntry> {
+    struct Row {
+        display: String,
+        colour: Option<String>,
+        count: usize,
+    }
+    let mut rows: HashMap<String, Row> = HashMap::new();
+
+    for (lower, info) in config {
+        if lower == "r18" {
+            continue;
+        }
+        rows.insert(lower.clone(), Row {
+            display: info.display_name.clone(),
+            colour: Some(info.colour.clone()),
+            count: 0,
+        });
+    }
+
+    for game in games.values() {
+        let tags = match &game.meta.tags {
+            Some(t) => t,
+            None => continue,
+        };
+        let mut seen_in_game: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for tag in tags {
+            let lower = tag.to_lowercase();
+            if lower == "r18" || !seen_in_game.insert(lower.clone()) {
+                continue;
+            }
+            let entry = rows.entry(lower).or_insert_with(|| Row {
+                display: tag.clone(),
+                colour: None,
+                count: 0,
+            });
+            entry.count += 1;
+        }
+    }
+
+    let mut out: Vec<TagBarEntry> = rows.into_values().map(|r| TagBarEntry {
+        name: r.display,
+        colour: r.colour,
+        count: r.count,
+    }).collect();
+
+    out.sort_by(|a, b| {
+        b.count.cmp(&a.count)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    out
 }
 
 /// Get inline style for a tag badge, or None if unknown.
@@ -507,12 +588,15 @@ pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<Str
     })
 }
 
-/// Pick the tag for the top-right priority badge slot. AI is excluded — it
-/// has its own dedicated top-left slot. Priority order:
+/// Pick the tag for the top-right priority badge slot. Priority order:
 ///   1. R18 (content warning)
 ///   2. "Terrace and Ray" (publisher identity)
-///   3. First other configured tag (≠ AI)
+///   3. First other configured tag whose group has `card_priority_badge: true`
 ///   4. None — no fallback to non-configured tags. Empty slot is acceptable.
+///
+/// Tags whose group sets `card_priority_badge: false` (AI, languages) exist
+/// for filtering only and never promote into this slot — AI has its own
+/// dedicated top-left slot, languages are metadata, not identity.
 pub fn pick_priority_tag<'a>(
     tags: &'a [String],
     config: &HashMap<String, TagInfo>,
@@ -524,7 +608,7 @@ pub fn pick_priority_tag<'a>(
         return Some(t.as_str());
     }
     if let Some(t) = tags.iter().find(|t| {
-        !t.eq_ignore_ascii_case("ai") && config.contains_key(&t.to_lowercase())
+        config.get(&t.to_lowercase()).is_some_and(|info| info.card_priority_badge)
     }) {
         return Some(t.as_str());
     }
@@ -615,7 +699,7 @@ pub fn strip_img_tags(input: &str) -> String {
 
         if let Some(end) = remaining[start..].find("/>") {
             remaining = &remaining[start + end + 2..];
-            remaining = remaining.trim_start_matches(|c| c == '\n' || c == '\r');
+            remaining = remaining.trim_start_matches(['\n', '\r']);
         } else {
             result.push_str(&remaining[start..start + 4]);
             remaining = &remaining[start + 4..];

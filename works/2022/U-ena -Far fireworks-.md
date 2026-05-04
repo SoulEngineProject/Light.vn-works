@@ -5,7 +5,7 @@ link_label: Steam
 link_url: "https://store.steampowered.com/app/1744570/Uena_Far_fireworks/"
 extra_links:
 tagline: "―Far fireworks―"
-tags: []
+tags: [English, 한국어, 中文]
 thumbnail_index:
 ---
 

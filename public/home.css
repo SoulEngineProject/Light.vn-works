@@ -1,5 +1,9 @@
 body {
   position: relative;
+  /* Establish a stacking context so body::after { z-index: -1 } is trapped here
+     and paints above body's bg but below content. Without this, the pseudo
+     escapes to the root SC and gets occluded by html's bg from critical CSS. */
+  z-index: 0;
 }
 
 body::after {
@@ -192,6 +196,61 @@ header::before {
 @keyframes scroll-right {
   from { transform: translateX(-50%); }
   to { transform: translateX(0); }
+}
+
+/* Tag filter bar */
+.tag-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0.75rem auto 1rem;
+  max-width: 760px;
+}
+
+.tag-chip {
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  color: white;
+}
+
+.tag-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+}
+
+.tag-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tag-chip.tag-default {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+/* When any chip is active, dim siblings so the active one stands out by
+   contrast — no extra ring needed since the search input already echoes the
+   tag name as direct confirmation. */
+.tag-bar.has-active .tag-chip:not(.active) {
+  opacity: 0.45;
+}
+
+.tag-chip-count {
+  font-size: 0.65rem;
+  font-weight: 500;
+  opacity: 0.75;
 }
 
 /* Search */
