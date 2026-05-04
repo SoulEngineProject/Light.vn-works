@@ -1,0 +1,19 @@
+name: Audit
+
+# Periodic supply-chain check. The per-PR audit in rust.yml only fires on
+# pushes; this catches advisories that land in the RustSec DB between
+# pushes (e.g. for a project that goes weeks without code changes).
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Monday 08:00 UTC weekly
+  workflow_dispatch:       # manual trigger from the Actions tab
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Security audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
