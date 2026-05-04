@@ -1,4 +1,4 @@
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -827,4 +827,135 @@ fn tag_with_url_renders_event_link() {
     assert!(html.contains("https://example.com/2025"));
     assert!(html.contains("TestFest2025 Entry"));
     assert!(html.contains("tag-event-link"));
+}
+
+fn make_game_with_tags(year: &str, title: &str, tags: Vec<&str>) -> ParsedGame {
+    ParsedGame {
+        year: year.to_string(),
+        title: title.to_string(),
+        path: format!("/works/{}/{}", year, title),
+        meta: GameMeta {
+            tags: Some(tags.into_iter().map(String::from).collect()),
+            ..Default::default()
+        },
+        body_html: String::new(),
+        images: vec![],
+        thumbnail: None,
+        thumbnail_ribbon: None,
+        thumbnail_composite: false,
+    }
+}
+
+#[test]
+fn tag_index_excludes_r18() {
+    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [r18, ai]");
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["r18", "ai"]),
+        make_game_with_tags("2024", "b", vec!["r18"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    assert!(bar.iter().all(|e| e.name.to_lowercase() != "r18"));
+    assert!(bar.iter().any(|e| e.name == "ai"));
+}
+
+#[test]
+fn tag_index_counts_games_per_tag() {
+    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["Spooktober"]),
+        make_game_with_tags("2024", "b", vec!["Spooktober", "ai"]),
+        make_game_with_tags("2024", "c", vec![]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let spook = bar.iter().find(|e| e.name == "Spooktober").expect("Spooktober present");
+    assert_eq!(spook.count, 2);
+}
+
+#[test]
+fn tag_index_dedupes_case_insensitively() {
+    // "AI" and "ai" in different files should collapse to one entry
+    let cfg = HashMap::new();
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["AI"]),
+        make_game_with_tags("2024", "b", vec!["ai"]),
+        make_game_with_tags("2024", "c", vec!["Ai"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let ai_rows: Vec<_> = bar.iter().filter(|e| e.name.eq_ignore_ascii_case("ai")).collect();
+    assert_eq!(ai_rows.len(), 1);
+    assert_eq!(ai_rows[0].count, 3);
+}
+
+#[test]
+fn tag_index_dedupes_within_single_game() {
+    // Same tag listed twice in one game still counts as 1.
+    let cfg = HashMap::new();
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["mystery", "MYSTERY"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("mystery")).unwrap();
+    assert_eq!(row.count, 1);
+}
+
+#[test]
+fn tag_index_yaml_casing_wins_over_md_casing() {
+    // Configured tag uses canonical casing from yaml even if md files write it differently.
+    let cfg = load_tag_config("colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]");
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["terrace and ray"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("terrace and ray")).unwrap();
+    assert_eq!(row.name, "Terrace and Ray");
+}
+
+#[test]
+fn tag_index_includes_unconfigured_md_tags() {
+    let cfg = HashMap::new();
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["한국어"]),
+        make_game_with_tags("2024", "b", vec!["한국어"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name == "한국어").unwrap();
+    assert_eq!(row.count, 2);
+    assert!(row.colour.is_none());
+}
+
+#[test]
+fn tag_index_includes_configured_tags_with_zero_uses() {
+    // A tag in yaml with no game using it still appears in the bar with count 0.
+    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
+    let games: HashMap<String, ParsedGame> = HashMap::new();
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name == "GhostFest").unwrap();
+    assert_eq!(row.count, 0);
+    assert_eq!(row.colour.as_deref(), Some("#000"));
+}
+
+#[test]
+fn tag_index_sorts_count_desc_then_name_asc() {
+    let cfg = HashMap::new();
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["zeta"]),
+        make_game_with_tags("2024", "b", vec!["alpha", "beta"]),
+        make_game_with_tags("2024", "c", vec!["alpha", "beta"]),
+        make_game_with_tags("2024", "d", vec!["beta"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let names: Vec<&str> = bar.iter().map(|e| e.name.as_str()).collect();
+    // counts: beta=3, alpha=2, zeta=1 → beta, alpha, zeta
+    assert_eq!(names, vec!["beta", "alpha", "zeta"]);
+}
+
+#[test]
+fn tag_index_configured_carries_colour() {
+    let cfg = load_tag_config("colours:\n  c: \"#abcdef\"\ntags:\n  - colour: c\n    tags: [Foo]");
+    let games = games_map(vec![
+        make_game_with_tags("2024", "a", vec!["Foo"]),
+    ]);
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name == "Foo").unwrap();
+    assert_eq!(row.colour.as_deref(), Some("#abcdef"));
 }

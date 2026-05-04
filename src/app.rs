@@ -26,8 +26,8 @@ use crate::{
     GameMeta, ParsedGame, TagInfo, ThumbSize, extract_user_attachment_uuid,
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
-    get_related_paths, gallery_rows, build_tags_line, load_aliases, load_tag_config,
-    pick_priority_tag, tag_style, get_lang,
+    build_tag_index, get_related_paths, gallery_rows, build_tags_line, load_aliases,
+    load_tag_config, pick_priority_tag, tag_style, get_lang,
 };
 
 // Inlined into <head> on both index.html and game.html so the very first
@@ -42,6 +42,7 @@ struct AppState {
     creator_paths: Arc<HashMap<String, Vec<String>>>,
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
+    tag_bar: Arc<Vec<crate::TagBarEntry>>,
     tree_json: Arc<String>,
     // Thumbnail proxy state
     thumb_cache: Arc<DashMap<(String, ThumbSize), Vec<u8>>>,
@@ -697,11 +698,14 @@ pub fn build_app() -> Router {
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
     // Tag config: defines colours and optional contest URLs per tag.
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
+    // Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts).
+    let tag_bar = build_tag_index(&games, &tag_config);
     let state = AppState {
         games: Arc::new(games),
         creator_paths: Arc::new(creator_paths),
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
+        tag_bar: Arc::new(tag_bar),
         tree_json: Arc::new(tree_json),
         thumb_cache: Arc::new(DashMap::new()),
         thumb_in_flight: Arc::new(Mutex::new(HashSet::new())),
@@ -764,6 +768,7 @@ async fn serve_home(State(state): State<AppState>) -> Html<String> {
                 .collect();
             serde_json::to_string(&colours).unwrap_or_default()
         })
+        .replace("{{tag_bar_json}}", &serde_json::to_string(&*state.tag_bar).unwrap_or_default())
         .replace("{{tree_json}}", &state.tree_json);
     Html(page)
 }

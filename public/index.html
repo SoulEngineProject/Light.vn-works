@@ -38,12 +38,14 @@
 
     <p class="contribute"><span id="lang-contribute">Want to add your game?</span> <a href="https://forms.gle/UKGwKB1Y2C1H9YRv8" target="_blank" rel="noopener" id="lang-contribute-link">Submit your game</a></p>
 
+    <nav id="tag-bar" class="tag-bar" hidden aria-label="Filter by tag"></nav>
+
     <div id="tree"></div>
   </div>
 
-  <!-- Server-embedded data: translations, tag colours, and full game tree.
+  <!-- Server-embedded data: translations, tag colours, tag bar, and full game tree.
        Eliminates client-side API fetches for instant page render. -->
-  <script>var LANG_DATA = {{lang_json}}; var TAG_COLOURS = {{tag_colours_json}}; var TREE_DATA = {{tree_json}};</script>
+  <script>var LANG_DATA = {{lang_json}}; var TAG_COLOURS = {{tag_colours_json}}; var TAG_BAR = {{tag_bar_json}}; var TREE_DATA = {{tree_json}};</script>
   <script src="/home.js" defer></script>
   <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>

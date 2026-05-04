@@ -458,6 +458,9 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
 #[derive(Clone, Debug, Serialize)]
 pub struct TagInfo {
     pub colour: String,
+    /// Original yaml casing (e.g. "Terrace and Ray"). Map keys are lowercased
+    /// for case-insensitive lookup; this preserves the canonical display form.
+    pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -492,12 +495,84 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
         for tag in &group.tags {
             map.insert(tag.to_lowercase(), TagInfo {
                 colour: resolved_colour.clone(),
+                display_name: tag.clone(),
                 url: group.url.clone(),
                 label: group.label.clone(),
             });
         }
     }
     map
+}
+
+/// One row of the homepage tag-filter bar.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct TagBarEntry {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub colour: Option<String>,
+    pub count: usize,
+}
+
+/// Build the tag-filter bar entries: union of yaml-configured tags and tags
+/// found in game frontmatter, deduped case-insensitively. Counts are total
+/// games per tag (not affected by R18 toggle or current search). `r18` is
+/// excluded — already covered by the dedicated toggle. Sort: count desc,
+/// then name asc (case-insensitive). Configured tags use the yaml display
+/// casing; unconfigured (md-only) tags use first-seen casing.
+pub fn build_tag_index(
+    games: &HashMap<String, ParsedGame>,
+    config: &HashMap<String, TagInfo>,
+) -> Vec<TagBarEntry> {
+    struct Row {
+        display: String,
+        colour: Option<String>,
+        count: usize,
+    }
+    let mut rows: HashMap<String, Row> = HashMap::new();
+
+    for (lower, info) in config {
+        if lower == "r18" {
+            continue;
+        }
+        rows.insert(lower.clone(), Row {
+            display: info.display_name.clone(),
+            colour: Some(info.colour.clone()),
+            count: 0,
+        });
+    }
+
+    for game in games.values() {
+        let tags = match &game.meta.tags {
+            Some(t) => t,
+            None => continue,
+        };
+        let mut seen_in_game: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for tag in tags {
+            let lower = tag.to_lowercase();
+            if lower == "r18" || !seen_in_game.insert(lower.clone()) {
+                continue;
+            }
+            let entry = rows.entry(lower).or_insert_with(|| Row {
+                display: tag.clone(),
+                colour: None,
+                count: 0,
+            });
+            entry.count += 1;
+        }
+    }
+
+    let mut out: Vec<TagBarEntry> = rows.into_values().map(|r| TagBarEntry {
+        name: r.display,
+        colour: r.colour,
+        count: r.count,
+    }).collect();
+
+    out.sort_by(|a, b| {
+        b.count.cmp(&a.count)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    out
 }
 
 /// Get inline style for a tag badge, or None if unknown.

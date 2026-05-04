@@ -31,7 +31,7 @@ if (typeof LANG_DATA !== 'undefined') {
 setupLangToggle();
 applyStaticTranslations();
 
-// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_COLOURS).
+// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_COLOURS, TAG_BAR).
 // No API fetch needed — everything is baked into the HTML at serve time.
 if (typeof TREE_DATA !== 'undefined') {
   allData = TREE_DATA;
@@ -40,6 +40,7 @@ if (typeof TREE_DATA !== 'undefined') {
   scrollToHash();
   updateGameCount(TREE_DATA);
   buildRibbon(TREE_DATA);
+  buildTagBar();
 }
 
 function applyStaticTranslations() {
@@ -119,8 +120,20 @@ function buildHref(linkPath) {
   return encodePath(linkPath) + (parts.length ? '?' + parts.join('&') : '');
 }
 
-document.getElementById('search').addEventListener('input', rerender);
-document.getElementById('hide-r18').addEventListener('change', rerender);
+// Debounce typing so we don't churn the URL bar on every keystroke. ~250ms
+// is short enough to feel synchronous when sharing, long enough that mid-word
+// pauses don't trigger writes.
+var syncTimer = null;
+document.getElementById('search').addEventListener('input', function() {
+  rerender();
+  syncActiveTagChip();
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncUrl, 250);
+});
+document.getElementById('hide-r18').addEventListener('change', function() {
+  rerender();
+  syncUrl();
+});
 
 function rerender() {
   if (allData) {
@@ -128,6 +141,26 @@ function rerender() {
     const hideR18 = document.getElementById('hide-r18').checked;
     renderTree(allData, query, hideR18);
   }
+}
+
+// Mirror current UI state into the URL via replaceState — shareable links
+// without polluting browser history on every keystroke. Does not touch
+// ?lang (owned by the language toggle handler) or the hash.
+function syncUrl() {
+  const url = new URL(location.href);
+  const search = document.getElementById('search').value.trim();
+  const hideR18 = document.getElementById('hide-r18').checked;
+  if (search) {
+    url.searchParams.set('search', search);
+  } else {
+    url.searchParams.delete('search');
+  }
+  if (!hideR18) {
+    url.searchParams.set('r18', '0');
+  } else {
+    url.searchParams.delete('r18');
+  }
+  history.replaceState(null, '', url.toString());
 }
 
 // Pick the tag for the top-right priority badge slot. AI is excluded — it
@@ -378,6 +411,68 @@ function buildRibbon(data) {
       img.addEventListener('load', reveal, { once: true });
     }
   });
+}
+
+// Render the tag-filter bar from server-embedded TAG_BAR. Each chip is a
+// button that sets the search input to its tag name (idempotent click).
+// Configured tags use their colour; unconfigured tags get the default style.
+function buildTagBar() {
+  const container = document.getElementById('tag-bar');
+  if (!container || typeof TAG_BAR === 'undefined' || !TAG_BAR.length) {
+    return;
+  }
+
+  const search = document.getElementById('search');
+
+  TAG_BAR.forEach(function(entry) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tag-chip' + (entry.colour ? '' : ' tag-default');
+    btn.dataset.tag = entry.name;
+    if (entry.colour) {
+      btn.style.background = entry.colour;
+      btn.style.color = 'white';
+    }
+    btn.innerHTML = escapeHtml(entry.name.toUpperCase()) +
+      ' <span class="tag-chip-count">' + entry.count + '</span>';
+
+    btn.addEventListener('click', function() {
+      search.value = entry.name;
+      rerender();
+      syncActiveTagChip();
+      syncUrl();
+      search.focus();
+    });
+
+    container.appendChild(btn);
+  });
+
+  container.hidden = false;
+  syncActiveTagChip();
+}
+
+// Mark the chip that exactly matches the current search input as active.
+// Exact match only (case-insensitive) — partial typing like "spook" doesn't
+// activate the Spooktober chip, matching how clicks set full tag names.
+function syncActiveTagChip() {
+  const container = document.getElementById('tag-bar');
+  if (!container) {
+    return;
+  }
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  const chips = container.querySelectorAll('.tag-chip');
+  let anyActive = false;
+  chips.forEach(function(chip) {
+    const isActive = chip.dataset.tag.toLowerCase() === query;
+    chip.classList.toggle('active', isActive);
+    if (isActive) {
+      chip.setAttribute('aria-pressed', 'true');
+      anyActive = true;
+    } else {
+      chip.removeAttribute('aria-pressed');
+    }
+  });
+  container.classList.toggle('has-active', anyActive);
 }
 
 function updateGameCount(data) {
