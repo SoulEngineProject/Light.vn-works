@@ -530,7 +530,7 @@ fn validate_all_markdown_files() {
         let frontmatter_raw = content
             .trim_start()
             .trim_start_matches("---")
-            .splitn(2, "\n---")
+            .split("\n---")
             .next()
             .unwrap_or("");
         if !frontmatter_raw.lines().any(|l| l.trim_start().starts_with("thumbnail_index:")) {
@@ -723,10 +723,11 @@ fn priority_ai_alone_yields_none(cfg: HashMap<String, TagInfo>) {
 }
 
 #[rstest]
-#[case::korean_alone(&["한국어"])]
-#[case::korean_with_ai(&["ai", "한국어"])]
+#[case::mystery_alone(&["mystery"])]
+#[case::mystery_with_ai(&["ai", "mystery"])]
 fn priority_unconfigured_yields_none(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
     // given: tag list with only unconfigured tags (and possibly ai)
+    // ("mystery" is intentionally not in tags.yaml — adjust if it ever gets added)
     let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
 
     // when: picking the priority tag
@@ -749,6 +750,66 @@ fn priority_empty_yields_none(cfg: HashMap<String, TagInfo>) {
 }
 
 #[rstest]
+#[case::english_alone(&["English"])]
+#[case::korean_alone(&["한국어"])]
+#[case::chinese_alone(&["中文"])]
+#[case::language_with_ai(&["English", "ai"])]
+fn priority_language_does_not_promote(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
+    // given: tag list with only language tags (and possibly ai), no r18 / no
+    // Terrace and Ray / no other priority-eligible tag
+    let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&owned, &cfg);
+
+    // then: None — languages are filter-only (card_priority_badge: false), AI
+    // has its own slot. Right-slot stays empty.
+    assert_eq!(result, None);
+}
+
+#[rstest]
+fn priority_other_configured_beats_language(cfg: HashMap<String, TagInfo>) {
+    // given: a real-world combo: a Spooktober game also tagged English
+    // (the bulk-edit pass earlier in the project added English to all
+    //  Spooktober games — make sure the right slot still picks Spooktober)
+    let tags: Vec<String> = vec!["Spooktober".into(), "English".into()];
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&tags, &cfg);
+
+    // then: Spooktober wins; English is filter-only and skipped
+    assert_eq!(result, Some("Spooktober"));
+}
+
+#[rstest]
+fn card_priority_badge_defaults_to_true_when_omitted() {
+    // given: a yaml group with no card_priority_badge key
+    let yaml = "colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Foo]";
+    let cfg = load_tag_config(yaml);
+
+    // when: looking up the tag
+    let info = cfg.get("foo").expect("Foo configured");
+
+    // then: defaults to true (priority-eligible) — backwards-compatible with
+    // existing yaml that doesn't specify the field
+    assert!(info.card_priority_badge);
+}
+
+#[rstest]
+fn card_priority_badge_propagates_false_from_yaml() {
+    // given: a yaml group with card_priority_badge: false
+    let yaml = "colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Foo]\n    card_priority_badge: false";
+    let cfg = load_tag_config(yaml);
+
+    // when: looking up the tag
+    let info = cfg.get("foo").expect("Foo configured");
+
+    // then: flag is false, and pick_priority_tag will skip it
+    assert!(!info.card_priority_badge);
+    assert_eq!(pick_priority_tag(&["Foo".to_string()], &cfg), None);
+}
+
+#[rstest]
 fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>) {
     // given: every configured colour-category tag thrown at the system at once
     let tags: Vec<String> = vec![
@@ -756,7 +817,7 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
         "ai".into(),
         "Terrace and Ray".into(),
         "Spooktober".into(),
-        "한국어".into(),       // unconfigured noise
+        "mystery".into(),       // unconfigured noise
     ];
 
     // when: deriving the two badge slots the way the renderers do
@@ -778,7 +839,7 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
 #[rstest]
 fn cards_emit_zero_badges_when_no_tag_qualifies(cfg: HashMap<String, TagInfo>) {
     // given: only an unconfigured tag, with AI absent
-    let tags: Vec<String> = vec!["한국어".into()];
+    let tags: Vec<String> = vec!["mystery".into()];
 
     // when: deriving the two badge slots
     let right_slot = pick_priority_tag(&tags, &cfg);
@@ -787,6 +848,39 @@ fn cards_emit_zero_badges_when_no_tag_qualifies(cfg: HashMap<String, TagInfo>) {
     // then: both slots are empty — card renders with no badges
     assert_eq!(right_slot, None);
     assert!(!left_slot);
+}
+
+#[rstest]
+#[case::english("English")]
+#[case::korean("한국어")]
+#[case::chinese("中文")]
+fn language_tag_propagates_yaml_colour_to_bar(
+    cfg: HashMap<String, TagInfo>,
+    #[case] tag: &str,
+) {
+    // given: a registered language tag and a game using it
+    let info = cfg.get(&tag.to_lowercase()).expect("tag is configured in yaml");
+    let games = games_map(vec![make_game_with_tags("2024", "g", vec![tag])]);
+
+    // when: building the tag-index row
+    let bar = build_tag_index(&games, &cfg);
+    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case(tag)).expect("row present");
+
+    // then: bar entry carries whatever colour yaml/config defined — no hex
+    // hardcoded so the test tracks yaml changes instead of fighting them
+    assert_eq!(row.colour.as_deref(), Some(info.colour.as_str()));
+}
+
+#[rstest]
+fn language_tags_share_a_colour(cfg: HashMap<String, TagInfo>) {
+    // given: the registered language tags loaded from the production yaml
+    let english = &cfg.get("english").expect("English configured").colour;
+    let korean = &cfg.get("한국어").expect("한국어 configured").colour;
+    let chinese = &cfg.get("中文").expect("中文 configured").colour;
+
+    // when/then: all three share one colour — they're a single category
+    assert_eq!(english, korean);
+    assert_eq!(english, chinese);
 }
 
 #[rstest]

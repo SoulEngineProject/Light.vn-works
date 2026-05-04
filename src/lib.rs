@@ -152,7 +152,7 @@ pub fn is_composite_dimensions(width: u32, height: u32) -> bool {
 /// - **Composites** (wide-aspect strips): rendered via CSS `background-size:
 ///   340%` zoom/crop, which needs enough source resolution to survive retina
 ///   + zoom without upsampling blur. Uses wider composite-specific targets
-///   and *never upscales* — if the source already fits, it's kept as-is.
+///     and *never upscales* — if the source already fits, it's kept as-is.
 ///
 /// Triangle filter is 2–4× faster than Lanczos3 with imperceptible quality
 /// loss at thumbnail sizes.
@@ -463,6 +463,11 @@ pub struct TagInfo {
     pub display_name: String,
     pub url: Option<String>,
     pub label: Option<String>,
+    /// Whether this tag is eligible for the card's priority (right-slot) badge.
+    /// `false` means the tag exists for filtering/discovery (e.g. languages,
+    /// AI which has its own dedicated left slot) but should not promote into
+    /// the priority cascade. Defaults to `true` when the yaml omits it.
+    pub card_priority_badge: bool,
 }
 
 /// Parse tag config YAML into a map of lowercased tag name → TagInfo.
@@ -480,6 +485,7 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
         tags: Vec<String>,
         url: Option<String>,
         label: Option<String>,
+        card_priority_badge: Option<bool>,
     }
     let config: RawConfig = serde_yaml::from_str(yaml).unwrap_or(RawConfig {
         colours: HashMap::new(),
@@ -490,12 +496,14 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
         let resolved_colour = config.colours.get(&group.colour)
             .cloned()
             .unwrap_or(group.colour.clone());
+        let card_priority_badge = group.card_priority_badge.unwrap_or(true);
         for tag in &group.tags {
             map.insert(tag.to_lowercase(), TagInfo {
                 colour: resolved_colour.clone(),
                 display_name: tag.clone(),
                 url: group.url.clone(),
                 label: group.label.clone(),
+                card_priority_badge,
             });
         }
     }
@@ -580,12 +588,15 @@ pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<Str
     })
 }
 
-/// Pick the tag for the top-right priority badge slot. AI is excluded — it
-/// has its own dedicated top-left slot. Priority order:
+/// Pick the tag for the top-right priority badge slot. Priority order:
 ///   1. R18 (content warning)
 ///   2. "Terrace and Ray" (publisher identity)
-///   3. First other configured tag (≠ AI)
+///   3. First other configured tag whose group has `card_priority_badge: true`
 ///   4. None — no fallback to non-configured tags. Empty slot is acceptable.
+///
+/// Tags whose group sets `card_priority_badge: false` (AI, languages) exist
+/// for filtering only and never promote into this slot — AI has its own
+/// dedicated top-left slot, languages are metadata, not identity.
 pub fn pick_priority_tag<'a>(
     tags: &'a [String],
     config: &HashMap<String, TagInfo>,
@@ -597,7 +608,7 @@ pub fn pick_priority_tag<'a>(
         return Some(t.as_str());
     }
     if let Some(t) = tags.iter().find(|t| {
-        !t.eq_ignore_ascii_case("ai") && config.contains_key(&t.to_lowercase())
+        config.get(&t.to_lowercase()).is_some_and(|info| info.card_priority_badge)
     }) {
         return Some(t.as_str());
     }
@@ -688,7 +699,7 @@ pub fn strip_img_tags(input: &str) -> String {
 
         if let Some(end) = remaining[start..].find("/>") {
             remaining = &remaining[start + end + 2..];
-            remaining = remaining.trim_start_matches(|c| c == '\n' || c == '\r');
+            remaining = remaining.trim_start_matches(['\n', '\r']);
         } else {
             result.push_str(&remaining[start..start + 4]);
             remaining = &remaining[start + 4..];

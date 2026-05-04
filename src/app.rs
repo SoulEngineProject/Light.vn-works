@@ -23,7 +23,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, ParsedGame, TagBarEntry, TagInfo, ThumbSize, extract_user_attachment_uuid,
+    GameMeta, ParsedGame, TagInfo, ThumbSize, extract_user_attachment_uuid,
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     build_tag_index, get_related_paths, gallery_rows, build_tags_line, load_aliases,
@@ -34,6 +34,13 @@ use crate::{
 // frame paints with the dark theme even before external CSS arrives. Without
 // this, slow CSS loads (e.g., Render free-tier cold start) cause a white
 // flash. Hex values mirror --bg and --text in style.css.
+//
+// ⚠ Setting `html` bg here (vs. only `body`) interacts with the homepage
+// mascot. `public/home.css` has `body::after { z-index: -1 }` for the LX
+// pseudo, which is trapped in body's stacking context (body has `z-index: 0`
+// in home.css). If you ever change the body's stacking — or move the bg off
+// `html` — re-verify the mascot still paints. See `body::after` and the
+// `body { z-index: 0 }` rule in home.css.
 const CRITICAL_CSS: &str = "<style>html,body{background:#0d0b12;color:#ede9fe}</style>";
 
 #[derive(Clone)]
@@ -42,7 +49,8 @@ struct AppState {
     creator_paths: Arc<HashMap<String, Vec<String>>>,
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
-    tag_bar: Arc<Vec<TagBarEntry>>,
+    tag_bar_json: Arc<String>,
+    tag_info_json: Arc<String>,
     tree_json: Arc<String>,
     // Thumbnail proxy state
     thumb_cache: Arc<DashMap<(String, ThumbSize), Vec<u8>>>,
@@ -222,7 +230,7 @@ async fn render_markdown(
         String::new()
     };
 
-    let synopsis_html = strip_img_tags(&md_html);
+    let synopsis_html = strip_img_tags(md_html);
 
     // Fallback to title if no tagline — only used in meta/OG tags (SEO), not visible on page
     let tagline = meta.tagline.as_deref()
@@ -423,7 +431,7 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
             let thumb_idx = meta.thumbnail_index.unwrap_or(0);
             let thumb_img = images.get(thumb_idx).or(images.first());
             let original_thumbnail = thumb_img.map(|img| img.url.clone());
-            let thumbnail_composite = thumb_img.map_or(false, |img| img.is_composite());
+            let thumbnail_composite = thumb_img.is_some_and(|img| img.is_composite());
 
             // Rewrite GitHub user-attachment URLs to the proxy form; pass
             // through anything else unchanged.
@@ -698,14 +706,33 @@ pub fn build_app() -> Router {
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
     // Tag config: defines colours and optional contest URLs per tag.
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
-    // Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts).
-    let tag_bar = build_tag_index(&games, &tag_config);
+    // Pre-compute the homepage tag-filter bar (union of yaml + md tags, with
+    // counts) and serialize it once. Static across requests.
+    let tag_bar_json = serde_json::to_string(&build_tag_index(&games, &tag_config))
+        .unwrap_or_default();
+    // Pre-serialize the {[name]: {colour, card_priority_badge}} payload that
+    // the homepage embeds as the TAG_INFO global. Static across requests.
+    let tag_info_json = {
+        #[derive(serde::Serialize)]
+        struct ClientTagInfo<'a> {
+            colour: &'a str,
+            card_priority_badge: bool,
+        }
+        let map: HashMap<&str, ClientTagInfo> = tag_config.iter()
+            .map(|(k, v)| (k.as_str(), ClientTagInfo {
+                colour: v.colour.as_str(),
+                card_priority_badge: v.card_priority_badge,
+            }))
+            .collect();
+        serde_json::to_string(&map).unwrap_or_default()
+    };
     let state = AppState {
         games: Arc::new(games),
         creator_paths: Arc::new(creator_paths),
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
-        tag_bar: Arc::new(tag_bar),
+        tag_bar_json: Arc::new(tag_bar_json),
+        tag_info_json: Arc::new(tag_info_json),
         tree_json: Arc::new(tree_json),
         thumb_cache: Arc::new(DashMap::new()),
         thumb_in_flight: Arc::new(Mutex::new(HashSet::new())),
@@ -762,13 +789,8 @@ async fn serve_home(State(state): State<AppState>) -> Html<String> {
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{game_count}}", &state.games.len().to_string())
         .replace("{{lang_json}}", include_str!("../config/lang.json"))
-        .replace("{{tag_colours_json}}", &{
-            let colours: HashMap<String, String> = state.tag_config.iter()
-                .map(|(k, v)| (k.clone(), v.colour.clone()))
-                .collect();
-            serde_json::to_string(&colours).unwrap_or_default()
-        })
-        .replace("{{tag_bar_json}}", &serde_json::to_string(&*state.tag_bar).unwrap_or_default())
+        .replace("{{tag_info_json}}", &state.tag_info_json)
+        .replace("{{tag_bar_json}}", &state.tag_bar_json)
         .replace("{{tree_json}}", &state.tree_json);
     Html(page)
 }

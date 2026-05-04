@@ -31,7 +31,7 @@ if (typeof LANG_DATA !== 'undefined') {
 setupLangToggle();
 applyStaticTranslations();
 
-// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_COLOURS, TAG_BAR).
+// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_INFO, TAG_BAR).
 // No API fetch needed — everything is baked into the HTML at serve time.
 if (typeof TREE_DATA !== 'undefined') {
   allData = TREE_DATA;
@@ -163,10 +163,13 @@ function syncUrl() {
   history.replaceState(null, '', url.toString());
 }
 
-// Pick the tag for the top-right priority badge slot. AI is excluded — it
-// has its own dedicated top-left slot. Mirrors src/lib.rs::pick_priority_tag.
-// Priority order: R18 → Terrace and Ray → first other configured tag.
-function pickPriorityTag(tags, tagColours) {
+// Pick the tag for the top-right priority badge slot. Mirrors
+// src/lib.rs::pick_priority_tag. Priority order: R18 → Terrace and Ray →
+// first other configured tag whose group has card_priority_badge: true.
+// AI and language tags have card_priority_badge: false in tags.yaml so they
+// never promote into this slot — AI uses the left-slot, languages are
+// metadata for the tag-bar filter only.
+function pickPriorityTag(tags, tagInfo) {
   let t = tags.find(x => x.toLowerCase() === 'r18');
   if (t) {
     return t;
@@ -176,8 +179,8 @@ function pickPriorityTag(tags, tagColours) {
     return t;
   }
   t = tags.find(x => {
-    const l = x.toLowerCase();
-    return l !== 'ai' && tagColours[l];
+    const info = tagInfo[x.toLowerCase()];
+    return info && info.card_priority_badge;
   });
   return t || null;
 }
@@ -258,17 +261,18 @@ function renderTree(data, query, hideR18) {
       const tagline = (item.meta && item.meta.tagline) ? item.meta.tagline : '';
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
 
-      var tagColours = (typeof TAG_COLOURS !== 'undefined') ? TAG_COLOURS : {};
+      var tagInfo = (typeof TAG_INFO !== 'undefined') ? TAG_INFO : {};
       // Two-slot layout: priority badge (top-right) + AI (top-left).
       // See pickPriorityTag() for priority order.
       let badges = '';
-      const priorityTag = pickPriorityTag(tags, tagColours);
+      const priorityTag = pickPriorityTag(tags, tagInfo);
       if (priorityTag) {
-        const colour = tagColours[priorityTag.toLowerCase()];
+        const colour = tagInfo[priorityTag.toLowerCase()].colour;
         badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(priorityTag.toUpperCase()) + '</span>';
       }
-      if (tags.some(x => x.toLowerCase() === 'ai') && tagColours['ai']) {
-        badges += '<span class="card-badge card-badge-left" style="background:' + tagColours['ai'] + ';color:white">AI</span>';
+      const aiInfo = tagInfo['ai'];
+      if (aiInfo && tags.some(x => x.toLowerCase() === 'ai')) {
+        badges += '<span class="card-badge card-badge-left" style="background:' + aiInfo.colour + ';color:white">AI</span>';
       }
 
       const a = document.createElement('a');

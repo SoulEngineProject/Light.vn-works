@@ -3,15 +3,18 @@ colours:
   ai: "#2563eb"
   contest: "#a16207"
   publisher: "#0891b2"
+  language: "#15803d"
 
 tags:
   # Content warnings
   - colour: content
     tags: [r18]
 
-  # AI-generated content
+  # AI-generated content (rendered in its own dedicated top-left slot —
+  # never promoted into the right-slot priority cascade)
   - colour: ai
     tags: [ai]
+    card_priority_badge: false
 
   # Contests / events
   - colour: contest
@@ -30,3 +33,9 @@ tags:
   # Publishers
   - colour: publisher
     tags: [Terrace and Ray]
+
+  # Languages (filter-only; not eligible for the right-slot priority badge —
+  # languages are metadata, not card identity)
+  - colour: language
+    tags: [English, 한국어, 中文]
+    card_priority_badge: false
