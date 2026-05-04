@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     # All cargo steps below use --locked so CI fails (rather than silently
     # re-resolving) if Cargo.toml drifts from Cargo.lock — the safety net
     # that makes committing the lockfile load-bearing.
