@@ -22,4 +22,4 @@ dashmap = "6"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 tokio = { version = "1", features = ["full"] }
-rstest = "0.23"             # parameterized tests + fixtures
+rstest = "0.26"             # parameterized tests + fixtures
