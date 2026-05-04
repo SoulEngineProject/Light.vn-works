@@ -1,5 +1,8 @@
 version: 2
 updates:
+  # Cargo deps: weekly bumps. Minor + patch updates are bundled into a single
+  # grouped PR so the inbox doesn't drown when multiple crates release in the
+  # same week. Major bumps stay as individual PRs — they need API review.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
@@ -9,6 +12,8 @@ updates:
       cargo-minor-and-patch:
         update-types: ["minor", "patch"]
 
+  # GitHub Actions: monthly cadence. Referenced actions (checkout etc.) change
+  # rarely; weekly would be noise.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
