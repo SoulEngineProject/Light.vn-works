@@ -455,15 +455,13 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
 }
 
 /// Info for a special tag (colour, optional link).
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct TagInfo {
     pub colour: String,
     /// Original yaml casing (e.g. "Terrace and Ray"). Map keys are lowercased
     /// for case-insensitive lookup; this preserves the canonical display form.
     pub display_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }
 

@@ -1,147 +1,212 @@
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, ThumbSize, RELEASED_UNKNOWN};
+//! Tests follow the given/when/then convention: every `#[test]` / `#[rstest]`
+//! body has `// given:`, `// when:`, `// then:` sections.
+//!
+//! Parameterized tests use `rstest`. One named case per `#[case::name(...)]` —
+//! the name appears in `cargo test` output for fast bisection. Non-parameterized
+//! tests use plain `#[test]`. Common test data is built via `#[fixture]`s
+//! (e.g. `cfg`); per-call data uses plain helper fns.
+
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
+use rstest::{fixture, rstest};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
 
 #[test]
 fn build_query_empty_input() {
-    assert_eq!(build_query(&[]), "");
+    // given: no key/value pairs
+    let pairs: &[(&str, &str)] = &[];
+
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: result is empty (no leading '?')
+    assert_eq!(out, "");
 }
 
 #[test]
 fn build_query_all_empty_values_returns_empty() {
-    assert_eq!(build_query(&[("lang", ""), ("r18", "")]), "");
+    // given: pairs whose values are all empty
+    let pairs = &[("lang", ""), ("r18", "")];
+
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: empty values are filtered, leaving nothing to emit
+    assert_eq!(out, "");
 }
 
 #[test]
 fn build_query_single_pair() {
-    assert_eq!(build_query(&[("lang", "ja")]), "?lang=ja");
+    // given: a single non-empty key/value pair
+    let pairs = &[("lang", "ja")];
+
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: leading '?' followed by k=v
+    assert_eq!(out, "?lang=ja");
 }
 
 #[test]
 fn build_query_multiple_pairs_joined_with_ampersand() {
-    assert_eq!(build_query(&[("lang", "ja"), ("r18", "0")]), "?lang=ja&r18=0");
+    // given: two non-empty key/value pairs
+    let pairs = &[("lang", "ja"), ("r18", "0")];
+
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: pairs joined with '&', leading '?'
+    assert_eq!(out, "?lang=ja&r18=0");
 }
 
-#[test]
-fn build_query_filters_empty_values() {
-    assert_eq!(build_query(&[("lang", "en"), ("r18", "")]), "?lang=en");
-    assert_eq!(build_query(&[("lang", ""), ("r18", "0")]), "?r18=0");
+#[rstest]
+#[case::lang_only(&[("lang", "en"), ("r18", "")], "?lang=en")]
+#[case::r18_only(&[("lang", ""), ("r18", "0")], "?r18=0")]
+fn build_query_filters_empty_values(#[case] pairs: &[(&str, &str)], #[case] expected: &str) {
+    // given: mixed pairs where one side has an empty value
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: empty-valued pair is dropped, remaining pair emitted
+    assert_eq!(out, expected);
 }
 
 #[test]
 fn game_page_suffixes_non_r18_no_params() {
-    // non-R18 game, nothing incoming → both suffixes empty
+    // given: a non-R18 game with no incoming lang or r18 params
+    // when: computing back/fwd suffixes
     let (back, fwd) = game_page_suffixes(None, false, false);
+
+    // then: both suffixes are empty — nothing to propagate
     assert_eq!(back, "");
     assert_eq!(fwd, "");
 }
 
 #[test]
 fn game_page_suffixes_r18_game_forces_back_r18() {
-    // R18 game with no incoming params → back forces r18=0, fwd empty
+    // given: an R18 game with no incoming params
+    // when: computing back/fwd suffixes
     let (back, fwd) = game_page_suffixes(None, true, false);
+
+    // then: back forces r18=0 (so homepage shows it after navigation back),
+    // fwd stays empty (incoming request didn't carry r18=0)
     assert_eq!(back, "?r18=0");
     assert_eq!(fwd, "");
 }
 
 #[test]
 fn game_page_suffixes_propagates_incoming_r18() {
-    // Non-R18 game, r18=0 incoming → both carry r18=0
+    // given: a non-R18 game whose incoming request carried r18=0
+    // when: computing back/fwd suffixes
     let (back, fwd) = game_page_suffixes(None, false, true);
+
+    // then: both carry r18=0 — preserve the user's filter state
     assert_eq!(back, "?r18=0");
     assert_eq!(fwd, "?r18=0");
 }
 
 #[test]
 fn game_page_suffixes_combines_lang_and_r18() {
-    // R18 game with lang=ja → both carry lang, back forces r18=0
+    // given: an R18 game with lang=ja, no incoming r18
+    // when: computing back/fwd suffixes
     let (back, fwd) = game_page_suffixes(Some("ja"), true, false);
+
+    // then: both carry lang; back additionally forces r18=0
     assert_eq!(back, "?lang=ja&r18=0");
     assert_eq!(fwd, "?lang=ja");
 }
 
 #[test]
 fn extract_uuid_from_user_attachment_url() {
-    // Real-shape URL
-    assert_eq!(
-        extract_user_attachment_uuid(
-            "https://github.com/user-attachments/assets/abc-def-123"
-        ),
-        Some("abc-def-123")
-    );
+    // given: a real-shape GitHub user-attachment URL
+    let url = "https://github.com/user-attachments/assets/abc-def-123";
+
+    // when: extracting the UUID
+    let uuid = extract_user_attachment_uuid(url);
+
+    // then: the trailing path segment is returned
+    assert_eq!(uuid, Some("abc-def-123"));
 }
 
-#[test]
-fn extract_uuid_rejects_non_github_urls() {
-    assert_eq!(
-        extract_user_attachment_uuid("https://example.com/image.png"),
-        None
-    );
-    assert_eq!(
-        extract_user_attachment_uuid("https://raw.githubusercontent.com/user/repo/main/a.png"),
-        None
-    );
+#[rstest]
+#[case::example_com("https://example.com/image.png")]
+#[case::raw_github("https://raw.githubusercontent.com/user/repo/main/a.png")]
+fn extract_uuid_rejects_non_github_urls(#[case] url: &str) {
+    // given: a URL hosted outside the github user-attachments path
+    // when: extracting the UUID
+    let uuid = extract_user_attachment_uuid(url);
+
+    // then: non-matching hosts return None
+    assert_eq!(uuid, None);
 }
 
-#[test]
-fn extract_uuid_rejects_malformed_paths() {
-    // Extra path segments
-    assert_eq!(
-        extract_user_attachment_uuid(
-            "https://github.com/user-attachments/assets/abc/extra"
-        ),
-        None
-    );
-    // Query string
-    assert_eq!(
-        extract_user_attachment_uuid(
-            "https://github.com/user-attachments/assets/abc?x=1"
-        ),
-        None
-    );
-    // Fragment
-    assert_eq!(
-        extract_user_attachment_uuid(
-            "https://github.com/user-attachments/assets/abc#frag"
-        ),
-        None
-    );
-    // Empty UUID
-    assert_eq!(
-        extract_user_attachment_uuid("https://github.com/user-attachments/assets/"),
-        None
-    );
+#[rstest]
+#[case::extra_path("https://github.com/user-attachments/assets/abc/extra")]
+#[case::query_string("https://github.com/user-attachments/assets/abc?x=1")]
+#[case::fragment("https://github.com/user-attachments/assets/abc#frag")]
+#[case::empty_uuid("https://github.com/user-attachments/assets/")]
+fn extract_uuid_rejects_malformed_paths(#[case] url: &str) {
+    // given: a github user-attachment URL with a malformed trailing path
+    // when: extracting the UUID
+    let uuid = extract_user_attachment_uuid(url);
+
+    // then: malformed shapes return None
+    assert_eq!(uuid, None);
 }
 
-#[test]
-fn thumb_size_parses_valid_variants() {
-    assert_eq!(ThumbSize::parse("ribbon"), Some(ThumbSize::Ribbon));
-    assert_eq!(ThumbSize::parse("card"), Some(ThumbSize::Card));
+#[rstest]
+#[case::ribbon("ribbon", Some(ThumbSize::Ribbon))]
+#[case::card("card", Some(ThumbSize::Card))]
+fn thumb_size_parses_valid_variants(#[case] input: &str, #[case] expected: Option<ThumbSize>) {
+    // given: a valid size string used in URLs
+    // when: parsing it
+    let parsed = ThumbSize::parse(input);
+
+    // then: the matching variant is returned
+    assert_eq!(parsed, expected);
 }
 
-#[test]
-fn thumb_size_rejects_invalid_variants() {
-    assert_eq!(ThumbSize::parse(""), None);
-    assert_eq!(ThumbSize::parse("Ribbon"), None); // case-sensitive
-    assert_eq!(ThumbSize::parse("thumb"), None);
-    assert_eq!(ThumbSize::parse("ribbon/extra"), None);
+#[rstest]
+#[case::empty("")]
+#[case::wrong_case("Ribbon")]   // case-sensitive — capital R rejected
+#[case::unknown("thumb")]
+#[case::with_slash("ribbon/extra")]
+fn thumb_size_rejects_invalid_variants(#[case] input: &str) {
+    // given: a string that doesn't match either variant
+    // when: parsing it
+    let parsed = ThumbSize::parse(input);
+
+    // then: None (no fuzzy matching)
+    assert_eq!(parsed, None);
 }
 
-#[test]
-fn thumb_size_dimensions() {
-    assert_eq!(ThumbSize::Ribbon.dimensions(), (240, 140));
-    assert_eq!(ThumbSize::Card.dimensions(), (600, 400));
+#[rstest]
+#[case::ribbon(ThumbSize::Ribbon, (240, 140))]
+#[case::card(ThumbSize::Card, (600, 400))]
+fn thumb_size_dimensions(#[case] size: ThumbSize, #[case] expected: (u32, u32)) {
+    // given: a ThumbSize variant
+    // when: querying its dimensions
+    let dims = size.dimensions();
+
+    // then: the variant returns its expected (width, height)
+    assert_eq!(dims, expected);
 }
 
-#[test]
-fn composite_detection_threshold() {
-    assert!(is_composite_dimensions(1600, 400));  // 4:1 → composite
-    assert!(is_composite_dimensions(2001, 1000)); // just over 2:1 → composite
-    assert!(!is_composite_dimensions(2000, 1000));// exactly 2:1 → not composite
-    assert!(!is_composite_dimensions(1280, 720)); // 16:9 → normal
-    assert!(!is_composite_dimensions(1000, 1000));// square → normal
-    assert!(!is_composite_dimensions(100, 0));    // zero height → guard
+#[rstest]
+#[case::four_to_one(1600, 400, true)]
+#[case::just_over_two(2001, 1000, true)]
+#[case::exactly_two(2000, 1000, false)]   // strict > threshold
+#[case::sixteen_nine(1280, 720, false)]
+#[case::square(1000, 1000, false)]
+#[case::zero_height(100, 0, false)]       // guard against div-by-zero
+fn composite_detection_threshold(#[case] w: u32, #[case] h: u32, #[case] expected: bool) {
+    // given: a (width, height) pair
+    // when: checking composite classification
+    let is_comp = is_composite_dimensions(w, h);
+
+    // then: classification matches the 2:1-strict threshold rule
+    assert_eq!(is_comp, expected);
 }
 
 #[test]
@@ -184,13 +249,17 @@ fn resize_thumbnail_fills_normal_aspect() {
     assert_eq!(resized.height(), 400);
 }
 
-#[test]
-fn encode_path_handles_reserved_chars() {
-    // given: a path with a '#' in the title (real case: works/2021/#水卜大作戦【デモ版】)
-    // when/then: '#' becomes %23, '/' is preserved, Japanese bytes are percent-encoded
-    assert_eq!(encode_path("/works/2021/#title"), "/works/2021/%23title");
-    assert_eq!(encode_path("/works/2021/foo?bar"), "/works/2021/foo%3Fbar");
-    assert_eq!(encode_path("/works/2021/plain-title"), "/works/2021/plain-title");
+#[rstest]
+#[case::hash("/works/2021/#title", "/works/2021/%23title")]
+#[case::question("/works/2021/foo?bar", "/works/2021/foo%3Fbar")]
+#[case::plain("/works/2021/plain-title", "/works/2021/plain-title")]
+fn encode_path_handles_reserved_chars(#[case] input: &str, #[case] expected: &str) {
+    // given: a path with possible reserved chars (real case: works/2021/#水卜大作戦【デモ版】)
+    // when: encoding the path
+    let out = encode_path(input);
+
+    // then: reserved chars become percent-escapes; '/' is preserved as a separator
+    assert_eq!(out, expected);
 }
 
 fn make_game(year: &str, title: &str, creator: &str, released: &str) -> ParsedGame {
@@ -588,60 +657,100 @@ fn lang_json_parses_both_languages() {
     assert!(!ja.engine_url.is_empty());
 }
 
-fn make_priority_config() -> std::collections::HashMap<String, lightvn_works::TagInfo> {
-    // Use the real production config so tests track config changes. If a tag
-    // is removed (e.g. "Terrace and Ray"), the relevant priority test should
-    // start failing — that's a feature, not a bug.
+/// Production tag config, loaded from the real `config/tags.yaml`. Tests bind
+/// to this so they track config changes — if a tag is removed (e.g. "Terrace
+/// and Ray"), the relevant priority test should start failing.
+#[fixture]
+fn cfg() -> HashMap<String, TagInfo> {
     load_tag_config(include_str!("../config/tags.yaml"))
 }
 
-#[test]
-fn priority_r18_always_wins() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&["r18".into()], &cfg), Some("r18"));
-    assert_eq!(pick_priority_tag(&["r18".into(), "ai".into()], &cfg), Some("r18"));
-    assert_eq!(pick_priority_tag(&["ai".into(), "r18".into()], &cfg), Some("r18"));
-    assert_eq!(pick_priority_tag(&["r18".into(), "Terrace and Ray".into()], &cfg), Some("r18"));
+#[rstest]
+#[case::alone(&["r18"])]
+#[case::with_ai(&["r18", "ai"])]
+#[case::ai_first(&["ai", "r18"])]
+#[case::with_terrace(&["r18", "Terrace and Ray"])]
+fn priority_r18_always_wins(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
+    // given: tag list contains r18 alongside other tags in any order
+    let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&owned, &cfg);
+
+    // then: r18 wins regardless of order or co-occurring tags
+    assert_eq!(result, Some("r18"));
 }
 
-#[test]
-fn priority_terrace_and_ray_second() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&["Terrace and Ray".into()], &cfg), Some("Terrace and Ray"));
-    assert_eq!(pick_priority_tag(&["Terrace and Ray".into(), "Spooktober".into()], &cfg), Some("Terrace and Ray"));
-    assert_eq!(pick_priority_tag(&["ai".into(), "Terrace and Ray".into()], &cfg), Some("Terrace and Ray"));
+#[rstest]
+#[case::alone(&["Terrace and Ray"])]
+#[case::with_spook(&["Terrace and Ray", "Spooktober"])]
+#[case::with_ai(&["ai", "Terrace and Ray"])]
+fn priority_terrace_and_ray_second(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
+    // given: tag list with "Terrace and Ray" present but no r18
+    let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&owned, &cfg);
+
+    // then: "Terrace and Ray" wins over other configured tags and over ai
+    assert_eq!(result, Some("Terrace and Ray"));
 }
 
-#[test]
-fn priority_other_configured_third() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&["Spooktober".into()], &cfg), Some("Spooktober"));
-    assert_eq!(pick_priority_tag(&["ai".into(), "Spooktober".into()], &cfg), Some("Spooktober"));
+#[rstest]
+#[case::spook_alone(&["Spooktober"])]
+#[case::spook_with_ai(&["ai", "Spooktober"])]
+fn priority_other_configured_third(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
+    // given: tag list with a configured non-r18, non-Terrace tag
+    let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&owned, &cfg);
+
+    // then: the configured tag wins; ai is not promoted into the right slot
+    assert_eq!(result, Some("Spooktober"));
 }
 
-#[test]
-fn priority_ai_alone_yields_none() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&["ai".into()], &cfg), None);
+#[rstest]
+fn priority_ai_alone_yields_none(cfg: HashMap<String, TagInfo>) {
+    // given: a tag list containing only ai
+    let tags: Vec<String> = vec!["ai".into()];
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&tags, &cfg);
+
+    // then: None — ai has its own dedicated left-slot, never the right slot
+    assert_eq!(result, None);
 }
 
-#[test]
-fn priority_unconfigured_yields_none() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&["한국어".into()], &cfg), None);
-    assert_eq!(pick_priority_tag(&["ai".into(), "한국어".into()], &cfg), None);
+#[rstest]
+#[case::korean_alone(&["한국어"])]
+#[case::korean_with_ai(&["ai", "한국어"])]
+fn priority_unconfigured_yields_none(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
+    // given: tag list with only unconfigured tags (and possibly ai)
+    let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&owned, &cfg);
+
+    // then: None — unconfigured tags don't promote, ai doesn't fill the slot
+    assert_eq!(result, None);
 }
 
-#[test]
-fn priority_empty_yields_none() {
-    let cfg = make_priority_config();
-    assert_eq!(pick_priority_tag(&[], &cfg), None);
+#[rstest]
+fn priority_empty_yields_none(cfg: HashMap<String, TagInfo>) {
+    // given: an empty tag list
+    let tags: Vec<String> = vec![];
+
+    // when: picking the priority tag
+    let result = pick_priority_tag(&tags, &cfg);
+
+    // then: None
+    assert_eq!(result, None);
 }
 
-#[test]
-fn cards_emit_at_most_one_left_and_one_right_badge() {
+#[rstest]
+fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>) {
     // given: every configured colour-category tag thrown at the system at once
-    let cfg = make_priority_config();
     let tags: Vec<String> = vec![
         "r18".into(),
         "ai".into(),
@@ -666,34 +775,42 @@ fn cards_emit_at_most_one_left_and_one_right_badge() {
     assert!(total_badges <= 2, "badge count is bounded at 2");
 }
 
-#[test]
-fn cards_emit_zero_badges_when_no_tag_qualifies() {
-    let cfg = make_priority_config();
-    // Only an unconfigured tag; AI absent. Both slots empty.
+#[rstest]
+fn cards_emit_zero_badges_when_no_tag_qualifies(cfg: HashMap<String, TagInfo>) {
+    // given: only an unconfigured tag, with AI absent
     let tags: Vec<String> = vec!["한국어".into()];
 
+    // when: deriving the two badge slots
     let right_slot = pick_priority_tag(&tags, &cfg);
     let left_slot = tags.iter().any(|t| t.eq_ignore_ascii_case("ai"));
 
+    // then: both slots are empty — card renders with no badges
     assert_eq!(right_slot, None);
     assert!(!left_slot);
 }
 
-#[test]
-fn gallery_rows_layout() {
-    // given/when/then: max 2 per row. Odd counts produce a trailing [1]; in
-    // production the orphan is stripped upstream and promoted to the editor
-    // mockup, so this function is typically called with even n.
-    assert_eq!(gallery_rows(0), Vec::<usize>::new());
-    assert_eq!(gallery_rows(1), vec![1]);
-    assert_eq!(gallery_rows(2), vec![2]);
-    assert_eq!(gallery_rows(3), vec![2, 1]);
-    assert_eq!(gallery_rows(4), vec![2, 2]);
-    assert_eq!(gallery_rows(5), vec![2, 2, 1]);
-    assert_eq!(gallery_rows(6), vec![2, 2, 2]);
-    assert_eq!(gallery_rows(7), vec![2, 2, 2, 1]);
-    assert_eq!(gallery_rows(8), vec![2, 2, 2, 2]);
-    assert_eq!(gallery_rows(9), vec![2, 2, 2, 2, 1]);
+#[rstest]
+#[case::n_0(0, vec![])]
+#[case::n_1(1, vec![1])]
+#[case::n_2(2, vec![2])]
+#[case::n_3(3, vec![2, 1])]
+#[case::n_4(4, vec![2, 2])]
+#[case::n_5(5, vec![2, 2, 1])]
+#[case::n_6(6, vec![2, 2, 2])]
+#[case::n_7(7, vec![2, 2, 2, 1])]
+#[case::n_8(8, vec![2, 2, 2, 2])]
+#[case::n_9(9, vec![2, 2, 2, 2, 1])]
+fn gallery_rows_layout(#[case] n: usize, #[case] expected: Vec<usize>) {
+    // given: an image count
+    // (in production the orphan single trailing image is stripped upstream and
+    //  promoted to the editor mockup, so this function is typically called
+    //  with even n — odd cases here verify the boundary is correct anyway)
+
+    // when: computing the row layout
+    let rows = gallery_rows(n);
+
+    // then: max 2 per row, trailing [1] when odd
+    assert_eq!(rows, expected);
 }
 
 #[test]
@@ -848,39 +965,53 @@ fn make_game_with_tags(year: &str, title: &str, tags: Vec<&str>) -> ParsedGame {
 
 #[test]
 fn tag_index_excludes_r18() {
+    // given: a config with both r18 and ai, plus games using both
     let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [r18, ai]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["r18", "ai"]),
         make_game_with_tags("2024", "b", vec!["r18"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: r18 is filtered out (handled by the dedicated toggle); ai stays
     assert!(bar.iter().all(|e| e.name.to_lowercase() != "r18"));
     assert!(bar.iter().any(|e| e.name == "ai"));
 }
 
 #[test]
 fn tag_index_counts_games_per_tag() {
+    // given: 3 games — 2 carry "Spooktober", 1 has no tags
     let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["Spooktober"]),
         make_game_with_tags("2024", "b", vec!["Spooktober", "ai"]),
         make_game_with_tags("2024", "c", vec![]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: Spooktober's count reflects only the games that carry it
     let spook = bar.iter().find(|e| e.name == "Spooktober").expect("Spooktober present");
     assert_eq!(spook.count, 2);
 }
 
 #[test]
 fn tag_index_dedupes_case_insensitively() {
-    // "AI" and "ai" in different files should collapse to one entry
+    // given: 3 games using the same tag with different casings
     let cfg = HashMap::new();
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["AI"]),
         make_game_with_tags("2024", "b", vec!["ai"]),
         make_game_with_tags("2024", "c", vec!["Ai"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: collapses to a single entry whose count covers all 3 games
     let ai_rows: Vec<_> = bar.iter().filter(|e| e.name.eq_ignore_ascii_case("ai")).collect();
     assert_eq!(ai_rows.len(), 1);
     assert_eq!(ai_rows[0].count, 3);
@@ -888,36 +1019,49 @@ fn tag_index_dedupes_case_insensitively() {
 
 #[test]
 fn tag_index_dedupes_within_single_game() {
-    // Same tag listed twice in one game still counts as 1.
+    // given: a single game listing the same tag twice with different casings
     let cfg = HashMap::new();
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["mystery", "MYSTERY"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: the duplicate within one game still counts as 1
     let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("mystery")).unwrap();
     assert_eq!(row.count, 1);
 }
 
 #[test]
 fn tag_index_yaml_casing_wins_over_md_casing() {
-    // Configured tag uses canonical casing from yaml even if md files write it differently.
+    // given: yaml declares "Terrace and Ray", md uses lowercase "terrace and ray"
     let cfg = load_tag_config("colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["terrace and ray"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: the entry uses the yaml's canonical display casing
     let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("terrace and ray")).unwrap();
     assert_eq!(row.name, "Terrace and Ray");
 }
 
 #[test]
 fn tag_index_includes_unconfigured_md_tags() {
+    // given: a tag that appears only in md files, never in yaml config
     let cfg = HashMap::new();
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["한국어"]),
         make_game_with_tags("2024", "b", vec!["한국어"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: tag is included with correct count and no colour assignment
     let row = bar.iter().find(|e| e.name == "한국어").unwrap();
     assert_eq!(row.count, 2);
     assert!(row.colour.is_none());
@@ -925,10 +1069,14 @@ fn tag_index_includes_unconfigured_md_tags() {
 
 #[test]
 fn tag_index_includes_configured_tags_with_zero_uses() {
-    // A tag in yaml with no game using it still appears in the bar with count 0.
+    // given: yaml configures a tag that no game currently uses
     let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
     let games: HashMap<String, ParsedGame> = HashMap::new();
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: tag still appears (count 0, with its configured colour)
     let row = bar.iter().find(|e| e.name == "GhostFest").unwrap();
     assert_eq!(row.count, 0);
     assert_eq!(row.colour.as_deref(), Some("#000"));
@@ -936,6 +1084,7 @@ fn tag_index_includes_configured_tags_with_zero_uses() {
 
 #[test]
 fn tag_index_sorts_count_desc_then_name_asc() {
+    // given: tags with varied counts including a tie that needs alphabetical fallback
     let cfg = HashMap::new();
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["zeta"]),
@@ -943,19 +1092,27 @@ fn tag_index_sorts_count_desc_then_name_asc() {
         make_game_with_tags("2024", "c", vec!["alpha", "beta"]),
         make_game_with_tags("2024", "d", vec!["beta"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: count desc primary, name asc secondary → beta(3), alpha(2), zeta(1)
     let names: Vec<&str> = bar.iter().map(|e| e.name.as_str()).collect();
-    // counts: beta=3, alpha=2, zeta=1 → beta, alpha, zeta
     assert_eq!(names, vec!["beta", "alpha", "zeta"]);
 }
 
 #[test]
 fn tag_index_configured_carries_colour() {
+    // given: a configured tag with a known colour, used by one game
     let cfg = load_tag_config("colours:\n  c: \"#abcdef\"\ntags:\n  - colour: c\n    tags: [Foo]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["Foo"]),
     ]);
+
+    // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
+
+    // then: the entry carries the configured colour through to the bar
     let row = bar.iter().find(|e| e.name == "Foo").unwrap();
     assert_eq!(row.colour.as_deref(), Some("#abcdef"));
 }

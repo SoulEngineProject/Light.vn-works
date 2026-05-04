@@ -15,7 +15,7 @@ Static assets send `Cache-Control: no-cache` rather than a long `max-age, immuta
 
 ## Server-embed tree data in home HTML
 
-The home page inlines `TREE_DATA`, `LANG_DATA`, and `TAG_COLOURS` as JSON in a `<script>` tag rather than fetching them client-side.
+The home page inlines `TREE_DATA`, `LANG_DATA`, `TAG_COLOURS`, and `TAG_BAR` as JSON in a `<script>` tag rather than fetching them client-side.
 
 - **Why**: eliminates the initial API roundtrip and loading state. Page renders immediately with full data.
 - **Tradeoff accepted**: HTML response size grows with catalog. Fine at 241 entries; revisit around 1000+ (noted in `performance_todo.md`).

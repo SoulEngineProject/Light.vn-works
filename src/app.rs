@@ -23,7 +23,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, ParsedGame, TagInfo, ThumbSize, extract_user_attachment_uuid,
+    GameMeta, ParsedGame, TagBarEntry, TagInfo, ThumbSize, extract_user_attachment_uuid,
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     build_tag_index, get_related_paths, gallery_rows, build_tags_line, load_aliases,
@@ -42,7 +42,7 @@ struct AppState {
     creator_paths: Arc<HashMap<String, Vec<String>>>,
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
-    tag_bar: Arc<Vec<crate::TagBarEntry>>,
+    tag_bar: Arc<Vec<TagBarEntry>>,
     tree_json: Arc<String>,
     // Thumbnail proxy state
     thumb_cache: Arc<DashMap<(String, ThumbSize), Vec<u8>>>,
