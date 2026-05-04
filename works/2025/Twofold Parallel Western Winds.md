@@ -4,7 +4,7 @@ released: 2025/10/28
 link_label: itch.io
 link_url: "https://2nd-draft.itch.io/twofold-parallel-ww"
 tagline: "After receiving a letter from their mother back out in the city..."
-tags: []
+tags: [English]
 thumbnail_index:
 ---
 
