@@ -19,7 +19,7 @@ webp = "0.3"
 dashmap = "6"
 
 [dev-dependencies]
-tower = { version = "0.4", features = ["util"] }
+tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 tokio = { version = "1", features = ["full"] }
 rstest = "0.23"             # parameterized tests + fixtures
