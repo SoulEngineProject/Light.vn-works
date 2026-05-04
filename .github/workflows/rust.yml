@@ -19,6 +19,8 @@ jobs:
     # All cargo steps below use --locked so CI fails (rather than silently
     # re-resolving) if Cargo.toml drifts from Cargo.lock — the safety net
     # that makes committing the lockfile load-bearing.
+    # -D warnings: any clippy warning fails CI. Strict on purpose — keeps the
+    # warning count at zero so new ones can't slip in unnoticed.
     - name: Clippy
       run: cargo clippy --locked --all-targets -- -D warnings
     # Checks Cargo.lock against the RustSec advisory database. Different DB
