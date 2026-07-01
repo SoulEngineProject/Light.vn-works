@@ -26,8 +26,8 @@ use crate::{
     build_creator_paths, build_sitemap, build_tag_index, build_tags_line, encode_path,
     extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
     get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
-    parse_frontmatter, pick_priority_tag, released_to_lastmod, resize_thumbnail, strip_img_tags,
-    tag_style, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    parse_frontmatter, pick_priority_tag, resize_thumbnail, strip_img_tags, tag_style, GameMeta,
+    ParsedGame, TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -103,15 +103,8 @@ fn base_url(headers: &HeaderMap) -> String {
 // - XML sitemap of the home page + every game URL, built from the in-memory index.
 // - Crawlers need this because the home page builds its game links in JavaScript.
 async fn serve_sitemap(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    let entries: Vec<(String, Option<String>)> = state
-        .games
-        .iter()
-        .map(|(path, game)| {
-            let lastmod = released_to_lastmod(game.meta.released.as_deref().unwrap_or(""));
-            (path.clone(), lastmod)
-        })
-        .collect();
-    let xml = build_sitemap(&base_url(&headers), &entries);
+    let paths: Vec<String> = state.games.keys().cloned().collect();
+    let xml = build_sitemap(&base_url(&headers), &paths);
     ([(header::CONTENT_TYPE, "application/xml")], xml)
 }
 

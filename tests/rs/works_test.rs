@@ -7,8 +7,8 @@ use lightvn_works::{
     build_creator_paths, build_query, build_sitemap, build_tag_index, build_tags_line, encode_path,
     extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
     get_related_paths, html_escape, is_composite_dimensions, load_aliases, load_tag_config,
-    parse_frontmatter, pick_priority_tag, released_to_lastmod, resize_thumbnail, split_creators,
-    strip_img_tags, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    parse_frontmatter, pick_priority_tag, resize_thumbnail, split_creators, strip_img_tags,
+    GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -77,48 +77,26 @@ fn build_query_filters_empty_values(#[case] pairs: &[(&str, &str)], #[case] expe
 
 #[test]
 fn build_sitemap_lists_home_and_encoded_game_urls() {
-    // given: a base URL and canonical game entries, one with spaces
+    // given: a base URL and canonical game paths, one with spaces
     let base = "https://example.com";
-    let entries = vec![
-        (
-            "/works/2024/42 Hallows Street".to_string(),
-            Some("2024-03-15".to_string()),
-        ),
-        ("/works/2016/KONKON".to_string(), None),
+    let paths = vec![
+        "/works/2024/42 Hallows Street".to_string(),
+        "/works/2016/KONKON".to_string(),
     ];
 
     // when: building the sitemap
-    let xml = build_sitemap(base, &entries);
+    let xml = build_sitemap(base, &paths);
 
     // then:
     // - well-formed XML header + urlset wrapper
     // - the home page and both games appear as absolute, percent-encoded URLs
-    // - entries are sorted, so 2016 precedes 2024
+    // - paths are sorted, so 2016 precedes 2024
     assert!(xml.starts_with("<?xml version=\"1.0\""));
     assert!(xml.contains("<loc>https://example.com/</loc>"));
     assert!(xml.contains("<loc>https://example.com/works/2016/KONKON</loc>"));
     assert!(xml.contains("<loc>https://example.com/works/2024/42%20Hallows%20Street</loc>"));
     assert!(xml.trim_end().ends_with("</urlset>"));
     assert!(xml.find("2016").unwrap() < xml.find("2024").unwrap());
-}
-
-#[test]
-fn build_sitemap_emits_lastmod_only_when_present() {
-    // given: one entry with a lastmod date and one without
-    let entries = vec![
-        ("/works/2024/A".to_string(), Some("2024-03-15".to_string())),
-        ("/works/2016/B".to_string(), None),
-    ];
-
-    // when: building the sitemap
-    let xml = build_sitemap("https://example.com", &entries);
-
-    // then: the dated entry carries <lastmod>, the undated one does not
-    assert!(xml.contains(
-        "<loc>https://example.com/works/2024/A</loc><lastmod>2024-03-15</lastmod></url>"
-    ));
-    assert!(xml.contains("<loc>https://example.com/works/2016/B</loc></url>"));
-    assert_eq!(xml.matches("<lastmod>").count(), 1);
 }
 
 #[test]
@@ -130,25 +108,6 @@ fn build_sitemap_trims_trailing_slash_from_base() {
     // then: the home URL has no doubled slash
     assert!(xml.contains("<loc>https://example.com/</loc>"));
     assert!(!xml.contains("com//"));
-}
-
-#[rstest]
-#[case::full("2024/03/15", Some("2024-03-15"))]
-#[case::zero_pads("2024/3/5", Some("2024-03-05"))]
-#[case::year_month("2024/03", Some("2024-03"))]
-#[case::year_only("2018", Some("2018"))]
-#[case::empty("", None)]
-#[case::unknown(RELEASED_UNKNOWN, None)]
-#[case::bad_month("2024/13/01", None)]
-#[case::not_a_date("soon", None)]
-#[case::too_many("2024/01/02/03", None)]
-fn released_to_lastmod_normalizes(#[case] input: &str, #[case] expected: Option<&str>) {
-    // given: a frontmatter released value
-    // when: converting it to a sitemap lastmod
-    let got = released_to_lastmod(input);
-
-    // then: valid dates are zero-padded to W3C form; anything else yields None
-    assert_eq!(got.as_deref(), expected);
 }
 
 #[test]

@@ -16,7 +16,7 @@
 - `/sitemap.xml` (`serve_sitemap` in `src/app.rs`, built by `build_sitemap` in `src/lib.rs`).
 - Generated from the in-memory games index (`state.games`) on each request, so it's always current after a restart — no separate build step.
 - One `<loc>` for the home page plus one per game. URLs are **absolute** and each path segment is **percent-encoded** (game titles contain spaces and non-ASCII). Sorted for deterministic output.
-- Each game carries a `<lastmod>` derived from its `released` date (`released_to_lastmod` in `src/lib.rs`), zero-padded to a valid W3C date; malformed/unknown dates are omitted rather than emitted invalid. **Caveat:** `<lastmod>` means "last modified", `released` means "published" — for this archival catalog (pages rarely change after publish) that's a deliberate approximation, since git per-file dates don't survive Render's mtime-resetting deploys.
+- **No `<lastmod>` — deliberate.** `<lastmod>` means "last modified", but the only date we have is `released` (published), which never changes when a page is later edited. So it would mislead crawlers — e.g. adding a tag to a 2017 work today would still advertise a 2017 date. Since search engines also largely ignore inconsistent `<lastmod>`, and a truly-accurate value (git per-file date) doesn't survive Render's mtime-resetting deploys, we omit it entirely and let crawlers schedule their own re-crawls.
 
 ## robots.txt
 - `/robots.txt` (`serve_robots`) allows all crawlers and points them at the sitemap.
