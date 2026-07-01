@@ -281,9 +281,8 @@ function renderTree(data, query, hideR18) {
         badges += '<span class="card-badge card-badge-left" style="background:' + aiInfo.colour + ';color:white">AI</span>';
       }
 
-      const a = document.createElement('a');
-      a.href = buildHref(linkPath);
-      a.className = 'file-card';
+      const card = document.createElement('div');
+      card.className = 'file-card';
 
       let thumbHtml;
       if (item.thumbnail && item.thumbnail_composite) {
@@ -297,14 +296,27 @@ function renderTree(data, query, hideR18) {
         thumbHtml = '<div class="card-thumb-placeholder">' + badges + '✨</div>';
       }
 
-      a.innerHTML = thumbHtml +
+      // - Creator byline links to each creator's page. The card itself is a
+      //   stretched link (.card-link below), so these must not nest inside it.
+      let creatorHtml = '';
+      if (creator) {
+        const links = creator.split(',').map(function(c) {
+          const nm = c.trim();
+          return '<a class="creator-link" href="/creator/' + encodeURIComponent(nm) + '">' + escapeHtml(nm) + '</a>';
+        }).join(', ');
+        creatorHtml = '<div class="card-creator">by ' + links + '</div>';
+      }
+
+      card.innerHTML =
+        '<a class="card-link" href="' + buildHref(linkPath) + '" aria-label="' + escapeHtml(displayName) + '"></a>' +
+        thumbHtml +
         '<div class="card-body">' +
           '<div class="card-title">' + escapeHtml(displayName) + '</div>' +
-          (creator ? '<div class="card-creator">by ' + escapeHtml(creator) + '</div>' : '') +
+          creatorHtml +
           (tagline ? '<div class="card-tagline">' + escapeHtml(tagline) + '</div>' : '') +
         '</div>';
 
-      filesDiv.appendChild(a);
+      filesDiv.appendChild(card);
     });
 
     section.appendChild(filesDiv);

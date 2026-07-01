@@ -217,6 +217,25 @@ fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) ->
     )
 }
 
+// - Resolve the display language: explicit ?lang wins, else Accept-Language, else English.
+fn detect_lang(params: &HashMap<String, String>, headers: &HeaderMap) -> &'static str {
+    match params.get("lang").map(|s| s.as_str()) {
+        Some("ja") => "ja",
+        Some("en") => "en",
+        _ => {
+            let accept = headers
+                .get("accept-language")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("en");
+            if accept.contains("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
+    }
+}
+
 // - Creator page: every work by a creator, merged across their aliases
 //   (same resolution as the "more from creator" strip), newest first.
 async fn serve_creator(
@@ -235,23 +254,7 @@ async fn serve_creator(
             .into_response();
     }
 
-    // Language detection mirrors render_markdown so the toggle behaves the same.
-    let lang_param = params.get("lang").map(|s| s.as_str());
-    let accept_lang = headers
-        .get("accept-language")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("en");
-    let detected_lang = match lang_param {
-        Some("ja") => "ja",
-        Some("en") => "en",
-        _ => {
-            if accept_lang.contains("ja") {
-                "ja"
-            } else {
-                "en"
-            }
-        }
-    };
+    let detected_lang = detect_lang(&params, &headers);
     let lang = get_lang(detected_lang);
 
     let mut games: Vec<&ParsedGame> = groups
@@ -393,21 +396,7 @@ async fn render_markdown(
     AxumPath((year, title)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
     let lang_param = params.get("lang").map(|s| s.as_str());
-    let accept_lang = headers
-        .get("accept-language")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("en");
-    let detected_lang = match lang_param {
-        Some("ja") => "ja",
-        Some("en") => "en",
-        _ => {
-            if accept_lang.contains("ja") {
-                "ja"
-            } else {
-                "en"
-            }
-        }
-    };
+    let detected_lang = detect_lang(&params, &headers);
     let lang = get_lang(detected_lang);
     let incoming_r18_zero = params.get("r18").map(|s| s.as_str()) == Some("0");
 
@@ -445,7 +434,7 @@ async fn render_markdown(
                 .iter()
                 .map(|name| {
                     format!(
-                        r#"<a href="/creator/{}">{}</a>"#,
+                        r#"<a href="/creator/{}" class="creator-link">{}</a>"#,
                         html_escape(&encode_path(name)),
                         html_escape(name)
                     )
@@ -607,9 +596,15 @@ async fn render_markdown(
                 .filter_map(|p| state.games.get(*p))
                 .map(|g| render_creator_card(g, &state, &fwd_suffix))
                 .collect();
+            // - Link the creator name in the heading to their creator page.
+            let creator_link = format!(
+                r#"<a href="/creator/{}" class="creator-link">{}</a>"#,
+                html_escape(&encode_path(name)),
+                html_escape(name)
+            );
             format!(
                 r#"<div class="more-creator"><h2>{}</h2><div class="more-creator-grid">{}</div></div>"#,
-                lang.more_from.replace("{creator}", &html_escape(name)),
+                lang.more_from.replace("{creator}", &creator_link),
                 cards
             )
         })
