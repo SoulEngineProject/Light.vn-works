@@ -4,7 +4,7 @@ released: 2025/06/30
 link_label: itch.io
 link_url: "https://wningningw.itch.io/lightvn-gui-template-001"
 tagline: "A pre-made GUI / UI pack"
-tags: [English]
+tags: [English, UI]
 thumbnail_index:
 ---
 
