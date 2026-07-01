@@ -74,5 +74,25 @@
   "dev_example": {
     "en": "Development Example",
     "ja": "開発例"
+  },
+  "creator_active_since": {
+    "en": "Active since {year}",
+    "ja": "{year}年から活動"
+  },
+  "creator_latest": {
+    "en": "Latest",
+    "ja": "最新作"
+  },
+  "creator_more_works": {
+    "en": "More works",
+    "ja": "他の作品"
+  },
+  "creator_view": {
+    "en": "View →",
+    "ja": "見る →"
+  },
+  "creator_all_works": {
+    "en": "← All works",
+    "ja": "← 作品一覧"
   }
 }

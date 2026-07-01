@@ -372,6 +372,7 @@ header::before {
 }
 
 .file-card {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 0.875rem;
@@ -449,6 +450,18 @@ header::before {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-bottom: 0.4rem;
+}
+
+/* The whole card is clickable via a stretched link; the byline links sit above it. */
+.card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.card-creator .creator-link {
+  position: relative;
+  z-index: 2;
 }
 
 .card-tagline {

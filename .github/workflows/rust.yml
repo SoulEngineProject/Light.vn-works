@@ -20,6 +20,9 @@ jobs:
     # - Cold cache (first run, or a Cargo.lock/toolchain change) still rebuilds fully.
     - name: Cache Rust build
       uses: Swatinem/rust-cache@v2
+    # Fails CI if any file isn't rustfmt-formatted. Run `cargo fmt` to fix.
+    - name: Format check
+      run: cargo fmt --check
     # All cargo steps below use --locked so CI fails (rather than silently
     # re-resolving) if Cargo.toml drifts from Cargo.lock — the safety net
     # that makes committing the lockfile load-bearing.

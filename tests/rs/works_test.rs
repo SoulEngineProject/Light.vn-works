@@ -3,7 +3,15 @@
 //! - Non-parameterized tests use plain `#[test]`.
 //! - Common test data is built via `#[fixture]`s (e.g. `cfg`); per-call data uses plain helper fns.
 
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
+use lightvn_works::{
+    aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
+    build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path,
+    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
+    get_lang, get_related_paths, html_escape, is_composite_dimensions, load_aliases,
+    load_tag_config, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
+    split_creators, strip_img_tags, ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    RELEASED_UNKNOWN,
+};
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
 use std::path::Path;
@@ -67,6 +75,275 @@ fn build_query_filters_empty_values(#[case] pairs: &[(&str, &str)], #[case] expe
 
     // then: empty-valued pair is dropped, remaining pair emitted
     assert_eq!(out, expected);
+}
+
+#[test]
+fn build_sitemap_lists_home_and_encoded_game_urls() {
+    // given: a base URL and canonical game paths, one with spaces
+    let base = "https://example.com";
+    let paths = vec![
+        "/works/2024/42 Hallows Street".to_string(),
+        "/works/2016/KONKON".to_string(),
+    ];
+
+    // when: building the sitemap
+    let xml = build_sitemap(base, &paths);
+
+    // then:
+    // - well-formed XML header + urlset wrapper
+    // - the home page and both games appear as absolute, percent-encoded URLs
+    // - paths are sorted, so 2016 precedes 2024
+    assert!(xml.starts_with("<?xml version=\"1.0\""));
+    assert!(xml.contains("<loc>https://example.com/</loc>"));
+    assert!(xml.contains("<loc>https://example.com/works/2016/KONKON</loc>"));
+    assert!(xml.contains("<loc>https://example.com/works/2024/42%20Hallows%20Street</loc>"));
+    assert!(xml.trim_end().ends_with("</urlset>"));
+    assert!(xml.find("2016").unwrap() < xml.find("2024").unwrap());
+}
+
+#[test]
+fn build_sitemap_trims_trailing_slash_from_base() {
+    // given: a base URL with a trailing slash and no games
+    // when: building the sitemap
+    let xml = build_sitemap("https://example.com/", &[]);
+
+    // then: the home URL has no doubled slash
+    assert!(xml.contains("<loc>https://example.com/</loc>"));
+    assert!(!xml.contains("com//"));
+}
+
+#[rstest]
+#[case::full("2024/03/15", Some("2024-03-15"))]
+#[case::zero_pads("2024/3/5", Some("2024-03-05"))]
+#[case::year_month("2024/03", Some("2024-03"))]
+#[case::year_only("2018", Some("2018"))]
+#[case::empty("", None)]
+#[case::unknown(RELEASED_UNKNOWN, None)]
+#[case::bad_month("2024/13/01", None)]
+#[case::not_a_date("soon", None)]
+fn released_to_iso_normalizes(#[case] input: &str, #[case] expected: Option<&str>) {
+    // given: a frontmatter date value
+    // when: converting it to an ISO date
+    let got = released_to_iso(input);
+
+    // then: valid dates zero-pad to W3C form; anything else is None
+    assert_eq!(got.as_deref(), expected);
+}
+
+#[test]
+fn feed_date_prefers_date_added_then_released() {
+    // given: metas with different date_added / released combinations
+    let both = GameMeta {
+        date_added: Some("2024/01/02".into()),
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let only_released = GameMeta {
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let bad_added = GameMeta {
+        date_added: Some("nope".into()),
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let neither = GameMeta::default();
+
+    // when: resolving the feed date
+    // then:
+    // - a valid date_added wins
+    assert_eq!(feed_date(&both).as_deref(), Some("2024-01-02"));
+    // - falls back to released when date_added is absent
+    assert_eq!(feed_date(&only_released).as_deref(), Some("2020-05-05"));
+    // - falls back to released when date_added is malformed
+    assert_eq!(feed_date(&bad_added).as_deref(), Some("2020-05-05"));
+    // - None when neither is a valid date
+    assert_eq!(feed_date(&neither), None);
+}
+
+#[test]
+fn aggregate_creator_links_keeps_only_recurring_links() {
+    // given: two games sharing a homepage + Twitter, each with its own one-off store link
+    let shared = |extra: Vec<ExtraLink>, label: &str, url: &str| GameMeta {
+        link_label: Some(label.to_string()),
+        link_url: Some(url.to_string()),
+        extra_links: Some(extra),
+        ..Default::default()
+    };
+    let hp = ExtraLink {
+        label: "HP".into(),
+        url: "https://creator.example".into(),
+    };
+    let tw = ExtraLink {
+        label: "Twitter".into(),
+        url: "https://twitter.example/me".into(),
+    };
+    let g1 = shared(
+        vec![hp.clone(), tw.clone()],
+        "DLsite",
+        "https://dlsite.example/a",
+    );
+    let g2 = shared(
+        vec![hp.clone(), tw.clone()],
+        "BOOTH",
+        "https://booth.example/b",
+    );
+
+    // when: aggregating the creator's links
+    let links = aggregate_creator_links(&[&g1, &g2]);
+    let urls: Vec<&str> = links.iter().map(|l| l.url.as_str()).collect();
+
+    // then:
+    // - the homepage + Twitter (present on both games) are kept
+    // - the one-off DLsite / BOOTH store pages (a single game each) are dropped
+    assert!(urls.contains(&"https://creator.example"));
+    assert!(urls.contains(&"https://twitter.example/me"));
+    assert!(!urls.contains(&"https://dlsite.example/a"));
+    assert!(!urls.contains(&"https://booth.example/b"));
+}
+
+#[rstest]
+#[case::explicit_ja(Some("ja"), Some("en-US,en"), "ja")]
+#[case::explicit_en(Some("en"), Some("ja,en"), "en")]
+#[case::accept_ja(None, Some("ja,en"), "ja")]
+#[case::accept_en(None, Some("en-US"), "en")]
+#[case::default_none(None, None, "en")]
+#[case::unknown_param_falls_through(Some("fr"), Some("ja"), "ja")]
+fn detect_lang_resolves(
+    #[case] param: Option<&str>,
+    #[case] accept: Option<&str>,
+    #[case] expected: &str,
+) {
+    // given: a ?lang param and an Accept-Language header
+    // when: resolving the display language
+    // then: explicit ja/en param wins, else Accept-Language, else English
+    assert_eq!(detect_lang(param, accept), expected);
+}
+
+#[rstest]
+#[case::dated(Some("2018/01/04"), "2018", "2018/01/04")]
+#[case::unknown(Some(RELEASED_UNKNOWN), "2014", "2014")]
+#[case::empty(Some(""), "2015", "2015")]
+#[case::missing(None, "2016", "2016")]
+fn creator_work_key_falls_back_to_folder_year(
+    #[case] released: Option<&str>,
+    #[case] year: &str,
+    #[case] expected: &str,
+) {
+    // given: a work's released value and its folder year
+    // when: computing the sort key
+    // then: a real date is used, otherwise the folder year
+    assert_eq!(creator_work_key(released, year), expected);
+}
+
+#[test]
+fn creator_work_key_orders_newest_first_with_undated_by_folder_year() {
+    // given: (folder_year, released, title) works including an undated 2014 one
+    let mut works = [
+        ("2014", Some(RELEASED_UNKNOWN), "undated 2014"),
+        ("2018", Some("2018/01/04"), "newest 2018"),
+        ("2015", Some("2015/03/07"), "mid 2015"),
+    ];
+
+    // when: sorting newest-first by the key (as serve_creator does)
+    works.sort_by(|a, b| {
+        let ka = creator_work_key(a.1, a.0);
+        let kb = creator_work_key(b.1, b.0);
+        kb.cmp(ka).then_with(|| a.2.cmp(b.2))
+    });
+
+    // then:
+    // - the 2018 work leads (it would be the hero)
+    // - the undated 2014 work sorts last by its folder year, not to the top
+    assert_eq!(works[0].2, "newest 2018");
+    assert_eq!(works.last().unwrap().2, "undated 2014");
+}
+
+#[test]
+fn aggregate_creator_links_leads_with_hp() {
+    // given: recurring links where Twitter is encountered before HP
+    let make = |extras: Vec<ExtraLink>| GameMeta {
+        extra_links: Some(extras),
+        ..Default::default()
+    };
+    let tw = ExtraLink {
+        label: "Twitter".into(),
+        url: "https://x.example".into(),
+    };
+    let hp = ExtraLink {
+        label: "HP".into(),
+        url: "https://home.example".into(),
+    };
+    let g1 = make(vec![tw.clone(), hp.clone()]);
+    let g2 = make(vec![tw.clone(), hp.clone()]);
+
+    // when: aggregating the creator's links
+    let links = aggregate_creator_links(&[&g1, &g2]);
+
+    // then: HP leads, even though Twitter was encountered first
+    assert_eq!(links[0].label, "HP");
+    assert_eq!(links[1].label, "Twitter");
+}
+
+#[test]
+fn aggregate_creator_links_dedupes_same_label_keeping_newest() {
+    // given: newest-first games where two different URLs both carry the label "Twitter",
+    //        each appearing on 2 games so both survive the recurring filter
+    let tw = |url: &str| ExtraLink {
+        label: "Twitter".into(),
+        url: url.into(),
+    };
+    let g_new = GameMeta {
+        extra_links: Some(vec![tw("https://x.com/new")]),
+        ..Default::default()
+    };
+    let g_mid = GameMeta {
+        extra_links: Some(vec![tw("https://x.com/new"), tw("https://twitter.com/old")]),
+        ..Default::default()
+    };
+    let g_old = GameMeta {
+        extra_links: Some(vec![tw("https://twitter.com/old")]),
+        ..Default::default()
+    };
+
+    // when: aggregating (metas are newest-first)
+    let links = aggregate_creator_links(&[&g_new, &g_mid, &g_old]);
+
+    // then: one "Twitter" link only — the newest work's
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].url, "https://x.com/new");
+}
+
+#[test]
+fn build_atom_feed_emits_entries_newest_first() {
+    // given: two feed entries, already newest-first, one without a summary
+    let entries = vec![
+        FeedEntry {
+            title: "New Game".into(),
+            path: "/works/2024/New Game".into(),
+            summary: "a tagline".into(),
+            updated: "2024-03-15".into(),
+        },
+        FeedEntry {
+            title: "Old Game".into(),
+            path: "/works/2016/Old".into(),
+            summary: String::new(),
+            updated: "2016-01-01".into(),
+        },
+    ];
+
+    // when: building the Atom feed
+    let xml = build_atom_feed("https://example.com", &entries);
+
+    // then:
+    // - Atom envelope, feed <updated> = newest entry, RFC-3339 timestamps
+    // - absolute, percent-encoded entry links; empty summary omitted; newest first
+    assert!(xml.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"));
+    assert!(xml.contains("<updated>2024-03-15T00:00:00Z</updated>"));
+    assert!(xml.contains("<link href=\"https://example.com/works/2024/New%20Game\"/>"));
+    assert!(xml.contains("<summary>a tagline</summary>"));
+    assert_eq!(xml.matches("<summary>").count(), 1);
+    assert!(xml.find("New Game").unwrap() < xml.find("Old Game").unwrap());
 }
 
 #[test]
@@ -167,7 +444,7 @@ fn thumb_size_parses_valid_variants(#[case] input: &str, #[case] expected: Optio
 
 #[rstest]
 #[case::empty("")]
-#[case::wrong_case("Ribbon")]   // case-sensitive — capital R rejected
+#[case::wrong_case("Ribbon")] // case-sensitive — capital R rejected
 #[case::unknown("thumb")]
 #[case::with_slash("ribbon/extra")]
 fn thumb_size_rejects_invalid_variants(#[case] input: &str) {
@@ -194,10 +471,10 @@ fn thumb_size_dimensions(#[case] size: ThumbSize, #[case] expected: (u32, u32)) 
 #[rstest]
 #[case::four_to_one(1600, 400, true)]
 #[case::just_over_two(2001, 1000, true)]
-#[case::exactly_two(2000, 1000, false)]   // strict > threshold
+#[case::exactly_two(2000, 1000, false)] // strict > threshold
 #[case::sixteen_nine(1280, 720, false)]
 #[case::square(1000, 1000, false)]
-#[case::zero_height(100, 0, false)]       // guard against div-by-zero
+#[case::zero_height(100, 0, false)] // guard against div-by-zero
 fn composite_detection_threshold(#[case] w: u32, #[case] h: u32, #[case] expected: bool) {
     // given: a (width, height) pair
     // when: checking composite classification
@@ -230,7 +507,7 @@ fn resize_thumbnail_shrinks_composite_for_ribbon() {
 
     // then: scaled to fit within (900, 400), preserving 5.4:1 aspect
     assert_eq!(resized.width(), 900);
-    assert_eq!(resized.height(), 166);  // 900 * 216/1170 ≈ 166
+    assert_eq!(resized.height(), 166); // 900 * 216/1170 ≈ 166
 }
 
 #[test]
@@ -377,7 +654,10 @@ Full synopsis here."#;
     // then: tagline and og_image data are available for OG tags
     assert_eq!(meta.tagline.as_deref(), Some("A short description."));
     assert!(!images.is_empty());
-    assert_eq!(images[0].url, "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(
+        images[0].url,
+        "https://github.com/user-attachments/assets/abc123"
+    );
     assert_eq!(images[0].width, Some(384));
     assert_eq!(images[0].height, Some(216));
     assert!(!images[0].is_composite());
@@ -463,10 +743,7 @@ fn validate_all_markdown_files() {
     // when: checking each file for valid frontmatter and images
     let mut errors = Vec::new();
 
-    for entry in WalkDir::new(works_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new(works_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
@@ -476,10 +753,14 @@ fn validate_all_markdown_files() {
         // - A colon or similar aborts `git checkout` on NTFS for every contributor
         //   on that platform (e.g. the `POV: Verity.md` breakage).
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if let Some(bad) = name.chars().find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+            if let Some(bad) = name
+                .chars()
+                .find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+            {
                 errors.push(format!(
                     "{}: filename contains '{}', which is illegal on Windows",
-                    path.display(), bad
+                    path.display(),
+                    bad
                 ));
             }
         }
@@ -506,23 +787,35 @@ fn validate_all_markdown_files() {
             errors.push(format!("{}: released date is empty", path.display()));
         }
         if meta.tags.is_none() {
-            errors.push(format!("{}: tags field missing from frontmatter", path.display()));
+            errors.push(format!(
+                "{}: tags field missing from frontmatter",
+                path.display()
+            ));
         }
 
         // released year should match the folder year
         let released = meta.released.as_deref().unwrap_or("");
-        let folder_year = path.parent()
+        let folder_year = path
+            .parent()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        if !released.is_empty() && released != RELEASED_UNKNOWN && !folder_year.is_empty() && !released.starts_with(folder_year) {
+        if !released.is_empty()
+            && released != RELEASED_UNKNOWN
+            && !folder_year.is_empty()
+            && !released.starts_with(folder_year)
+        {
             errors.push(format!(
                 "{}: released '{}' does not match folder year '{}'",
-                path.display(), released, folder_year
+                path.display(),
+                released,
+                folder_year
             ));
         }
 
-        if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
+        if !body.contains("<!-- TODO")
+            && !body.contains("src=\"https://github.com/user-attachments/")
+        {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
         }
 
@@ -531,7 +824,9 @@ fn validate_all_markdown_files() {
             if idx >= image_count {
                 errors.push(format!(
                     "{}: thumbnail_index {} out of range (only {} images)",
-                    path.display(), idx, image_count
+                    path.display(),
+                    idx,
+                    image_count
                 ));
             }
         }
@@ -542,8 +837,14 @@ fn validate_all_markdown_files() {
             .split("\n---")
             .next()
             .unwrap_or("");
-        if !frontmatter_raw.lines().any(|l| l.trim_start().starts_with("thumbnail_index:")) {
-            errors.push(format!("{}: thumbnail_index field missing from frontmatter", path.display()));
+        if !frontmatter_raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("thumbnail_index:"))
+        {
+            errors.push(format!(
+                "{}: thumbnail_index field missing from frontmatter",
+                path.display()
+            ));
         }
     }
 
@@ -598,9 +899,7 @@ fn creator_index_excludes_current_game() {
 #[test]
 fn creator_index_single_game_creator() {
     // given: creator with only 1 game
-    let games = games_map(vec![
-        make_game("2024", "Only Game", "Solo", "2024/01/01"),
-    ]);
+    let games = games_map(vec![make_game("2024", "Only Game", "Solo", "2024/01/01")]);
     let index = build_creator_paths(&games);
 
     // when: getting related paths
@@ -634,7 +933,13 @@ fn creator_index_multi_creator_game() {
     let index = build_creator_paths(&games);
 
     // when: getting related paths for the collab game
-    let related = get_related_paths(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
+    let related = get_related_paths(
+        &index,
+        "Alice, Bob",
+        "/works/2024/Collab",
+        4,
+        &HashMap::new(),
+    );
 
     // then: Bob's section shows Solo
     assert_eq!(related.len(), 1);
@@ -670,7 +975,7 @@ fn lang_json_parses_both_languages() {
 /// - Tests bind to this so they track config changes — if a tag is removed (e.g. "Terrace and Ray"), the relevant priority test should start failing.
 #[fixture]
 fn cfg() -> HashMap<String, TagInfo> {
-    load_tag_config(include_str!("../config/tags.yaml"))
+    load_tag_config(include_str!("../../config/tags.yaml"))
 }
 
 #[rstest]
@@ -825,7 +1130,7 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
         "ai".into(),
         "Terrace and Ray".into(),
         "Spooktober".into(),
-        "mystery".into(),       // unconfigured noise
+        "mystery".into(), // unconfigured noise
     ];
 
     // when: deriving the two badge slots the way the renderers do
@@ -841,7 +1146,10 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
 
     // total badges rendered = at most 1 (right) + at most 1 (left) = max 2
     let total_badges = right_slot.is_some() as usize + left_slot as usize;
-    assert_eq!(total_badges, 2, "exactly two badges rendered for this input");
+    assert_eq!(
+        total_badges, 2,
+        "exactly two badges rendered for this input"
+    );
     assert!(total_badges <= 2, "badge count is bounded at 2");
 }
 
@@ -863,17 +1171,19 @@ fn cards_emit_zero_badges_when_no_tag_qualifies(cfg: HashMap<String, TagInfo>) {
 #[case::english("English")]
 #[case::korean("한국어")]
 #[case::chinese("中文")]
-fn language_tag_propagates_yaml_colour_to_bar(
-    cfg: HashMap<String, TagInfo>,
-    #[case] tag: &str,
-) {
+fn language_tag_propagates_yaml_colour_to_bar(cfg: HashMap<String, TagInfo>, #[case] tag: &str) {
     // given: a registered language tag and a game using it
-    let info = cfg.get(&tag.to_lowercase()).expect("tag is configured in yaml");
+    let info = cfg
+        .get(&tag.to_lowercase())
+        .expect("tag is configured in yaml");
     let games = games_map(vec![make_game_with_tags("2024", "g", vec![tag])]);
 
     // when: building the tag-index row
     let bar = build_tag_index(&games, &cfg);
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case(tag)).expect("row present");
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case(tag))
+        .expect("row present");
 
     // then: bar entry carries whatever colour yaml/config defined — no hardcoded hex, so the test tracks yaml changes
     assert_eq!(row.colour.as_deref(), Some(info.colour.as_str()));
@@ -973,8 +1283,14 @@ fn alias_groups_resolve_bidirectionally() {
     assert_eq!(aliases.get("alice").unwrap().len(), 2);
     assert_eq!(aliases.get("アリス").unwrap().len(), 2);
     assert_eq!(aliases.get("a-chan").unwrap().len(), 2);
-    assert!(aliases.get("alice").unwrap().contains(&"アリス".to_string()));
-    assert!(aliases.get("alice").unwrap().contains(&"A-chan".to_string()));
+    assert!(aliases
+        .get("alice")
+        .unwrap()
+        .contains(&"アリス".to_string()));
+    assert!(aliases
+        .get("alice")
+        .unwrap()
+        .contains(&"A-chan".to_string()));
 }
 
 #[test]
@@ -1010,8 +1326,17 @@ fn alias_no_duplicate_games() {
     let related = get_related_paths(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
 
     // then: Solo appears only once (not duplicated across alias lookups)
-    let all_paths: Vec<&str> = related.iter().flat_map(|(_, paths)| paths.iter().copied()).collect();
-    assert_eq!(all_paths.iter().filter(|p| **p == "/works/2024/Solo").count(), 1);
+    let all_paths: Vec<&str> = related
+        .iter()
+        .flat_map(|(_, paths)| paths.iter().copied())
+        .collect();
+    assert_eq!(
+        all_paths
+            .iter()
+            .filter(|p| **p == "/works/2024/Solo")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -1019,7 +1344,11 @@ fn special_tags_get_colour() {
     // given: tag config with palette and groups
     let yaml = "colours:\n  content: \"#dc2626\"\n  contest: \"#d97706\"\ntags:\n  - colour: content\n    tags: [r18]\n  - colour: contest\n    tags: [Summer Jam]";
     let config = load_tag_config(yaml);
-    let tags = vec!["r18".to_string(), "Summer Jam".to_string(), "mystery".to_string()];
+    let tags = vec![
+        "r18".to_string(),
+        "Summer Jam".to_string(),
+        "mystery".to_string(),
+    ];
 
     // when: building tags line
     let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
@@ -1086,7 +1415,8 @@ fn tag_index_excludes_r18() {
 #[test]
 fn tag_index_counts_games_per_tag() {
     // given: 3 games — 2 carry "Spooktober", 1 has no tags
-    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
+    let cfg =
+        load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["Spooktober"]),
         make_game_with_tags("2024", "b", vec!["Spooktober", "ai"]),
@@ -1097,7 +1427,10 @@ fn tag_index_counts_games_per_tag() {
     let bar = build_tag_index(&games, &cfg);
 
     // then: Spooktober's count reflects only the games that carry it
-    let spook = bar.iter().find(|e| e.name == "Spooktober").expect("Spooktober present");
+    let spook = bar
+        .iter()
+        .find(|e| e.name == "Spooktober")
+        .expect("Spooktober present");
     assert_eq!(spook.count, 2);
 }
 
@@ -1115,7 +1448,10 @@ fn tag_index_dedupes_case_insensitively() {
     let bar = build_tag_index(&games, &cfg);
 
     // then: collapses to a single entry whose count covers all 3 games
-    let ai_rows: Vec<_> = bar.iter().filter(|e| e.name.eq_ignore_ascii_case("ai")).collect();
+    let ai_rows: Vec<_> = bar
+        .iter()
+        .filter(|e| e.name.eq_ignore_ascii_case("ai"))
+        .collect();
     assert_eq!(ai_rows.len(), 1);
     assert_eq!(ai_rows[0].count, 3);
 }
@@ -1124,31 +1460,43 @@ fn tag_index_dedupes_case_insensitively() {
 fn tag_index_dedupes_within_single_game() {
     // given: a single game listing the same tag twice with different casings
     let cfg = HashMap::new();
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["mystery", "MYSTERY"]),
-    ]);
+    let games = games_map(vec![make_game_with_tags(
+        "2024",
+        "a",
+        vec!["mystery", "MYSTERY"],
+    )]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
 
     // then: the duplicate within one game still counts as 1
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("mystery")).unwrap();
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case("mystery"))
+        .unwrap();
     assert_eq!(row.count, 1);
 }
 
 #[test]
 fn tag_index_yaml_casing_wins_over_md_casing() {
     // given: yaml declares "Terrace and Ray", md uses lowercase "terrace and ray"
-    let cfg = load_tag_config("colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]");
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["terrace and ray"]),
-    ]);
+    let cfg = load_tag_config(
+        "colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]",
+    );
+    let games = games_map(vec![make_game_with_tags(
+        "2024",
+        "a",
+        vec!["terrace and ray"],
+    )]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
 
     // then: the entry uses the yaml's canonical display casing
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("terrace and ray")).unwrap();
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case("terrace and ray"))
+        .unwrap();
     assert_eq!(row.name, "Terrace and Ray");
 }
 
@@ -1173,7 +1521,8 @@ fn tag_index_includes_unconfigured_md_tags() {
 #[test]
 fn tag_index_includes_configured_tags_with_zero_uses() {
     // given: yaml configures a tag that no game currently uses
-    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
+    let cfg =
+        load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
     let games: HashMap<String, ParsedGame> = HashMap::new();
 
     // when: building the tag index
@@ -1208,9 +1557,7 @@ fn tag_index_sorts_count_desc_then_name_asc() {
 fn tag_index_configured_carries_colour() {
     // given: a configured tag with a known colour, used by one game
     let cfg = load_tag_config("colours:\n  c: \"#abcdef\"\ntags:\n  - colour: c\n    tags: [Foo]");
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["Foo"]),
-    ]);
+    let games = games_map(vec![make_game_with_tags("2024", "a", vec!["Foo"])]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);

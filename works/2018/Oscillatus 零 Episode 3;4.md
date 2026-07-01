@@ -9,7 +9,7 @@ extra_links:
   - label: Twitter
     url: "https://twitter.com/cos6official"
 tagline: 新本格シネマADV《Oscillatus 零》の後編、EP3;4を収録しています。
-tags: []
+tags: [早稲田大学]
 thumbnail_index:
 ---
 

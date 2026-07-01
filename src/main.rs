@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use lightvn_works::app::build_app;
+use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {

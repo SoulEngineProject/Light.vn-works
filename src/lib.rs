@@ -1,8 +1,8 @@
 pub mod app;
 
-use pulldown_cmark::{html, Parser, Event};
-use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
+use pulldown_cmark::{html, Event, Parser};
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const RELEASED_UNKNOWN: &str = "unknown";
@@ -17,6 +17,11 @@ pub struct LangStrings {
     pub engine_url: String,
     pub tags_label: String,
     pub dev_example: String,
+    pub creator_active_since: String,
+    pub creator_latest: String,
+    pub creator_more_works: String,
+    pub creator_view: String,
+    pub creator_all_works: String,
 }
 
 struct LangPair {
@@ -48,6 +53,11 @@ fn load_lang() -> &'static LangPair {
                 engine_url: get("engine_url"),
                 tags_label: get("tags_label"),
                 dev_example: get("dev_example"),
+                creator_active_since: get("creator_active_since"),
+                creator_latest: get("creator_latest"),
+                creator_more_works: get("creator_more_works"),
+                creator_view: get("creator_view"),
+                creator_all_works: get("creator_all_works"),
             }
         }
 
@@ -67,12 +77,41 @@ pub fn get_lang(lang: &str) -> &'static LangStrings {
     }
 }
 
+/// - Resolve the display language: an explicit `lang` param wins ("ja"/"en"),
+///   else the Accept-Language header, else English.
+pub fn detect_lang(lang_param: Option<&str>, accept_language: Option<&str>) -> &'static str {
+    match lang_param {
+        Some("ja") => "ja",
+        Some("en") => "en",
+        _ => {
+            if accept_language.unwrap_or("en").contains("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
+    }
+}
+
+/// - Sort key for ordering a creator's works newest-first.
+/// - Uses the release date, falling back to the folder year when the date is
+///   missing, empty, or "unknown" — so an undated work sorts by its year rather
+///   than jumping to the top (e.g. as the hero).
+pub fn creator_work_key<'a>(released: Option<&'a str>, folder_year: &'a str) -> &'a str {
+    match released {
+        Some(r) if !r.is_empty() && r != RELEASED_UNKNOWN => r,
+        _ => folder_year,
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct GameMeta {
     #[serde(default)]
     pub creator: Option<String>,
     #[serde(default)]
     pub released: Option<String>,
+    #[serde(default)]
+    pub date_added: Option<String>,
     #[serde(default)]
     pub link_label: Option<String>,
     #[serde(default)]
@@ -199,7 +238,10 @@ pub fn extract_all_images(md: &str) -> Vec<ImageInfo> {
                     let url = html_str[abs_start..abs_start + end_quote].to_string();
                     // Find the tag boundaries to extract width/height
                     let tag_start = html_str[..search_from + src_start].rfind('<').unwrap_or(0);
-                    let tag_end = abs_start + end_quote + html_str[abs_start + end_quote..].find('>').unwrap_or(0) + 1;
+                    let tag_end = abs_start
+                        + end_quote
+                        + html_str[abs_start + end_quote..].find('>').unwrap_or(0)
+                        + 1;
                     let tag = &html_str[tag_start..tag_end];
                     images.push(ImageInfo {
                         url,
@@ -265,6 +307,135 @@ pub fn build_query(params: &[(&str, &str)]) -> String {
     }
 }
 
+/// - Build an XML sitemap listing the home page and every game URL.
+/// - `base_url` is scheme+host without a trailing slash (e.g. https://example.com).
+/// - `game_paths` are canonical paths ("/works/YYYY/title"); each segment is
+///   percent-encoded and paths are sorted for deterministic output.
+/// - No `<lastmod>`: our only date is the release date, which never updates when a
+///   page is edited, so it would misreport freshness (see docs/seo.md).
+pub fn build_sitemap(base_url: &str, game_paths: &[String]) -> String {
+    let base = base_url.trim_end_matches('/');
+    let mut sorted: Vec<&String> = game_paths.iter().collect();
+    sorted.sort();
+
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
+    out.push_str(&format!("  <url><loc>{}/</loc></url>\n", html_escape(base)));
+    for path in sorted {
+        let loc = format!("{}{}", base, encode_path(path));
+        out.push_str(&format!("  <url><loc>{}</loc></url>\n", html_escape(&loc)));
+    }
+    out.push_str("</urlset>\n");
+    out
+}
+
+/// - Convert a `YYYY/MM/DD` (or `YYYY/MM`, `YYYY`) date to ISO `YYYY-MM-DD`, zero-padded.
+/// - Returns None for empty, RELEASED_UNKNOWN, or malformed input.
+pub fn released_to_iso(date: &str) -> Option<String> {
+    let s = date.trim();
+    if s.is_empty() || s == RELEASED_UNKNOWN {
+        return None;
+    }
+    let mut parts = s.split('/');
+
+    let year = parts.next()?;
+    if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let mut out = year.to_string();
+
+    if let Some(month) = parts.next() {
+        let m: u32 = month.parse().ok()?;
+        if !(1..=12).contains(&m) {
+            return None;
+        }
+        out.push_str(&format!("-{:02}", m));
+
+        if let Some(day) = parts.next() {
+            let d: u32 = day.parse().ok()?;
+            if !(1..=31).contains(&d) {
+                return None;
+            }
+            out.push_str(&format!("-{:02}", d));
+        }
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(out)
+}
+
+/// - The date a work is ordered/timestamped by in the feed.
+/// - Prefers `date_added` (when to the site), falling back to `released`.
+/// - Returns ISO `YYYY-MM-DD`, or None when neither is a valid date.
+pub fn feed_date(meta: &GameMeta) -> Option<String> {
+    meta.date_added
+        .as_deref()
+        .and_then(released_to_iso)
+        .or_else(|| meta.released.as_deref().and_then(released_to_iso))
+}
+
+/// One entry in the Atom feed.
+pub struct FeedEntry {
+    pub title: String,
+    pub path: String,    // canonical path "/works/YYYY/title"
+    pub summary: String, // tagline (may be empty)
+    pub updated: String, // ISO date "YYYY-MM-DD"
+}
+
+/// - Build an Atom 1.0 feed from entries already sorted newest-first.
+/// - `base_url` is scheme+host without a trailing slash.
+/// - Links are absolute (base + percent-encoded path); dates become RFC-3339
+///   `{updated}T00:00:00Z`. Feed-level `<updated>` is the newest entry's date.
+pub fn build_atom_feed(base_url: &str, entries: &[FeedEntry]) -> String {
+    let base = base_url.trim_end_matches('/');
+    let feed_updated = entries
+        .first()
+        .map(|e| e.updated.as_str())
+        .unwrap_or("1970-01-01");
+
+    let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    out.push_str("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n");
+    out.push_str("  <title>Light.vn Works</title>\n");
+    out.push_str("  <author><name>Light.vn Works</name></author>\n");
+    out.push_str(&format!("  <link href=\"{}/\"/>\n", html_escape(base)));
+    out.push_str(&format!(
+        "  <link rel=\"self\" href=\"{}/feed.xml\"/>\n",
+        html_escape(base)
+    ));
+    out.push_str(&format!("  <id>{}/</id>\n", html_escape(base)));
+    out.push_str(&format!(
+        "  <updated>{}T00:00:00Z</updated>\n",
+        html_escape(feed_updated)
+    ));
+
+    for entry in entries {
+        let loc = format!("{}{}", base, encode_path(&entry.path));
+        out.push_str("  <entry>\n");
+        out.push_str(&format!(
+            "    <title>{}</title>\n",
+            html_escape(&entry.title)
+        ));
+        out.push_str(&format!("    <link href=\"{}\"/>\n", html_escape(&loc)));
+        out.push_str(&format!("    <id>{}</id>\n", html_escape(&loc)));
+        out.push_str(&format!(
+            "    <updated>{}T00:00:00Z</updated>\n",
+            html_escape(&entry.updated)
+        ));
+        if !entry.summary.is_empty() {
+            out.push_str(&format!(
+                "    <summary>{}</summary>\n",
+                html_escape(&entry.summary)
+            ));
+        }
+        out.push_str("  </entry>\n");
+    }
+    out.push_str("</feed>\n");
+    out
+}
+
 /// - Compute the breadcrumb-back suffix and the forward-link suffix for a game
 ///   page.
 /// - Both propagate `lang`.
@@ -291,14 +462,14 @@ pub fn game_page_suffixes(
 /// - Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
 pub struct ParsedGame {
-    pub year: String,                // directory name
-    pub title: String,               // file stem, no .md
-    pub path: String,                // "/works/YYYY/title", no .md
+    pub year: String,  // directory name
+    pub title: String, // file stem, no .md
+    pub path: String,  // "/works/YYYY/title", no .md
     pub meta: GameMeta,
-    pub body_html: String,           // pre-rendered markdown
+    pub body_html: String, // pre-rendered markdown
     pub images: Vec<ImageInfo>,
-    pub thumbnail: Option<String>,           // card-size URL: "/thumb/UUID/card" or passthrough
-    pub thumbnail_ribbon: Option<String>,    // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
+    pub thumbnail: Option<String>, // card-size URL: "/thumb/UUID/card" or passthrough
+    pub thumbnail_ribbon: Option<String>, // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
     pub thumbnail_composite: bool,
 }
 
@@ -353,9 +524,7 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 /// - Build creator → paths index.
 /// - Paths are sorted by release date descending (unknown last).
 /// - Creators with commas are split into separate entries.
-pub fn build_creator_paths(
-    games: &HashMap<String, ParsedGame>,
-) -> HashMap<String, Vec<String>> {
+pub fn build_creator_paths(games: &HashMap<String, ParsedGame>) -> HashMap<String, Vec<String>> {
     let mut index: HashMap<String, Vec<String>> = HashMap::new();
 
     for game in games.values() {
@@ -447,6 +616,68 @@ pub fn get_related_paths<'a>(
     result
 }
 
+/// - A creator's recurring links (homepage / socials / shop), gathered from the
+///   games they appear on.
+/// - Keeps any link (primary or extra) present on >= 2 of the games; one-off
+///   per-game store pages are dropped. Deduped by URL (first label wins),
+///   in first-encountered order.
+pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut seen_url: HashSet<String> = HashSet::new();
+    let mut order: Vec<ExtraLink> = Vec::new();
+
+    for meta in metas {
+        // Collect this game's links (primary + extras).
+        let mut links: Vec<ExtraLink> = Vec::new();
+        if let (Some(label), Some(url)) = (meta.link_label.as_deref(), meta.link_url.as_deref()) {
+            if !url.is_empty() {
+                links.push(ExtraLink {
+                    label: label.to_string(),
+                    url: url.to_string(),
+                });
+            }
+        }
+        if let Some(extras) = &meta.extra_links {
+            for l in extras {
+                if !l.url.is_empty() {
+                    links.push(l.clone());
+                }
+            }
+        }
+
+        // Count each URL at most once per game; record first-seen label/order.
+        let mut this_game: HashSet<String> = HashSet::new();
+        for l in links {
+            if this_game.insert(l.url.clone()) {
+                *counts.entry(l.url.clone()).or_insert(0) += 1;
+            }
+            if seen_url.insert(l.url.clone()) {
+                order.push(l);
+            }
+        }
+    }
+
+    // Keep recurring links (>= 2 games), then collapse same-label duplicates,
+    // keeping the first (newest work's) version since `order` is newest-first.
+    let mut seen_label: HashSet<String> = HashSet::new();
+    let mut links: Vec<ExtraLink> = order
+        .into_iter()
+        .filter(|l| counts.get(&l.url).copied().unwrap_or(0) >= 2)
+        .filter(|l| seen_label.insert(l.label.to_lowercase()))
+        .collect();
+
+    // - Always lead with the creator's homepage ("HP") when present.
+    // - Stable sort, so the remaining links keep their newest-first order.
+    links.sort_by_key(|l| {
+        if l.label.eq_ignore_ascii_case("hp") {
+            0
+        } else {
+            1
+        }
+    });
+    links
+}
+
 /// - Compute gallery row sizes — max 2 per row.
 /// - Bigger thumbnails for screenshot detail.
 /// - Orphan (single trailing image) is handled upstream by promoting it to the
@@ -504,18 +735,23 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
     });
     let mut map = HashMap::new();
     for group in config.tags {
-        let resolved_colour = config.colours.get(&group.colour)
+        let resolved_colour = config
+            .colours
+            .get(&group.colour)
             .cloned()
             .unwrap_or(group.colour.clone());
         let card_priority_badge = group.card_priority_badge.unwrap_or(true);
         for tag in &group.tags {
-            map.insert(tag.to_lowercase(), TagInfo {
-                colour: resolved_colour.clone(),
-                display_name: tag.clone(),
-                url: group.url.clone(),
-                label: group.label.clone(),
-                card_priority_badge,
-            });
+            map.insert(
+                tag.to_lowercase(),
+                TagInfo {
+                    colour: resolved_colour.clone(),
+                    display_name: tag.clone(),
+                    url: group.url.clone(),
+                    label: group.label.clone(),
+                    card_priority_badge,
+                },
+            );
         }
     }
     map
@@ -553,11 +789,14 @@ pub fn build_tag_index(
         if lower == "r18" {
             continue;
         }
-        rows.insert(lower.clone(), Row {
-            display: info.display_name.clone(),
-            colour: Some(info.colour.clone()),
-            count: 0,
-        });
+        rows.insert(
+            lower.clone(),
+            Row {
+                display: info.display_name.clone(),
+                colour: Some(info.colour.clone()),
+                count: 0,
+            },
+        );
     }
 
     for game in games.values() {
@@ -580,14 +819,18 @@ pub fn build_tag_index(
         }
     }
 
-    let mut out: Vec<TagBarEntry> = rows.into_values().map(|r| TagBarEntry {
-        name: r.display,
-        colour: r.colour,
-        count: r.count,
-    }).collect();
+    let mut out: Vec<TagBarEntry> = rows
+        .into_values()
+        .map(|r| TagBarEntry {
+            name: r.display,
+            colour: r.colour,
+            count: r.count,
+        })
+        .collect();
 
     out.sort_by(|a, b| {
-        b.count.cmp(&a.count)
+        b.count
+            .cmp(&a.count)
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
@@ -596,9 +839,9 @@ pub fn build_tag_index(
 
 /// Get inline style for a tag badge, or None if unknown.
 pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<String> {
-    tag_config.get(&tag.to_lowercase()).map(|info| {
-        format!("background:{};color:white", info.colour)
-    })
+    tag_config
+        .get(&tag.to_lowercase())
+        .map(|info| format!("background:{};color:white", info.colour))
 }
 
 /// Pick the tag for the top-right priority badge slot. Priority order:
@@ -617,11 +860,16 @@ pub fn pick_priority_tag<'a>(
     if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("r18")) {
         return Some(t.as_str());
     }
-    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("terrace and ray")) {
+    if let Some(t) = tags
+        .iter()
+        .find(|t| t.eq_ignore_ascii_case("terrace and ray"))
+    {
         return Some(t.as_str());
     }
     if let Some(t) = tags.iter().find(|t| {
-        config.get(&t.to_lowercase()).is_some_and(|info| info.card_priority_badge)
+        config
+            .get(&t.to_lowercase())
+            .is_some_and(|info| info.card_priority_badge)
     }) {
         return Some(t.as_str());
     }
@@ -659,47 +907,64 @@ pub fn build_tags_line(
     let tag_links: String = if tags.is_empty() {
         "<span class=\"tags-none\">\u{2014}</span>".to_string()
     } else {
-        tags.iter().map(|tag| {
-            let style_attr = match tag_style(tag, tag_config) {
-                Some(s) => format!(r#" style="{}""#, s),
-                None => String::new(),
-            };
-            let class = if tag_style(tag, tag_config).is_some() { "tag-link" } else { "tag-link tag-default" };
-            let href = if let Some(lang) = lang_param {
-                format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
-            } else {
-                format!("/?search={}", html_escape(tag))
-            };
-            format!(
-                r#"<a href="{}" class="{}"{}>{}</a>"#,
-                href,
-                class,
-                style_attr,
-                html_escape(&tag.to_uppercase())
-            )
-        }).collect()
+        tags.iter()
+            .map(|tag| {
+                let style_attr = match tag_style(tag, tag_config) {
+                    Some(s) => format!(r#" style="{}""#, s),
+                    None => String::new(),
+                };
+                let class = if tag_style(tag, tag_config).is_some() {
+                    "tag-link"
+                } else {
+                    "tag-link tag-default"
+                };
+                let href = if let Some(lang) = lang_param {
+                    format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
+                } else {
+                    format!("/?search={}", html_escape(tag))
+                };
+                format!(
+                    r#"<a href="{}" class="{}"{}>{}</a>"#,
+                    href,
+                    class,
+                    style_attr,
+                    html_escape(&tag.to_uppercase())
+                )
+            })
+            .collect()
     };
 
     // Build event links for tags that have url/label
-    let year = if released.len() >= 4 { &released[..4] } else { "" };
-    let event_links: String = tags.iter().filter_map(|tag| {
-        let info = tag_config.get(&tag.to_lowercase())?;
-        let url_template = info.url.as_deref()?;
-        let label_template = info.label.as_deref()?;
-        let url = url_template.replace("{year}", year).replace("{tag}", tag);
-        let label = label_template.replace("{year}", year).replace("{tag}", tag);
-        Some(format!(
-            r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
-            html_escape(&url),
-            html_escape(&label)
-        ))
-    }).collect();
+    let year = if released.len() >= 4 {
+        &released[..4]
+    } else {
+        ""
+    };
+    let event_links: String = tags
+        .iter()
+        .filter_map(|tag| {
+            let info = tag_config.get(&tag.to_lowercase())?;
+            let url_template = info.url.as_deref()?;
+            let label_template = info.label.as_deref()?;
+            let url = url_template.replace("{year}", year).replace("{tag}", tag);
+            let label = label_template.replace("{year}", year).replace("{tag}", tag);
+            Some(format!(
+                r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
+                html_escape(&url),
+                html_escape(&label)
+            ))
+        })
+        .collect();
 
     format!(
         r#"<div class="tags-line"><span class="tags-label">{}</span> {}{}</div>"#,
         html_escape(tags_label),
         tag_links,
-        if event_links.is_empty() { String::new() } else { format!(r#" {}"#, event_links) }
+        if event_links.is_empty() {
+            String::new()
+        } else {
+            format!(r#" {}"#, event_links)
+        }
     )
 }
 

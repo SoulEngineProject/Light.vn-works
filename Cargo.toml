@@ -23,3 +23,11 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 tokio = { version = "1", features = ["full"] }
 rstest = "0.26"             # parameterized tests + fixtures
+# Installs a git pre-commit hook (on first `cargo test`) that runs `cargo fmt --check`.
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt"] }
+
+# All Rust integration tests live under tests/rs/ as modules of one binary.
+# Cargo only auto-discovers tests/*.rs, so the subdir root is declared once here.
+[[test]]
+name = "rs"
+path = "tests/rs/main.rs"

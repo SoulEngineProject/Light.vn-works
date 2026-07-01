@@ -193,10 +193,10 @@ function renderTree(data, query, hideR18) {
     .filter(y => y.is_dir && y.name.match(/^\d{4}$/))
     .sort((a, b) => b.name.localeCompare(a.name));
 
-  let totalVisible = 0;
-
-  sortedYears.forEach((year, index) => {
-    let items = (year.children || []).filter(item => {
+  // Pass 1: filter + sort each year's items; keep only years with visible works.
+  const groups = [];
+  sortedYears.forEach(year => {
+    const items = (year.children || []).filter(item => {
       if (item.is_dir) {
         return false;
       }
@@ -221,15 +221,27 @@ function renderTree(data, query, hideR18) {
       return rb.localeCompare(ra);
     });
 
-    if (items.length === 0) {
-      return;
+    if (items.length > 0) {
+      groups.push({ year: year, items: items });
     }
+  });
+
+  // - Open the newest group, then cascade down until at least 6 works are shown.
+  // - A query opens every matching group.
+  const openFlags = computeOpenYearFlags(groups.map(g => g.items.length), !!query);
+
+  // Pass 2: render each visible group.
+  let totalVisible = 0;
+
+  groups.forEach((group, index) => {
+    const year = group.year;
+    const items = group.items;
     totalVisible += items.length;
 
     const section = document.createElement('div');
     section.className = 'year-section';
     section.id = year.name;
-    if (index === 0 || query) {
+    if (openFlags[index]) {
       section.classList.add('open');
     }
 
@@ -269,9 +281,8 @@ function renderTree(data, query, hideR18) {
         badges += '<span class="card-badge card-badge-left" style="background:' + aiInfo.colour + ';color:white">AI</span>';
       }
 
-      const a = document.createElement('a');
-      a.href = buildHref(linkPath);
-      a.className = 'file-card';
+      const card = document.createElement('div');
+      card.className = 'file-card';
 
       let thumbHtml;
       if (item.thumbnail && item.thumbnail_composite) {
@@ -285,14 +296,27 @@ function renderTree(data, query, hideR18) {
         thumbHtml = '<div class="card-thumb-placeholder">' + badges + '✨</div>';
       }
 
-      a.innerHTML = thumbHtml +
+      // - Creator byline links to each creator's page. The card itself is a
+      //   stretched link (.card-link below), so these must not nest inside it.
+      let creatorHtml = '';
+      if (creator) {
+        const links = creator.split(',').map(function(c) {
+          const nm = c.trim();
+          return '<a class="creator-link" href="/creator/' + encodeURIComponent(nm) + '">' + escapeHtml(nm) + '</a>';
+        }).join(', ');
+        creatorHtml = '<div class="card-creator">by ' + links + '</div>';
+      }
+
+      card.innerHTML =
+        '<a class="card-link" href="' + buildHref(linkPath) + '" aria-label="' + escapeHtml(displayName) + '"></a>' +
+        thumbHtml +
         '<div class="card-body">' +
           '<div class="card-title">' + escapeHtml(displayName) + '</div>' +
-          (creator ? '<div class="card-creator">by ' + escapeHtml(creator) + '</div>' : '') +
+          creatorHtml +
           (tagline ? '<div class="card-tagline">' + escapeHtml(tagline) + '</div>' : '') +
         '</div>';
 
-      filesDiv.appendChild(a);
+      filesDiv.appendChild(card);
     });
 
     section.appendChild(filesDiv);

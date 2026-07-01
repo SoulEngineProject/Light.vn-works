@@ -37,6 +37,18 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
   left: 0.5rem;
 }
 
+/* Creator links (game byline, "More from" heading, home-card byline) use the
+   accent colour with no underline, matching the tag/event links. */
+.creator-link {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.creator-link:hover {
+  color: var(--accent-hover);
+}
+
 .card-thumb-composite,
 .more-creator-thumb-composite {
   width: 100%;

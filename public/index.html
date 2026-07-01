@@ -15,8 +15,11 @@
   <link rel="stylesheet" href="/home.css">
   <meta property="og:title" content="Light.vn Works" />
   <meta property="og:description" content="{{game_count}}+ visual novels built with Light.vn." />
-  <meta property="og:image" content="/lvn_icon.webp" />
+  <meta property="og:image" content="{{og_image}}" />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="{{canonical_url}}" />
+  <link rel="canonical" href="{{canonical_url}}" />
+  <link rel="alternate" type="application/atom+xml" title="Light.vn Works" href="{{feed_url}}" />
 </head>
 <body>
   <button id="lang-toggle" class="lang-toggle">日本語</button>
@@ -47,6 +50,7 @@
        - No client-side API fetch, so the page renders instantly. -->
   <script>var LANG_DATA = {{lang_json}}; var TAG_INFO = {{tag_info_json}}; var TAG_BAR = {{tag_bar_json}}; var TREE_DATA = {{tree_json}};</script>
   <script src="/search.js" defer></script>
+  <script src="/view.js" defer></script>
   <script src="/home.js" defer></script>
   <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
