@@ -7,7 +7,7 @@ extra_links:
   - label: HP
     url: "http://soulengineproject.com/lightvn-x-01-hisia/"
 tagline: "Light.vn X 育成シミュレーション"
-tags: []
+tags: ["Light.vn X", UI]
 thumbnail_index: 1
 ---
 
