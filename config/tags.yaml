@@ -4,7 +4,7 @@ colours:
   contest: "#a16207"
   publisher: "#0891b2"
   language: "#15803d"
-  ui: "#ca8a04"
+  ui: "#9333ea"
 
 tags:
   # Content warnings
@@ -34,11 +34,11 @@ tags:
   # Publishers
   - colour: publisher
     tags: [Terrace and Ray]
-  - colour: publisher
-    tags: [Light.vn X]
 
   - colour: ui
     tags: [UI]
+  - colour: ui
+    tags: [Light.vn X]
 
   # - Languages: filter-only, not eligible for the right-slot priority badge
   # - They're metadata, not card identity

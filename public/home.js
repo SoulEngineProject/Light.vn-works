@@ -193,10 +193,10 @@ function renderTree(data, query, hideR18) {
     .filter(y => y.is_dir && y.name.match(/^\d{4}$/))
     .sort((a, b) => b.name.localeCompare(a.name));
 
-  let totalVisible = 0;
-
-  sortedYears.forEach((year, index) => {
-    let items = (year.children || []).filter(item => {
+  // Pass 1: filter + sort each year's items; keep only years with visible works.
+  const groups = [];
+  sortedYears.forEach(year => {
+    const items = (year.children || []).filter(item => {
       if (item.is_dir) {
         return false;
       }
@@ -221,15 +221,27 @@ function renderTree(data, query, hideR18) {
       return rb.localeCompare(ra);
     });
 
-    if (items.length === 0) {
-      return;
+    if (items.length > 0) {
+      groups.push({ year: year, items: items });
     }
+  });
+
+  // - Open the newest group, then cascade down until at least 6 works are shown.
+  // - A query opens every matching group.
+  const openFlags = computeOpenYearFlags(groups.map(g => g.items.length), !!query);
+
+  // Pass 2: render each visible group.
+  let totalVisible = 0;
+
+  groups.forEach((group, index) => {
+    const year = group.year;
+    const items = group.items;
     totalVisible += items.length;
 
     const section = document.createElement('div');
     section.className = 'year-section';
     section.id = year.name;
-    if (index === 0 || query) {
+    if (openFlags[index]) {
       section.classList.add('open');
     }
 
