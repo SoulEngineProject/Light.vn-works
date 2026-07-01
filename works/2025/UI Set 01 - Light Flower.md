@@ -4,7 +4,7 @@ released: 2025/11/08
 link_label: itch.io
 link_url: "https://minute.itch.io/lvnuiset-01"
 tagline: "A free UI set"
-tags: [English]
+tags: [English, UI]
 thumbnail_index:
 ---
 
