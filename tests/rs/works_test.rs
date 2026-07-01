@@ -4,11 +4,13 @@
 //! - Common test data is built via `#[fixture]`s (e.g. `cfg`); per-call data uses plain helper fns.
 
 use lightvn_works::{
-    build_creator_paths, build_query, build_sitemap, build_tag_index, build_tags_line, encode_path,
-    extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
+    aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
+    build_tag_index, build_tags_line, encode_path, extract_all_images,
+    extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes, get_lang,
     get_related_paths, html_escape, is_composite_dimensions, load_aliases, load_tag_config,
-    parse_frontmatter, pick_priority_tag, resize_thumbnail, split_creators, strip_img_tags,
-    GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail, split_creators,
+    strip_img_tags, ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -108,6 +110,157 @@ fn build_sitemap_trims_trailing_slash_from_base() {
     // then: the home URL has no doubled slash
     assert!(xml.contains("<loc>https://example.com/</loc>"));
     assert!(!xml.contains("com//"));
+}
+
+#[rstest]
+#[case::full("2024/03/15", Some("2024-03-15"))]
+#[case::zero_pads("2024/3/5", Some("2024-03-05"))]
+#[case::year_month("2024/03", Some("2024-03"))]
+#[case::year_only("2018", Some("2018"))]
+#[case::empty("", None)]
+#[case::unknown(RELEASED_UNKNOWN, None)]
+#[case::bad_month("2024/13/01", None)]
+#[case::not_a_date("soon", None)]
+fn released_to_iso_normalizes(#[case] input: &str, #[case] expected: Option<&str>) {
+    // given: a frontmatter date value
+    // when: converting it to an ISO date
+    let got = released_to_iso(input);
+
+    // then: valid dates zero-pad to W3C form; anything else is None
+    assert_eq!(got.as_deref(), expected);
+}
+
+#[test]
+fn feed_date_prefers_date_added_then_released() {
+    // given: metas with different date_added / released combinations
+    let both = GameMeta {
+        date_added: Some("2024/01/02".into()),
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let only_released = GameMeta {
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let bad_added = GameMeta {
+        date_added: Some("nope".into()),
+        released: Some("2020/05/05".into()),
+        ..Default::default()
+    };
+    let neither = GameMeta::default();
+
+    // when: resolving the feed date
+    // then:
+    // - a valid date_added wins
+    assert_eq!(feed_date(&both).as_deref(), Some("2024-01-02"));
+    // - falls back to released when date_added is absent
+    assert_eq!(feed_date(&only_released).as_deref(), Some("2020-05-05"));
+    // - falls back to released when date_added is malformed
+    assert_eq!(feed_date(&bad_added).as_deref(), Some("2020-05-05"));
+    // - None when neither is a valid date
+    assert_eq!(feed_date(&neither), None);
+}
+
+#[test]
+fn aggregate_creator_links_keeps_only_recurring_links() {
+    // given: two games sharing a homepage + Twitter, each with its own one-off store link
+    let shared = |extra: Vec<ExtraLink>, label: &str, url: &str| GameMeta {
+        link_label: Some(label.to_string()),
+        link_url: Some(url.to_string()),
+        extra_links: Some(extra),
+        ..Default::default()
+    };
+    let hp = ExtraLink {
+        label: "HP".into(),
+        url: "https://creator.example".into(),
+    };
+    let tw = ExtraLink {
+        label: "Twitter".into(),
+        url: "https://twitter.example/me".into(),
+    };
+    let g1 = shared(
+        vec![hp.clone(), tw.clone()],
+        "DLsite",
+        "https://dlsite.example/a",
+    );
+    let g2 = shared(
+        vec![hp.clone(), tw.clone()],
+        "BOOTH",
+        "https://booth.example/b",
+    );
+
+    // when: aggregating the creator's links
+    let links = aggregate_creator_links(&[&g1, &g2]);
+    let urls: Vec<&str> = links.iter().map(|l| l.url.as_str()).collect();
+
+    // then:
+    // - the homepage + Twitter (present on both games) are kept
+    // - the one-off DLsite / BOOTH store pages (a single game each) are dropped
+    assert!(urls.contains(&"https://creator.example"));
+    assert!(urls.contains(&"https://twitter.example/me"));
+    assert!(!urls.contains(&"https://dlsite.example/a"));
+    assert!(!urls.contains(&"https://booth.example/b"));
+}
+
+#[test]
+fn aggregate_creator_links_dedupes_same_label_keeping_newest() {
+    // given: newest-first games where two different URLs both carry the label "Twitter",
+    //        each appearing on 2 games so both survive the recurring filter
+    let tw = |url: &str| ExtraLink {
+        label: "Twitter".into(),
+        url: url.into(),
+    };
+    let g_new = GameMeta {
+        extra_links: Some(vec![tw("https://x.com/new")]),
+        ..Default::default()
+    };
+    let g_mid = GameMeta {
+        extra_links: Some(vec![tw("https://x.com/new"), tw("https://twitter.com/old")]),
+        ..Default::default()
+    };
+    let g_old = GameMeta {
+        extra_links: Some(vec![tw("https://twitter.com/old")]),
+        ..Default::default()
+    };
+
+    // when: aggregating (metas are newest-first)
+    let links = aggregate_creator_links(&[&g_new, &g_mid, &g_old]);
+
+    // then: one "Twitter" link only — the newest work's
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].url, "https://x.com/new");
+}
+
+#[test]
+fn build_atom_feed_emits_entries_newest_first() {
+    // given: two feed entries, already newest-first, one without a summary
+    let entries = vec![
+        FeedEntry {
+            title: "New Game".into(),
+            path: "/works/2024/New Game".into(),
+            summary: "a tagline".into(),
+            updated: "2024-03-15".into(),
+        },
+        FeedEntry {
+            title: "Old Game".into(),
+            path: "/works/2016/Old".into(),
+            summary: String::new(),
+            updated: "2016-01-01".into(),
+        },
+    ];
+
+    // when: building the Atom feed
+    let xml = build_atom_feed("https://example.com", &entries);
+
+    // then:
+    // - Atom envelope, feed <updated> = newest entry, RFC-3339 timestamps
+    // - absolute, percent-encoded entry links; empty summary omitted; newest first
+    assert!(xml.contains("<feed xmlns=\"http://www.w3.org/2005/Atom\">"));
+    assert!(xml.contains("<updated>2024-03-15T00:00:00Z</updated>"));
+    assert!(xml.contains("<link href=\"https://example.com/works/2024/New%20Game\"/>"));
+    assert!(xml.contains("<summary>a tagline</summary>"));
+    assert_eq!(xml.matches("<summary>").count(), 1);
+    assert!(xml.find("New Game").unwrap() < xml.find("Old Game").unwrap());
 }
 
 #[test]

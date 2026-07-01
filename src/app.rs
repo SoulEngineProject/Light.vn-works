@@ -23,11 +23,12 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    build_creator_paths, build_sitemap, build_tag_index, build_tags_line, encode_path,
-    extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
-    get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
-    parse_frontmatter, pick_priority_tag, resize_thumbnail, strip_img_tags, tag_style, GameMeta,
-    ParsedGame, TagInfo, ThumbSize,
+    aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
+    build_tags_line, encode_path, extract_all_images, extract_user_attachment_uuid, feed_date,
+    gallery_rows, game_page_suffixes, get_lang, get_related_paths, html_escape, load_aliases,
+    load_tag_config, markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso,
+    resize_thumbnail, split_creators, strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame,
+    TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -103,7 +104,20 @@ fn base_url(headers: &HeaderMap) -> String {
 // - XML sitemap of the home page + every game URL, built from the in-memory index.
 // - Crawlers need this because the home page builds its game links in JavaScript.
 async fn serve_sitemap(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    let paths: Vec<String> = state.games.keys().cloned().collect();
+    let mut paths: Vec<String> = state.games.keys().cloned().collect();
+
+    // - One /creator/<name> URL per credited name (case-insensitive dedup, display casing kept).
+    let mut seen = HashSet::new();
+    for game in state.games.values() {
+        if let Some(creator) = game.meta.creator.as_deref() {
+            for name in split_creators(creator) {
+                if seen.insert(name.to_lowercase()) {
+                    paths.push(format!("/creator/{}", name));
+                }
+            }
+        }
+    }
+
     let xml = build_sitemap(&base_url(&headers), &paths);
     ([(header::CONTENT_TYPE, "application/xml")], xml)
 }
@@ -115,6 +129,261 @@ async fn serve_robots(headers: HeaderMap) -> impl IntoResponse {
         base_url(&headers)
     );
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body)
+}
+
+// - Atom feed of the most recently added/released works (30 newest).
+async fn serve_feed(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let mut dated: Vec<(&ParsedGame, String)> = state
+        .games
+        .values()
+        .filter_map(|g| feed_date(&g.meta).map(|d| (g, d)))
+        .collect();
+    // Newest first; tie-break on title for deterministic output.
+    dated.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.title.cmp(&b.0.title)));
+
+    let entries: Vec<FeedEntry> = dated
+        .into_iter()
+        .take(30)
+        .map(|(g, d)| FeedEntry {
+            title: g.title.clone(),
+            path: g.path.clone(),
+            summary: g.meta.tagline.clone().unwrap_or_default(),
+            updated: d,
+        })
+        .collect();
+
+    let xml = build_atom_feed(&base_url(&headers), &entries);
+    (
+        [(header::CONTENT_TYPE, "application/atom+xml; charset=utf-8")],
+        xml,
+    )
+}
+
+// - Priority badge (top-right) + AI badge (top-left) for a game's tags.
+fn card_badges(tags: &[String], config: &HashMap<String, TagInfo>) -> String {
+    let mut badge = String::new();
+    if let Some(t) = pick_priority_tag(tags, config) {
+        let style_attr = match tag_style(t, config) {
+            Some(s) => format!(r#" style="{}""#, s),
+            None => String::new(),
+        };
+        badge.push_str(&format!(
+            r#"<span class="card-badge"{}>{}</span>"#,
+            style_attr,
+            html_escape(&t.to_uppercase())
+        ));
+    }
+    if tags.iter().any(|t| t.eq_ignore_ascii_case("ai")) {
+        if let Some(style) = tag_style("ai", config) {
+            badge.push_str(&format!(
+                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
+                style
+            ));
+        }
+    }
+    badge
+}
+
+// - One game card (thumb + priority/AI badges + title link) for the
+//   "more from creator" strip and creator pages.
+fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) -> String {
+    let thumb = game
+        .thumbnail
+        .as_deref()
+        .map(|url| {
+            if game.thumbnail_composite {
+                format!(
+                    r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
+                    html_escape(url)
+                )
+            } else {
+                // - alt="" intentional: .more-creator-title below is the link's accessible name.
+                // - Empty alt avoids flashing title during slow loads.
+                format!(r#"<img src="{}" alt="" loading="lazy" />"#, html_escape(url))
+            }
+        })
+        .unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
+
+    let tags = game.meta.tags.as_deref().unwrap_or(&[]);
+    let badge = card_badges(tags, &state.tag_config);
+
+    format!(
+        r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
+        html_escape(&encode_path(&game.path)),
+        fwd_suffix,
+        badge,
+        thumb,
+        html_escape(&game.title)
+    )
+}
+
+// - Creator page: every work by a creator, merged across their aliases
+//   (same resolution as the "more from creator" strip), newest first.
+async fn serve_creator(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+    AxumPath(name): AxumPath<String>,
+) -> Response {
+    // current_path "" excludes nothing, so this returns the full alias-merged set.
+    let groups = get_related_paths(&state.creator_paths, &name, "", usize::MAX, &state.aliases);
+    if groups.is_empty() {
+        return (
+            StatusCode::NOT_FOUND,
+            Html(include_str!("../public/404.html").to_string()),
+        )
+            .into_response();
+    }
+
+    // Language detection mirrors render_markdown so the toggle behaves the same.
+    let lang_param = params.get("lang").map(|s| s.as_str());
+    let accept_lang = headers
+        .get("accept-language")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("en");
+    let detected_lang = match lang_param {
+        Some("ja") => "ja",
+        Some("en") => "en",
+        _ => {
+            if accept_lang.contains("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
+    };
+    let lang = get_lang(detected_lang);
+
+    let mut games: Vec<&ParsedGame> = groups
+        .iter()
+        .flat_map(|(_, paths)| paths.iter().filter_map(|p| state.games.get(*p)))
+        .collect();
+    games.sort_by(|a, b| {
+        let ra = a.meta.released.as_deref().unwrap_or("");
+        let rb = b.meta.released.as_deref().unwrap_or("");
+        rb.cmp(ra).then_with(|| a.title.cmp(&b.title))
+    });
+
+    // Display name: recover original casing from a matching creator credit.
+    let key = name.to_lowercase();
+    let display = games
+        .iter()
+        .flat_map(|g| split_creators(g.meta.creator.as_deref().unwrap_or("")))
+        .find(|c| c.to_lowercase() == key)
+        .unwrap_or_else(|| name.clone());
+
+    // - Hero: the newest work, shown large (full screenshot + tagline + tags).
+    let hero = games
+        .first()
+        .map(|g| {
+            let img = g
+                .images
+                .first()
+                .map(|i| i.url.as_str())
+                .or(g.thumbnail.as_deref())
+                .map(|url| format!(r#"<img src="{}" alt="" loading="eager" />"#, html_escape(url)))
+                .unwrap_or_else(|| {
+                    r#"<div class="creator-hero-placeholder">&#10024;</div>"#.to_string()
+                });
+            let year = released_to_iso(g.meta.released.as_deref().unwrap_or(""))
+                .map(|iso| iso[..4].to_string())
+                .unwrap_or_default();
+            let tags = g.meta.tags.as_deref().unwrap_or(&[]);
+            let tagline = g.meta.tagline.as_deref().unwrap_or("");
+            let tagline_html = if tagline.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    r#"<p class="creator-hero-tagline">{}</p>"#,
+                    html_escape(tagline)
+                )
+            };
+            format!(
+                r#"<a href="{}" class="creator-hero"><div class="creator-hero-img">{}{}</div><div class="creator-hero-info"><span class="creator-hero-label">{}</span><h2>{}</h2><div class="creator-hero-meta"><span>{}</span></div>{}<span class="creator-hero-view">{}</span></div></a>"#,
+                html_escape(&encode_path(&g.path)),
+                card_badges(tags, &state.tag_config),
+                img,
+                html_escape(&lang.creator_latest),
+                html_escape(&g.title),
+                html_escape(&year),
+                tagline_html,
+                html_escape(&lang.creator_view),
+            )
+        })
+        .unwrap_or_default();
+
+    // - More works: the rest of the catalogue, shown only when there's more than the hero.
+    let more_works = if games.len() > 1 {
+        let cards: String = games
+            .iter()
+            .skip(1)
+            .map(|g| render_creator_card(g, &state, ""))
+            .collect();
+        format!(
+            r#"<h2 class="more-works-heading">{}</h2><div class="more-creator-grid">{}</div>"#,
+            html_escape(&lang.creator_more_works),
+            cards
+        )
+    } else {
+        String::new()
+    };
+
+    // - Creator hub links: the socials/homepage/shop they carry across games.
+    let metas: Vec<&GameMeta> = games.iter().map(|g| &g.meta).collect();
+    let links_html: String = aggregate_creator_links(&metas)
+        .iter()
+        .map(|l| {
+            format!(
+                r#"<a href="{}" class="extra-link" target="_blank" rel="noopener">{} ↗</a>"#,
+                html_escape(&l.url),
+                html_escape(&l.label)
+            )
+        })
+        .collect();
+
+    // - "Active since" = the creator's earliest release (ISO sorts chronologically).
+    let active_since = games
+        .iter()
+        .filter_map(|g| released_to_iso(g.meta.released.as_deref().unwrap_or("")))
+        .min()
+        .map(|iso| {
+            format!(
+                " · {}",
+                lang.creator_active_since.replace("{year}", &iso[..4])
+            )
+        })
+        .unwrap_or_default();
+
+    let n = games.len();
+    let count_label = if detected_lang == "ja" {
+        format!("{}作品", n)
+    } else {
+        format!("{} work{}", n, if n == 1 { "" } else { "s" })
+    };
+
+    let base = base_url(&headers);
+    let canonical = format!("{}/creator/{}", base, encode_path(&display));
+    let og_image = format!("{}/lvn_icon.webp", base);
+    let back_suffix = if detected_lang == "ja" {
+        "?lang=ja"
+    } else {
+        ""
+    };
+
+    let page = include_str!("../public/creator.html")
+        .replace("{{critical_css}}", CRITICAL_CSS)
+        .replace("{{lang_detected_lang}}", detected_lang)
+        .replace("{{creator_name}}", &html_escape(&display))
+        .replace("{{count_label}}", &html_escape(&count_label))
+        .replace("{{active_since}}", &html_escape(&active_since))
+        .replace("{{creator_links}}", &links_html)
+        .replace("{{hero}}", &hero)
+        .replace("{{more_works}}", &more_works)
+        .replace("{{all_works}}", &html_escape(&lang.creator_all_works))
+        .replace("{{back_suffix}}", back_suffix)
+        .replace("{{canonical_url}}", &html_escape(&canonical))
+        .replace("{{og_image}}", &html_escape(&og_image));
+    Html(page).into_response()
 }
 
 async fn render_markdown(
@@ -170,7 +439,20 @@ async fn render_markdown(
         .creator
         .as_deref()
         .filter(|c| !c.is_empty())
-        .map(|c| format!(r#"<span class="meta-item">by {}</span>"#, html_escape(c)))
+        .map(|c| {
+            // - Link each credited name to its creator page.
+            let links: Vec<String> = split_creators(c)
+                .iter()
+                .map(|name| {
+                    format!(
+                        r#"<a href="/creator/{}">{}</a>"#,
+                        html_escape(&encode_path(name)),
+                        html_escape(name)
+                    )
+                })
+                .collect();
+            format!(r#"<span class="meta-item">by {}</span>"#, links.join(", "))
+        })
         .unwrap_or_default();
 
     let released_html = meta
@@ -323,54 +605,7 @@ async fn render_markdown(
             let cards: String = paths
                 .iter()
                 .filter_map(|p| state.games.get(*p))
-                .map(|g| {
-                    let thumb = g.thumbnail.as_deref().map(|url| {
-                        if g.thumbnail_composite {
-                            format!(
-                                r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
-                                html_escape(url)
-                            )
-                        } else {
-                            // - alt="" intentional: .more-creator-title below is the link's accessible name.
-                            // - Empty alt avoids flashing title during slow loads.
-                            format!(
-                                r#"<img src="{}" alt="" loading="lazy" />"#,
-                                html_escape(url)
-                            )
-                        }
-                    }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
-                    let tags = g.meta.tags.as_deref().unwrap_or(&[]);
-                    // - Two-slot layout: priority badge (top-right) + AI (top-left).
-                    // - See pick_priority_tag() docs for priority order.
-                    let mut badge = String::new();
-                    if let Some(t) = pick_priority_tag(tags, &state.tag_config) {
-                        let style_attr = match tag_style(t, &state.tag_config) {
-                            Some(s) => format!(r#" style="{}""#, s),
-                            None => String::new(),
-                        };
-                        badge.push_str(&format!(
-                            r#"<span class="card-badge"{}>{}</span>"#,
-                            style_attr,
-                            html_escape(&t.to_uppercase())
-                        ));
-                    }
-                    if tags.iter().any(|t| t.eq_ignore_ascii_case("ai")) {
-                        if let Some(style) = tag_style("ai", &state.tag_config) {
-                            badge.push_str(&format!(
-                                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
-                                style
-                            ));
-                        }
-                    }
-                    format!(
-                        r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
-                        html_escape(&encode_path(&g.path)),
-                        fwd_suffix,
-                        badge,
-                        thumb,
-                        html_escape(&g.title)
-                    )
-                })
+                .map(|g| render_creator_card(g, &state, &fwd_suffix))
                 .collect();
             format!(
                 r#"<div class="more-creator"><h2>{}</h2><div class="more-creator-grid">{}</div></div>"#,
@@ -832,6 +1067,8 @@ pub fn build_app() -> Router {
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
         .route("/sitemap.xml", get(serve_sitemap))
         .route("/robots.txt", get(serve_robots))
+        .route("/feed.xml", get(serve_feed))
+        .route("/creator/{name}", get(serve_creator))
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
         .layer(cache_control)
@@ -846,11 +1083,13 @@ async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<S
     let base = base_url(&headers);
     let canonical_url = format!("{}/", base);
     let og_image = format!("{}/lvn_icon.webp", base);
+    let feed_url = format!("{}/feed.xml", base);
     let page = include_str!("../public/index.html")
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{game_count}}", &state.games.len().to_string())
         .replace("{{canonical_url}}", &html_escape(&canonical_url))
         .replace("{{og_image}}", &html_escape(&og_image))
+        .replace("{{feed_url}}", &html_escape(&feed_url))
         .replace("{{lang_json}}", include_str!("../config/lang.json"))
         .replace("{{tag_info_json}}", &state.tag_info_json)
         .replace("{{tag_bar_json}}", &state.tag_bar_json)

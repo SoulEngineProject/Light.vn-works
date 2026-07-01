@@ -2,7 +2,7 @@ pub mod app;
 
 use pulldown_cmark::{html, Event, Parser};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const RELEASED_UNKNOWN: &str = "unknown";
@@ -17,6 +17,11 @@ pub struct LangStrings {
     pub engine_url: String,
     pub tags_label: String,
     pub dev_example: String,
+    pub creator_active_since: String,
+    pub creator_latest: String,
+    pub creator_more_works: String,
+    pub creator_view: String,
+    pub creator_all_works: String,
 }
 
 struct LangPair {
@@ -48,6 +53,11 @@ fn load_lang() -> &'static LangPair {
                 engine_url: get("engine_url"),
                 tags_label: get("tags_label"),
                 dev_example: get("dev_example"),
+                creator_active_since: get("creator_active_since"),
+                creator_latest: get("creator_latest"),
+                creator_more_works: get("creator_more_works"),
+                creator_view: get("creator_view"),
+                creator_all_works: get("creator_all_works"),
             }
         }
 
@@ -73,6 +83,8 @@ pub struct GameMeta {
     pub creator: Option<String>,
     #[serde(default)]
     pub released: Option<String>,
+    #[serde(default)]
+    pub date_added: Option<String>,
     #[serde(default)]
     pub link_label: Option<String>,
     #[serde(default)]
@@ -292,6 +304,111 @@ pub fn build_sitemap(base_url: &str, game_paths: &[String]) -> String {
     out
 }
 
+/// - Convert a `YYYY/MM/DD` (or `YYYY/MM`, `YYYY`) date to ISO `YYYY-MM-DD`, zero-padded.
+/// - Returns None for empty, RELEASED_UNKNOWN, or malformed input.
+pub fn released_to_iso(date: &str) -> Option<String> {
+    let s = date.trim();
+    if s.is_empty() || s == RELEASED_UNKNOWN {
+        return None;
+    }
+    let mut parts = s.split('/');
+
+    let year = parts.next()?;
+    if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let mut out = year.to_string();
+
+    if let Some(month) = parts.next() {
+        let m: u32 = month.parse().ok()?;
+        if !(1..=12).contains(&m) {
+            return None;
+        }
+        out.push_str(&format!("-{:02}", m));
+
+        if let Some(day) = parts.next() {
+            let d: u32 = day.parse().ok()?;
+            if !(1..=31).contains(&d) {
+                return None;
+            }
+            out.push_str(&format!("-{:02}", d));
+        }
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(out)
+}
+
+/// - The date a work is ordered/timestamped by in the feed.
+/// - Prefers `date_added` (when to the site), falling back to `released`.
+/// - Returns ISO `YYYY-MM-DD`, or None when neither is a valid date.
+pub fn feed_date(meta: &GameMeta) -> Option<String> {
+    meta.date_added
+        .as_deref()
+        .and_then(released_to_iso)
+        .or_else(|| meta.released.as_deref().and_then(released_to_iso))
+}
+
+/// One entry in the Atom feed.
+pub struct FeedEntry {
+    pub title: String,
+    pub path: String,    // canonical path "/works/YYYY/title"
+    pub summary: String, // tagline (may be empty)
+    pub updated: String, // ISO date "YYYY-MM-DD"
+}
+
+/// - Build an Atom 1.0 feed from entries already sorted newest-first.
+/// - `base_url` is scheme+host without a trailing slash.
+/// - Links are absolute (base + percent-encoded path); dates become RFC-3339
+///   `{updated}T00:00:00Z`. Feed-level `<updated>` is the newest entry's date.
+pub fn build_atom_feed(base_url: &str, entries: &[FeedEntry]) -> String {
+    let base = base_url.trim_end_matches('/');
+    let feed_updated = entries
+        .first()
+        .map(|e| e.updated.as_str())
+        .unwrap_or("1970-01-01");
+
+    let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    out.push_str("<feed xmlns=\"http://www.w3.org/2005/Atom\">\n");
+    out.push_str("  <title>Light.vn Works</title>\n");
+    out.push_str("  <author><name>Light.vn Works</name></author>\n");
+    out.push_str(&format!("  <link href=\"{}/\"/>\n", html_escape(base)));
+    out.push_str(&format!(
+        "  <link rel=\"self\" href=\"{}/feed.xml\"/>\n",
+        html_escape(base)
+    ));
+    out.push_str(&format!("  <id>{}/</id>\n", html_escape(base)));
+    out.push_str(&format!(
+        "  <updated>{}T00:00:00Z</updated>\n",
+        html_escape(feed_updated)
+    ));
+
+    for entry in entries {
+        let loc = format!("{}{}", base, encode_path(&entry.path));
+        out.push_str("  <entry>\n");
+        out.push_str(&format!(
+            "    <title>{}</title>\n",
+            html_escape(&entry.title)
+        ));
+        out.push_str(&format!("    <link href=\"{}\"/>\n", html_escape(&loc)));
+        out.push_str(&format!("    <id>{}</id>\n", html_escape(&loc)));
+        out.push_str(&format!(
+            "    <updated>{}T00:00:00Z</updated>\n",
+            html_escape(&entry.updated)
+        ));
+        if !entry.summary.is_empty() {
+            out.push_str(&format!(
+                "    <summary>{}</summary>\n",
+                html_escape(&entry.summary)
+            ));
+        }
+        out.push_str("  </entry>\n");
+    }
+    out.push_str("</feed>\n");
+    out
+}
+
 /// - Compute the breadcrumb-back suffix and the forward-link suffix for a game
 ///   page.
 /// - Both propagate `lang`.
@@ -470,6 +587,57 @@ pub fn get_related_paths<'a>(
     }
 
     result
+}
+
+/// - A creator's recurring links (homepage / socials / shop), gathered from the
+///   games they appear on.
+/// - Keeps any link (primary or extra) present on >= 2 of the games; one-off
+///   per-game store pages are dropped. Deduped by URL (first label wins),
+///   in first-encountered order.
+pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut seen_url: HashSet<String> = HashSet::new();
+    let mut order: Vec<ExtraLink> = Vec::new();
+
+    for meta in metas {
+        // Collect this game's links (primary + extras).
+        let mut links: Vec<ExtraLink> = Vec::new();
+        if let (Some(label), Some(url)) = (meta.link_label.as_deref(), meta.link_url.as_deref()) {
+            if !url.is_empty() {
+                links.push(ExtraLink {
+                    label: label.to_string(),
+                    url: url.to_string(),
+                });
+            }
+        }
+        if let Some(extras) = &meta.extra_links {
+            for l in extras {
+                if !l.url.is_empty() {
+                    links.push(l.clone());
+                }
+            }
+        }
+
+        // Count each URL at most once per game; record first-seen label/order.
+        let mut this_game: HashSet<String> = HashSet::new();
+        for l in links {
+            if this_game.insert(l.url.clone()) {
+                *counts.entry(l.url.clone()).or_insert(0) += 1;
+            }
+            if seen_url.insert(l.url.clone()) {
+                order.push(l);
+            }
+        }
+    }
+
+    // Keep recurring links (>= 2 games), then collapse same-label duplicates,
+    // keeping the first (newest work's) version since `order` is newest-first.
+    let mut seen_label: HashSet<String> = HashSet::new();
+    order
+        .into_iter()
+        .filter(|l| counts.get(&l.url).copied().unwrap_or(0) >= 2)
+        .filter(|l| seen_label.insert(l.label.to_lowercase()))
+        .collect()
 }
 
 /// - Compute gallery row sizes — max 2 per row.

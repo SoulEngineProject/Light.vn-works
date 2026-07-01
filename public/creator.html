@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{{creator_name}} — Light.vn Works</title>
+
+  {{critical_css}}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="/lvn_icon.webp">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/home.css">
+  <link rel="stylesheet" href="/game.css">
+  <link rel="stylesheet" href="/creator.css">
+  <meta name="description" content="{{count_label}} by {{creator_name}}." />
+  <meta property="og:title" content="{{creator_name}} — Light.vn Works" />
+  <meta property="og:description" content="{{count_label}} by {{creator_name}}." />
+  <meta property="og:image" content="{{og_image}}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="{{canonical_url}}" />
+  <link rel="canonical" href="{{canonical_url}}" />
+</head>
+<body>
+  <button class="lang-toggle" id="lang-toggle"></button>
+  <script>
+  (function() {
+      var p = new URLSearchParams(location.search).get('lang');
+      var lang = p === 'ja' || p === 'en' ? p : '{{lang_detected_lang}}';
+      var btn = document.getElementById('lang-toggle');
+      btn.textContent = lang === 'ja' ? 'English' : '日本語';
+      btn.addEventListener('click', function() {
+          var url = new URL(location.href);
+          url.searchParams.set('lang', lang === 'ja' ? 'en' : 'ja');
+          location.href = url.toString();
+      });
+  })();
+  </script>
+
+  <div class="container">
+    <header>
+      <h1>{{creator_name}}</h1>
+      <p class="subtitle">{{count_label}}{{active_since}}</p>
+      <div class="meta-row">{{creator_links}}</div>
+    </header>
+
+    {{hero}}
+    {{more_works}}
+
+    <p class="contribute" style="margin-top: 2.5rem;"><a href="/{{back_suffix}}">{{all_works}}</a></p>
+  </div>
+  <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

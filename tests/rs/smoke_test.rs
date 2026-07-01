@@ -251,6 +251,157 @@ async fn responses_carry_security_headers() {
 }
 
 #[tokio::test]
+async fn feed_returns_atom() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting the feed
+    let response = app
+        .oneshot(
+            Request::get("/feed.xml")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 200 with an Atom content type and at least one entry
+    assert_eq!(response.status(), StatusCode::OK);
+    let ct = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(ct.contains("atom+xml"), "content-type was {}", ct);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("<feed"));
+    assert!(text.contains("<entry>"));
+}
+
+#[tokio::test]
+async fn home_advertises_feed() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting the home page
+    let response = app
+        .oneshot(Request::get("/").body(axum::body::Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    // then: the head links to the Atom feed
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains("application/atom+xml"));
+    assert!(html.contains("/feed.xml"));
+}
+
+#[tokio::test]
+async fn creator_page_lists_works() {
+    // given: the app and a known creator (Regen Radikaler → the Oscillatus works)
+    let app = build_app();
+
+    // when: requesting their creator page
+    let response = app
+        .oneshot(
+            Request::get("/creator/Regen%20Radikaler")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 200 with the creator name and their works as cards
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains("Regen Radikaler"));
+    assert!(html.contains("Oscillatus"));
+    assert!(html.contains("more-creator-card"));
+    // hub links (their HP/Twitter recur across games) + "active since" the earliest release
+    assert!(html.contains("extra-link"));
+    assert!(html.contains("Active since"));
+    // latest-work hero + language toggle
+    assert!(html.contains("creator-hero"));
+    assert!(html.contains("Latest"));
+    assert!(html.contains("lang-toggle"));
+}
+
+#[tokio::test]
+async fn creator_page_localizes_to_japanese() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting a creator page with ?lang=ja
+    let response = app
+        .oneshot(
+            Request::get("/creator/Regen%20Radikaler?lang=ja")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 200 and the chrome is Japanese (最新作 = Latest, 作品 = works)
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains("最新作"));
+    assert!(html.contains("作品"));
+}
+
+#[tokio::test]
+async fn creator_page_unknown_returns_404() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting a creator that doesn't exist
+    let response = app
+        .oneshot(
+            Request::get("/creator/nobody-here-at-all")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 404
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn sitemap_includes_creator_urls() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting the sitemap
+    let response = app
+        .oneshot(
+            Request::get("/sitemap.xml")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: it lists creator pages too
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("/creator/"));
+}
+
+#[tokio::test]
 async fn robots_points_to_sitemap() {
     // given: the app
     let app = build_app();
