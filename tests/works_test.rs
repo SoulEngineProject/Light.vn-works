@@ -472,6 +472,18 @@ fn validate_all_markdown_files() {
             continue;
         }
 
+        // - Reject filename characters that are illegal on Windows.
+        // - A colon or similar aborts `git checkout` on NTFS for every contributor
+        //   on that platform (e.g. the `POV: Verity.md` breakage).
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if let Some(bad) = name.chars().find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+                errors.push(format!(
+                    "{}: filename contains '{}', which is illegal on Windows",
+                    path.display(), bad
+                ));
+            }
+        }
+
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
