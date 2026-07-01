@@ -33,6 +33,13 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run tests
       run: cargo test --locked --verbose
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - name: JS tests
+      run: node --test
+      working-directory: tests/js
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
     - name: Coverage

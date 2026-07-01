@@ -44,8 +44,9 @@
   </div>
 
   <!-- Server-embedded data: translations, tag info, tag bar, and full game tree.
-       Eliminates client-side API fetches for instant page render. -->
+       - No client-side API fetch, so the page renders instantly. -->
   <script>var LANG_DATA = {{lang_json}}; var TAG_INFO = {{tag_info_json}}; var TAG_BAR = {{tag_bar_json}}; var TREE_DATA = {{tree_json}};</script>
+  <script src="/search.js" defer></script>
   <script src="/home.js" defer></script>
   <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>

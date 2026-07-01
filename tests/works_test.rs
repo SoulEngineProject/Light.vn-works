@@ -1,10 +1,7 @@
-//! Tests follow the given/when/then convention: every `#[test]` / `#[rstest]`
-//! body has `// given:`, `// when:`, `// then:` sections.
-//!
-//! Parameterized tests use `rstest`. One named case per `#[case::name(...)]` —
-//! the name appears in `cargo test` output for fast bisection. Non-parameterized
-//! tests use plain `#[test]`. Common test data is built via `#[fixture]`s
-//! (e.g. `cfg`); per-call data uses plain helper fns.
+//! - Tests follow the given/when/then convention: every `#[test]` / `#[rstest]` body has `// given:`, `// when:`, `// then:` sections.
+//! - Parameterized tests use `rstest`, one named case per `#[case::name(...)]` — the name appears in `cargo test` output for fast bisection.
+//! - Non-parameterized tests use plain `#[test]`.
+//! - Common test data is built via `#[fixture]`s (e.g. `cfg`); per-call data uses plain helper fns.
 
 use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
 use rstest::{fixture, rstest};
@@ -89,8 +86,9 @@ fn game_page_suffixes_r18_game_forces_back_r18() {
     // when: computing back/fwd suffixes
     let (back, fwd) = game_page_suffixes(None, true, false);
 
-    // then: back forces r18=0 (so homepage shows it after navigation back),
-    // fwd stays empty (incoming request didn't carry r18=0)
+    // then:
+    // - back forces r18=0 (so homepage shows it after navigating back)
+    // - fwd stays empty (incoming request didn't carry r18=0)
     assert_eq!(back, "?r18=0");
     assert_eq!(fwd, "");
 }
@@ -217,8 +215,7 @@ fn resize_thumbnail_preserves_composite_card_no_upscale() {
     // when: resized
     let resized = resize_thumbnail(&img, ThumbSize::Card);
 
-    // then: source fits within the target envelope — kept as-is (no upscale
-    // would introduce interpolation blur before the CSS zoom).
+    // then: source fits within the target envelope — kept as-is (upscaling would add interpolation blur before the CSS zoom)
     assert_eq!(resized.width(), 1170);
     assert_eq!(resized.height(), 216);
 }
@@ -657,9 +654,8 @@ fn lang_json_parses_both_languages() {
     assert!(!ja.engine_url.is_empty());
 }
 
-/// Production tag config, loaded from the real `config/tags.yaml`. Tests bind
-/// to this so they track config changes — if a tag is removed (e.g. "Terrace
-/// and Ray"), the relevant priority test should start failing.
+/// - Production tag config, loaded from the real `config/tags.yaml`.
+/// - Tests bind to this so they track config changes — if a tag is removed (e.g. "Terrace and Ray"), the relevant priority test should start failing.
 #[fixture]
 fn cfg() -> HashMap<String, TagInfo> {
     load_tag_config(include_str!("../config/tags.yaml"))
@@ -726,8 +722,9 @@ fn priority_ai_alone_yields_none(cfg: HashMap<String, TagInfo>) {
 #[case::mystery_alone(&["mystery"])]
 #[case::mystery_with_ai(&["ai", "mystery"])]
 fn priority_unconfigured_yields_none(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
-    // given: tag list with only unconfigured tags (and possibly ai)
-    // ("mystery" is intentionally not in tags.yaml — adjust if it ever gets added)
+    // given:
+    // - tag list with only unconfigured tags (and possibly ai)
+    // - "mystery" is intentionally absent from tags.yaml — adjust if it ever gets added
     let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
 
     // when: picking the priority tag
@@ -755,23 +752,23 @@ fn priority_empty_yields_none(cfg: HashMap<String, TagInfo>) {
 #[case::chinese_alone(&["中文"])]
 #[case::language_with_ai(&["English", "ai"])]
 fn priority_language_does_not_promote(cfg: HashMap<String, TagInfo>, #[case] tags: &[&str]) {
-    // given: tag list with only language tags (and possibly ai), no r18 / no
-    // Terrace and Ray / no other priority-eligible tag
+    // given: tag list with only language tags (and possibly ai) — no r18, no Terrace and Ray, no other priority-eligible tag
     let owned: Vec<String> = tags.iter().map(|s| s.to_string()).collect();
 
     // when: picking the priority tag
     let result = pick_priority_tag(&owned, &cfg);
 
-    // then: None — languages are filter-only (card_priority_badge: false), AI
-    // has its own slot. Right-slot stays empty.
+    // then:
+    // - None — languages are filter-only (card_priority_badge: false)
+    // - AI has its own slot, so the right slot stays empty
     assert_eq!(result, None);
 }
 
 #[rstest]
 fn priority_other_configured_beats_language(cfg: HashMap<String, TagInfo>) {
-    // given: a real-world combo: a Spooktober game also tagged English
-    // (the bulk-edit pass earlier in the project added English to all
-    //  Spooktober games — make sure the right slot still picks Spooktober)
+    // given:
+    // - a real-world combo: a Spooktober game also tagged English
+    // - a bulk-edit pass added English to all Spooktober games — the right slot must still pick Spooktober
     let tags: Vec<String> = vec!["Spooktober".into(), "English".into()];
 
     // when: picking the priority tag
@@ -790,8 +787,7 @@ fn card_priority_badge_defaults_to_true_when_omitted() {
     // when: looking up the tag
     let info = cfg.get("foo").expect("Foo configured");
 
-    // then: defaults to true (priority-eligible) — backwards-compatible with
-    // existing yaml that doesn't specify the field
+    // then: defaults to true (priority-eligible) — backwards-compatible with yaml that omits the field
     assert!(info.card_priority_badge);
 }
 
@@ -824,9 +820,10 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
     let right_slot = pick_priority_tag(&tags, &cfg);
     let left_slot = tags.iter().any(|t| t.eq_ignore_ascii_case("ai"));
 
-    // then: priority returns a single tag (Option enforces this by type),
-    // and AI detection is a single boolean (also type-bounded).
-    // R18 wins the priority cascade even with everything else present.
+    // then:
+    // - priority returns a single tag (Option enforces this by type)
+    // - AI detection is a single boolean (also type-bounded)
+    // - R18 wins the priority cascade even with everything else present
     assert_eq!(right_slot, Some("r18"));
     assert!(left_slot, "AI detected in left slot");
 
@@ -866,8 +863,7 @@ fn language_tag_propagates_yaml_colour_to_bar(
     let bar = build_tag_index(&games, &cfg);
     let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case(tag)).expect("row present");
 
-    // then: bar entry carries whatever colour yaml/config defined — no hex
-    // hardcoded so the test tracks yaml changes instead of fighting them
+    // then: bar entry carries whatever colour yaml/config defined — no hardcoded hex, so the test tracks yaml changes
     assert_eq!(row.colour.as_deref(), Some(info.colour.as_str()));
 }
 
@@ -878,7 +874,8 @@ fn language_tags_share_a_colour(cfg: HashMap<String, TagInfo>) {
     let korean = &cfg.get("한국어").expect("한국어 configured").colour;
     let chinese = &cfg.get("中文").expect("中文 configured").colour;
 
-    // when/then: all three share one colour — they're a single category
+    // when: comparing their colours
+    // then: all three share one colour — they're a single category
     assert_eq!(english, korean);
     assert_eq!(english, chinese);
 }
@@ -895,10 +892,10 @@ fn language_tags_share_a_colour(cfg: HashMap<String, TagInfo>) {
 #[case::n_8(8, vec![2, 2, 2, 2])]
 #[case::n_9(9, vec![2, 2, 2, 2, 1])]
 fn gallery_rows_layout(#[case] n: usize, #[case] expected: Vec<usize>) {
-    // given: an image count
-    // (in production the orphan single trailing image is stripped upstream and
-    //  promoted to the editor mockup, so this function is typically called
-    //  with even n — odd cases here verify the boundary is correct anyway)
+    // given:
+    // - an image count
+    // - in production the orphan trailing image is stripped upstream and promoted to the editor mockup, so this fn is usually called with even n
+    // - odd cases here verify the boundary is correct anyway
 
     // when: computing the row layout
     let rows = gallery_rows(n);

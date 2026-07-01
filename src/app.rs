@@ -30,17 +30,11 @@ use crate::{
     load_tag_config, pick_priority_tag, tag_style, get_lang,
 };
 
-// Inlined into <head> on both index.html and game.html so the very first
-// frame paints with the dark theme even before external CSS arrives. Without
-// this, slow CSS loads (e.g., Render free-tier cold start) cause a white
-// flash. Hex values mirror --bg and --text in style.css.
-//
-// ⚠ Setting `html` bg here (vs. only `body`) interacts with the homepage
-// mascot. `public/home.css` has `body::after { z-index: -1 }` for the LX
-// pseudo, which is trapped in body's stacking context (body has `z-index: 0`
-// in home.css). If you ever change the body's stacking — or move the bg off
-// `html` — re-verify the mascot still paints. See `body::after` and the
-// `body { z-index: 0 }` rule in home.css.
+// - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
+// - Without this, slow CSS loads (e.g., Render free-tier cold start) cause a white flash.
+// - Hex values mirror --bg and --text in style.css.
+// - ⚠ Setting `html` bg here (vs. only `body`) interacts with the homepage mascot: `public/home.css` has `body::after { z-index: -1 }` for the LX pseudo, trapped in body's stacking context (body has `z-index: 0` in home.css).
+// - If you ever change the body's stacking — or move the bg off `html` — re-verify the mascot still paints. See `body::after` and the `body { z-index: 0 }` rule in home.css.
 const CRITICAL_CSS: &str = "<style>html,body{background:#0d0b12;color:#ede9fe}</style>";
 
 #[derive(Clone)]
@@ -57,10 +51,8 @@ struct AppState {
     thumb_in_flight: Arc<Mutex<HashSet<(String, ThumbSize)>>>,
     thumb_originals: Arc<HashMap<String, String>>,
     thumb_semaphore: Arc<Semaphore>,
-    // Observability: wall-clock time since the first populate was spawned, a
-    // running count of successful populates, and cumulative time spent in the
-    // GitHub HTTP fetch portion (vs. decode/resize/encode). Lets you see how
-    // much of warmup cost is network vs. local CPU work.
+    // - Observability: wall-clock time since the first populate was spawned, a running count of successful populates, and cumulative time in the GitHub HTTP fetch portion (vs. decode/resize/encode).
+    // - Lets you see how much of warmup cost is network vs. local CPU work.
     thumb_populate_start: Arc<OnceLock<Instant>>,
     thumb_populate_count: Arc<AtomicUsize>,
     thumb_fetch_millis: Arc<AtomicU64>,
@@ -160,9 +152,8 @@ async fn render_markdown(
 
     let tags = meta.tags.as_deref().unwrap_or(&[]);
     let is_r18 = tags.iter().any(|t| t == "r18");
-    // Back-link (to homepage): forces r18=0 if this page is R18 so the game
-    // stays visible in the list. Forward-link (more-from cards): preserves
-    // whatever r18 state the user arrived with.
+    // - Back-link (to homepage): forces r18=0 if this page is R18 so the game stays visible in the list.
+    // - Forward-link (more-from cards): preserves whatever r18 state the user arrived with.
     let (home_suffix, fwd_suffix) = game_page_suffixes(lang_param, is_r18, incoming_r18_zero);
     let released = meta.released.as_deref().unwrap_or("");
     let tags_line = build_tags_line(tags, &lang.tags_label, lang_param, &state.tag_config, released);
@@ -180,9 +171,8 @@ async fn render_markdown(
         }
     }
 
-    // alt="" intentional: the <h1>{title}</h1> directly below is the accessible
-    // label for this page's hero image. Empty alt avoids flashing the title as
-    // overlay text during slow loads.
+    // - alt="" intentional: the <h1>{title}</h1> directly below is the accessible label for this page's hero image.
+    // - Empty alt avoids flashing the title as overlay text during slow loads.
     let hero_html = images.first().map(|img| {
         format!(
             r#"<div class="hero-image"><div class="hero-frame"><img src="{}" alt="" /></div></div>"#,
@@ -190,11 +180,9 @@ async fn render_markdown(
         )
     }).unwrap_or_default();
 
-    // Gallery layout: max 2 per row. If a trailing single image (orphan)
-    // would result, strip it from the gallery — it becomes the editor
-    // mockup's source instead via images.last() below. Half of all games
-    // (those with even total image count) get a unique editor image this way
-    // instead of duplicating the last gallery thumbnail.
+    // - Gallery layout: max 2 per row.
+    // - If a trailing single image (orphan) would result, strip it from the gallery — it becomes the editor mockup's source instead via images.last() below.
+    // - Half of all games (those with even total image count) get a unique editor image this way instead of duplicating the last gallery thumbnail.
     let gallery_count = match images.len() {
         0 | 1 => 0,
         n => {
@@ -204,11 +192,8 @@ async fn render_markdown(
         }
     };
 
-    // alt="" intentional: gallery screenshots are decorative in the context
-    // of a page that already has tagline, synopsis, and hero for descriptive
-    // content. We have no meaningful per-image description to provide; a
-    // generic "Screenshot" adds nothing for screen readers and flashes as
-    // overlay text during slow loads.
+    // - alt="" intentional: gallery screenshots are decorative on a page that already has tagline, synopsis, and hero for descriptive content.
+    // - No meaningful per-image description exists; a generic "Screenshot" adds nothing for screen readers and flashes as overlay text during slow loads.
     let gallery_html = if gallery_count > 0 {
         let gallery_images = &images[1..1 + gallery_count];
         let rows = gallery_rows(gallery_images.len());
@@ -238,8 +223,8 @@ async fn render_markdown(
         .unwrap_or(&title_display);
     let og_image = images.first().map(|img| img.url.as_str()).unwrap_or("");
 
-    // Editor mockup: show last screenshot inside the Light.vn editor frame.
-    // For composite images (width > height*2), crop to the rightmost third via CSS.
+    // - Editor mockup: show last screenshot inside the Light.vn editor frame.
+    // - For composite images (width > height*2), crop to the rightmost third via CSS.
     let editor_img = if detected_lang == "ja" { "editor_jp.webp" } else { "editor_en.webp" };
     let editor_mockup = images.last().map(|img| {
         let preview_html = if img.is_composite() {
@@ -248,9 +233,8 @@ async fn render_markdown(
                 html_escape(&img.url)
             )
         } else {
-            // alt="" intentional: the game page already has <h1>{title_display}</h1>,
-            // so this image is decorative. Empty alt avoids flashing the title
-            // as overlay text during slow loads.
+            // - alt="" intentional: the game page already has <h1>{title_display}</h1>, so this image is decorative.
+            // - Empty alt avoids flashing the title as overlay text during slow loads.
             format!(
                 r#"<img class="editor-preview" src="{}" alt="" loading="lazy" />"#,
                 html_escape(&img.url)
@@ -280,9 +264,8 @@ async fn render_markdown(
                                 html_escape(url)
                             )
                         } else {
-                            // alt="" intentional: .more-creator-title below is
-                            // the link's accessible name; empty alt avoids
-                            // flashing title during slow loads.
+                            // - alt="" intentional: .more-creator-title below is the link's accessible name.
+                            // - Empty alt avoids flashing title during slow loads.
                             format!(
                                 r#"<img src="{}" alt="" loading="lazy" />"#,
                                 html_escape(url)
@@ -290,8 +273,8 @@ async fn render_markdown(
                         }
                     }).unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
                     let tags = g.meta.tags.as_deref().unwrap_or(&[]);
-                    // Two-slot layout: priority badge (top-right) + AI (top-left).
-                    // See pick_priority_tag() docs for priority order.
+                    // - Two-slot layout: priority badge (top-right) + AI (top-left).
+                    // - See pick_priority_tag() docs for priority order.
                     let mut badge = String::new();
                     if let Some(t) = pick_priority_tag(tags, &state.tag_config) {
                         let style_attr = match tag_style(t, &state.tag_config) {
@@ -377,16 +360,9 @@ fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
     )
 }
 
-// Walk works/ once at startup. Parses each .md into a ParsedGame and keys by
-// canonical path ("/works/YYYY/title"). Per-file parse is wrapped in
-// catch_unwind so a panic in one file logs + skips, rather than crashing the
-// server. The bad file is missing from the index; the rest of the catalog
-// serves normally. Request for the skipped file yields 404.
-//
-// Also builds the `thumb_originals` map: for each thumbnail that's a GitHub
-// user-attachment URL, records (UUID → original URL) so the `/thumb/:uuid/:size`
-// handler knows what to fetch/proxy. Thumbnails get their URLs rewritten to
-// `/thumb/UUID/{card,ribbon}` form.
+// - Walk works/ once at startup. Parses each .md into a ParsedGame, keyed by canonical path ("/works/YYYY/title").
+// - Per-file parse is wrapped in catch_unwind so a panic in one file logs + skips rather than crashing the server. The bad file is missing from the index; the rest of the catalog serves normally, and a request for the skipped file yields 404.
+// - Also builds the `thumb_originals` map: for each thumbnail that's a GitHub user-attachment URL, records (UUID → original URL) so the `/thumb/:uuid/:size` handler knows what to fetch/proxy. Thumbnails get their URLs rewritten to `/thumb/UUID/{card,ribbon}` form.
 fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>) {
     let root_dir = FsPath::new("works");
     let mut games = HashMap::new();
@@ -477,10 +453,9 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
     (games, thumb_originals)
 }
 
-// Build Node tree from pre-parsed games, grouped by year. Directory shape is
-// always works/YYYY/file.md, so no recursive traversal is needed. The output
-// JSON shape matches the legacy walker (node names and paths keep their .md
-// suffix for client compat).
+// - Build Node tree from pre-parsed games, grouped by year.
+// - Directory shape is always works/YYYY/file.md, so no recursive traversal is needed.
+// - Output JSON shape matches the legacy walker (node names and paths keep their .md suffix for client compat).
 fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
     let mut by_year: BTreeMap<String, Vec<Node>> = BTreeMap::new();
 
@@ -555,8 +530,8 @@ async fn serve_thumb(
             .unwrap();
     }
 
-    // Miss path. Debounce: only spawn a populate if this (uuid, size) isn't
-    // already in flight. Prevents thundering herd on first visit.
+    // - Miss path. Debounce: only spawn a populate if this (uuid, size) isn't already in flight.
+    // - Prevents thundering herd on first visit.
     let should_spawn = {
         let mut in_flight = state.thumb_in_flight.lock().unwrap();
         in_flight.insert(key.clone())
@@ -574,28 +549,25 @@ async fn serve_thumb(
         .unwrap()
 }
 
-// Fetch the original from GitHub, decode, resize, re-encode as JPEG q=80,
-// insert into cache. Semaphore caps concurrent populates to avoid saturating
-// free-tier CPU when many misses arrive in a burst. Failures are logged and
-// the in-flight slot released so the next miss retries.
+// - Fetch the original from GitHub, decode, resize, re-encode as JPEG q=80, insert into cache.
+// - Semaphore caps concurrent populates to avoid saturating free-tier CPU when many misses arrive in a burst.
+// - Failures are logged and the in-flight slot released so the next miss retries.
 async fn populate_thumbnail(
     state: AppState,
     key: (String, ThumbSize),
     original_url: String,
 ) {
-    // Record the first populate's start time for cumulative progress logging.
-    // OnceLock::set is a no-op after the first call.
+    // - Record the first populate's start time for cumulative progress logging.
+    // - OnceLock::set is a no-op after the first call.
     let _ = state.thumb_populate_start.set(Instant::now());
     let _permit = state.thumb_semaphore.acquire().await.ok();
     let (uuid, size) = key.clone();
 
     let result = async {
         let fetch_start = Instant::now();
-        // One retry on transient network errors. "Connection closed before
-        // message complete" is the common flake from HTTP/2 pooled connections
-        // being reused as the server-side closes them; a retry almost always
-        // succeeds. Covers errors from both send() and body read. 4xx/5xx
-        // responses aren't retried (they're not transient).
+        // - One retry on transient network errors. "Connection closed before message complete" is the common flake from HTTP/2 pooled connections being reused as the server-side closes them; a retry almost always succeeds.
+        // - Covers errors from both send() and body read.
+        // - 4xx/5xx responses aren't retried (they're not transient).
         let fetch_once = || async {
             state
                 .http_client
@@ -620,8 +592,8 @@ async fn populate_thumbnail(
         let img = image::load_from_memory(&bytes)
             .map_err(|e| format!("decode: {}", e))?;
         let resized = resize_thumbnail(&img, size);
-        // WebP q=80 lossy via libwebp. Smaller than JPEG at equivalent visual
-        // quality, and preserves alpha channels (JPEG would flatten them).
+        // - WebP q=80 lossy via libwebp. Smaller than JPEG at equivalent visual quality.
+        // - Preserves alpha channels (JPEG would flatten them).
         let out: Vec<u8> = if resized.color().has_alpha() {
             let rgba = resized.to_rgba8();
             webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height())
@@ -668,11 +640,9 @@ async fn populate_thumbnail(
     state.thumb_in_flight.lock().unwrap().remove(&key);
 }
 
-// Background warmup: spawn a populate for every (uuid, size) pair that isn't
-// already cached. Reuses populate_thumbnail + in-flight debouncing, so races
-// with user requests are harmless (either the warmer or the user spawns the
-// task, never both). Semaphore throttles actual concurrency; spawning all
-// tasks up front just queues them.
+// - Background warmup: spawn a populate for every (uuid, size) pair that isn't already cached.
+// - Reuses populate_thumbnail + in-flight debouncing, so races with user requests are harmless (either the warmer or the user spawns the task, never both).
+// - Semaphore throttles actual concurrency; spawning all tasks up front just queues them.
 async fn warm_all_thumbnails(state: AppState) {
     for (uuid, original_url) in state.thumb_originals.iter() {
         for size in [ThumbSize::Card, ThumbSize::Ribbon] {
@@ -694,9 +664,8 @@ async fn warm_all_thumbnails(state: AppState) {
 }
 
 pub fn build_app() -> Router {
-    // Walk works/ once, parse every markdown file into a ParsedGame. All
-    // derived data (creator index, tree JSON for home-page embedding) is built
-    // from this single source of truth.
+    // - Walk works/ once, parse every markdown file into a ParsedGame.
+    // - All derived data (creator index, tree JSON for home-page embedding) is built from this single source of truth.
     let (games, thumb_originals) = build_games_index();
     let creator_paths = build_creator_paths(&games);
     let tree = build_tree_from_games(&games);
@@ -706,12 +675,12 @@ pub fn build_app() -> Router {
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
     // Tag config: defines colours and optional contest URLs per tag.
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
-    // Pre-compute the homepage tag-filter bar (union of yaml + md tags, with
-    // counts) and serialize it once. Static across requests.
+    // - Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts) and serialize it once.
+    // - Static across requests.
     let tag_bar_json = serde_json::to_string(&build_tag_index(&games, &tag_config))
         .unwrap_or_default();
-    // Pre-serialize the {[name]: {colour, card_priority_badge}} payload that
-    // the homepage embeds as the TAG_INFO global. Static across requests.
+    // - Pre-serialize the {[name]: {colour, card_priority_badge}} payload that the homepage embeds as the TAG_INFO global.
+    // - Static across requests.
     let tag_info_json = {
         #[derive(serde::Serialize)]
         struct ClientTagInfo<'a> {
@@ -743,30 +712,24 @@ pub fn build_app() -> Router {
         thumb_fetch_millis: Arc::new(AtomicU64::new(0)),
         http_client: reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
-            // Drop idle pooled connections sooner than GitHub's ~60s. Reusing
-            // a stale HTTP/2 connection is the typical cause of
-            // "connection closed before message complete" errors.
+            // - Drop idle pooled connections sooner than GitHub's ~60s.
+            // - Reusing a stale HTTP/2 connection is the typical cause of "connection closed before message complete" errors.
             .pool_idle_timeout(std::time::Duration::from_secs(20))
             .build()
             .expect("build reqwest client"),
     };
 
-    // Kick off background warmup. Runs concurrently with request handling;
-    // server is already listening by the time the spawned task progresses.
+    // - Kick off background warmup. Runs concurrently with request handling.
+    // - Server is already listening by the time the spawned task progresses.
     tokio::spawn(warm_all_thumbnails(state.clone()));
 
     let serve_dir = ServeDir::new("public").not_found_service(
         ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
     );
 
-    // "no-cache" means "cache, but revalidate every time". Combined with the
-    // Last-Modified header that ServeDir emits, browsers send conditional
-    // requests and get 304 Not Modified (no body) for unchanged static files.
-    // Zero stale-content risk; no build-time versioning needed.
-    //
-    // `if_not_present` (not `overriding`) so handlers that set their own
-    // Cache-Control keep theirs — notably /thumb/:uuid/:size uses
-    // `immutable` since UUID-keyed URLs never change.
+    // - "no-cache" means "cache, but revalidate every time". Combined with the Last-Modified header that ServeDir emits, browsers send conditional requests and get 304 Not Modified (no body) for unchanged static files.
+    // - Zero stale-content risk; no build-time versioning needed.
+    // - `if_not_present` (not `overriding`) so handlers that set their own Cache-Control keep theirs — notably /thumb/:uuid/:size uses `immutable` since UUID-keyed URLs never change.
     let cache_control = SetResponseHeaderLayer::if_not_present(
         header::CACHE_CONTROL,
         HeaderValue::from_static("no-cache"),
