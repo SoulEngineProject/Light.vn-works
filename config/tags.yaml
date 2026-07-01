@@ -33,6 +33,11 @@ tags:
   # Publishers
   - colour: publisher
     tags: [Terrace and Ray]
+  - colour: publisher
+    tags: [Light.vn X]
+
+  - colour: language
+    tags: [UI]
 
   # Languages (filter-only; not eligible for the right-slot priority badge —
   # languages are metadata, not card identity)
