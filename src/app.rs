@@ -24,11 +24,11 @@ use walkdir::WalkDir;
 
 use crate::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
-    build_tags_line, encode_path, extract_all_images, extract_user_attachment_uuid, feed_date,
-    gallery_rows, game_page_suffixes, get_lang, get_related_paths, html_escape, load_aliases,
-    load_tag_config, markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso,
-    resize_thumbnail, split_creators, strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame,
-    TagInfo, ThumbSize,
+    build_tags_line, creator_work_key, detect_lang, encode_path, extract_all_images,
+    extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes, get_lang,
+    get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
+    parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail, split_creators,
+    strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -217,25 +217,6 @@ fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) ->
     )
 }
 
-// - Resolve the display language: explicit ?lang wins, else Accept-Language, else English.
-fn detect_lang(params: &HashMap<String, String>, headers: &HeaderMap) -> &'static str {
-    match params.get("lang").map(|s| s.as_str()) {
-        Some("ja") => "ja",
-        Some("en") => "en",
-        _ => {
-            let accept = headers
-                .get("accept-language")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("en");
-            if accept.contains("ja") {
-                "ja"
-            } else {
-                "en"
-            }
-        }
-    }
-}
-
 // - Creator page: every work by a creator, merged across their aliases
 //   (same resolution as the "more from creator" strip), newest first.
 async fn serve_creator(
@@ -254,17 +235,23 @@ async fn serve_creator(
             .into_response();
     }
 
-    let detected_lang = detect_lang(&params, &headers);
+    let detected_lang = detect_lang(
+        params.get("lang").map(|s| s.as_str()),
+        headers.get("accept-language").and_then(|v| v.to_str().ok()),
+    );
     let lang = get_lang(detected_lang);
 
     let mut games: Vec<&ParsedGame> = groups
         .iter()
         .flat_map(|(_, paths)| paths.iter().filter_map(|p| state.games.get(*p)))
         .collect();
+    // - Newest first, keyed on the release date, falling back to the folder year
+    //   when the date is missing/"unknown" — so an undated work sorts by its year
+    //   (e.g. a 2014-folder work never sorts above a 2018 release as the hero).
     games.sort_by(|a, b| {
-        let ra = a.meta.released.as_deref().unwrap_or("");
-        let rb = b.meta.released.as_deref().unwrap_or("");
-        rb.cmp(ra).then_with(|| a.title.cmp(&b.title))
+        let ka = creator_work_key(a.meta.released.as_deref(), &a.year);
+        let kb = creator_work_key(b.meta.released.as_deref(), &b.year);
+        kb.cmp(ka).then_with(|| a.title.cmp(&b.title))
     });
 
     // Display name: recover original casing from a matching creator credit.
@@ -290,7 +277,7 @@ async fn serve_creator(
                 });
             let year = released_to_iso(g.meta.released.as_deref().unwrap_or(""))
                 .map(|iso| iso[..4].to_string())
-                .unwrap_or_default();
+                .unwrap_or_else(|| g.year.clone());
             let tags = g.meta.tags.as_deref().unwrap_or(&[]);
             let tagline = g.meta.tagline.as_deref().unwrap_or("");
             let tagline_html = if tagline.is_empty() {
@@ -344,17 +331,13 @@ async fn serve_creator(
         })
         .collect();
 
-    // - "Active since" = the creator's earliest release (ISO sorts chronologically).
+    // - "Active since" = the creator's earliest year. Use the folder year (present
+    //   for every work, incl. undated ones) so it isn't skewed by missing dates.
     let active_since = games
         .iter()
-        .filter_map(|g| released_to_iso(g.meta.released.as_deref().unwrap_or("")))
+        .map(|g| g.year.as_str())
         .min()
-        .map(|iso| {
-            format!(
-                " · {}",
-                lang.creator_active_since.replace("{year}", &iso[..4])
-            )
-        })
+        .map(|year| format!(" · {}", lang.creator_active_since.replace("{year}", year)))
         .unwrap_or_default();
 
     let n = games.len();
@@ -396,7 +379,10 @@ async fn render_markdown(
     AxumPath((year, title)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
     let lang_param = params.get("lang").map(|s| s.as_str());
-    let detected_lang = detect_lang(&params, &headers);
+    let detected_lang = detect_lang(
+        params.get("lang").map(|s| s.as_str()),
+        headers.get("accept-language").and_then(|v| v.to_str().ok()),
+    );
     let lang = get_lang(detected_lang);
     let incoming_r18_zero = params.get("r18").map(|s| s.as_str()) == Some("0");
 

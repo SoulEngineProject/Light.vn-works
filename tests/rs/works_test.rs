@@ -5,11 +5,11 @@
 
 use lightvn_works::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
-    build_tag_index, build_tags_line, encode_path, extract_all_images,
-    extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes, get_lang,
-    get_related_paths, html_escape, is_composite_dimensions, load_aliases, load_tag_config,
-    parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail, split_creators,
-    strip_img_tags, ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path,
+    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
+    get_lang, get_related_paths, html_escape, is_composite_dimensions, load_aliases,
+    load_tag_config, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
+    split_creators, strip_img_tags, ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
     RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
@@ -200,6 +200,89 @@ fn aggregate_creator_links_keeps_only_recurring_links() {
     assert!(urls.contains(&"https://twitter.example/me"));
     assert!(!urls.contains(&"https://dlsite.example/a"));
     assert!(!urls.contains(&"https://booth.example/b"));
+}
+
+#[rstest]
+#[case::explicit_ja(Some("ja"), Some("en-US,en"), "ja")]
+#[case::explicit_en(Some("en"), Some("ja,en"), "en")]
+#[case::accept_ja(None, Some("ja,en"), "ja")]
+#[case::accept_en(None, Some("en-US"), "en")]
+#[case::default_none(None, None, "en")]
+#[case::unknown_param_falls_through(Some("fr"), Some("ja"), "ja")]
+fn detect_lang_resolves(
+    #[case] param: Option<&str>,
+    #[case] accept: Option<&str>,
+    #[case] expected: &str,
+) {
+    // given: a ?lang param and an Accept-Language header
+    // when: resolving the display language
+    // then: explicit ja/en param wins, else Accept-Language, else English
+    assert_eq!(detect_lang(param, accept), expected);
+}
+
+#[rstest]
+#[case::dated(Some("2018/01/04"), "2018", "2018/01/04")]
+#[case::unknown(Some(RELEASED_UNKNOWN), "2014", "2014")]
+#[case::empty(Some(""), "2015", "2015")]
+#[case::missing(None, "2016", "2016")]
+fn creator_work_key_falls_back_to_folder_year(
+    #[case] released: Option<&str>,
+    #[case] year: &str,
+    #[case] expected: &str,
+) {
+    // given: a work's released value and its folder year
+    // when: computing the sort key
+    // then: a real date is used, otherwise the folder year
+    assert_eq!(creator_work_key(released, year), expected);
+}
+
+#[test]
+fn creator_work_key_orders_newest_first_with_undated_by_folder_year() {
+    // given: (folder_year, released, title) works including an undated 2014 one
+    let mut works = [
+        ("2014", Some(RELEASED_UNKNOWN), "undated 2014"),
+        ("2018", Some("2018/01/04"), "newest 2018"),
+        ("2015", Some("2015/03/07"), "mid 2015"),
+    ];
+
+    // when: sorting newest-first by the key (as serve_creator does)
+    works.sort_by(|a, b| {
+        let ka = creator_work_key(a.1, a.0);
+        let kb = creator_work_key(b.1, b.0);
+        kb.cmp(ka).then_with(|| a.2.cmp(b.2))
+    });
+
+    // then:
+    // - the 2018 work leads (it would be the hero)
+    // - the undated 2014 work sorts last by its folder year, not to the top
+    assert_eq!(works[0].2, "newest 2018");
+    assert_eq!(works.last().unwrap().2, "undated 2014");
+}
+
+#[test]
+fn aggregate_creator_links_leads_with_hp() {
+    // given: recurring links where Twitter is encountered before HP
+    let make = |extras: Vec<ExtraLink>| GameMeta {
+        extra_links: Some(extras),
+        ..Default::default()
+    };
+    let tw = ExtraLink {
+        label: "Twitter".into(),
+        url: "https://x.example".into(),
+    };
+    let hp = ExtraLink {
+        label: "HP".into(),
+        url: "https://home.example".into(),
+    };
+    let g1 = make(vec![tw.clone(), hp.clone()]);
+    let g2 = make(vec![tw.clone(), hp.clone()]);
+
+    // when: aggregating the creator's links
+    let links = aggregate_creator_links(&[&g1, &g2]);
+
+    // then: HP leads, even though Twitter was encountered first
+    assert_eq!(links[0].label, "HP");
+    assert_eq!(links[1].label, "Twitter");
 }
 
 #[test]

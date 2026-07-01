@@ -77,6 +77,33 @@ pub fn get_lang(lang: &str) -> &'static LangStrings {
     }
 }
 
+/// - Resolve the display language: an explicit `lang` param wins ("ja"/"en"),
+///   else the Accept-Language header, else English.
+pub fn detect_lang(lang_param: Option<&str>, accept_language: Option<&str>) -> &'static str {
+    match lang_param {
+        Some("ja") => "ja",
+        Some("en") => "en",
+        _ => {
+            if accept_language.unwrap_or("en").contains("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
+    }
+}
+
+/// - Sort key for ordering a creator's works newest-first.
+/// - Uses the release date, falling back to the folder year when the date is
+///   missing, empty, or "unknown" — so an undated work sorts by its year rather
+///   than jumping to the top (e.g. as the hero).
+pub fn creator_work_key<'a>(released: Option<&'a str>, folder_year: &'a str) -> &'a str {
+    match released {
+        Some(r) if !r.is_empty() && r != RELEASED_UNKNOWN => r,
+        _ => folder_year,
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct GameMeta {
     #[serde(default)]
@@ -633,11 +660,22 @@ pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
     // Keep recurring links (>= 2 games), then collapse same-label duplicates,
     // keeping the first (newest work's) version since `order` is newest-first.
     let mut seen_label: HashSet<String> = HashSet::new();
-    order
+    let mut links: Vec<ExtraLink> = order
         .into_iter()
         .filter(|l| counts.get(&l.url).copied().unwrap_or(0) >= 2)
         .filter(|l| seen_label.insert(l.label.to_lowercase()))
-        .collect()
+        .collect();
+
+    // - Always lead with the creator's homepage ("HP") when present.
+    // - Stable sort, so the remaining links keep their newest-first order.
+    links.sort_by_key(|l| {
+        if l.label.eq_ignore_ascii_case("hp") {
+            0
+        } else {
+            1
+        }
+    });
+    links
 }
 
 /// - Compute gallery row sizes — max 2 per row.

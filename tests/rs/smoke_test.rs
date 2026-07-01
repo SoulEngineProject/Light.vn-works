@@ -360,6 +360,38 @@ async fn creator_page_localizes_to_japanese() {
 }
 
 #[tokio::test]
+async fn creator_hero_ignores_unknown_dates() {
+    // given: Sumica, who has an undated 2014 work plus dated works through 2018
+    let app = build_app();
+
+    // when: requesting their creator page
+    let response = app
+        .oneshot(
+            Request::get("/creator/Sumica")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: the newest *dated* work (弟みくじ, 2018) is the hero — above the grid —
+    // rather than the undated 2014 work sorting to the top
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    let hero_pos = html.find("弟みくじ").expect("2018 work should appear");
+    let grid_pos = html
+        .find("more-works-heading")
+        .expect("more-works grid present");
+    assert!(
+        hero_pos < grid_pos,
+        "the newest dated work should be the hero, above the grid"
+    );
+}
+
+#[tokio::test]
 async fn creator_page_unknown_returns_404() {
     // given: the app
     let app = build_app();
