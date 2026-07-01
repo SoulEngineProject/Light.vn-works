@@ -66,6 +66,17 @@ If changes don't appear, hard refresh with `Ctrl+Shift+R`.
 cargo test
 ```
 
+### Formatting
+
+Code is formatted with rustfmt:
+
+```
+cargo fmt
+```
+
+- CI runs `cargo fmt --check` and fails on unformatted code.
+- A git pre-commit hook (installed automatically the first time you run `cargo test`, via cargo-husky) blocks unformatted commits.
+
 ### Analytics
 
 - https://lightvn-works.goatcounter.com/
