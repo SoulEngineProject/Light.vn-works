@@ -4,7 +4,7 @@ released: 2018/09/08
 link_label: HP
 link_url: "http://soulengineproject.com/lightvn-x-02-tik-tok-mary/"
 tagline: "Light.vn X アラーム"
-tags: []
+tags: ["Light.vn X", "UI"]
 thumbnail_index: 2
 ---
 
