@@ -2,7 +2,7 @@
 creator: Knickknack PJ
 released: 2026/06/30
 link_label: itch.io
-link_url: "[https://minute.itch.io/forever-held](https://knickknackpj.itch.io/povv)"
+link_url: "https://knickknackpj.itch.io/povv"
 tagline: "It doesn't take me long to find him."
 tags: [English]
 thumbnail_index:
