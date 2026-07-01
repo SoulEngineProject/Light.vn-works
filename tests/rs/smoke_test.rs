@@ -24,7 +24,11 @@ async fn api_tree_returns_200() {
 
     // when: requesting /api/tree
     let response = app
-        .oneshot(Request::get("/api/tree").body(axum::body::Body::empty()).unwrap())
+        .oneshot(
+            Request::get("/api/tree")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -218,6 +222,32 @@ async fn home_has_absolute_og_image_and_canonical() {
     assert!(html.contains("property=\"og:image\""));
     assert!(html.contains("http") && html.contains("/lvn_icon.webp"));
     assert!(html.contains("rel=\"canonical\""));
+}
+
+#[tokio::test]
+async fn responses_carry_security_headers() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting any page
+    let response = app
+        .oneshot(Request::get("/").body(axum::body::Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    // then: the baseline security headers are present
+    let headers = response.headers();
+    assert_eq!(
+        headers
+            .get("x-content-type-options")
+            .and_then(|v| v.to_str().ok()),
+        Some("nosniff")
+    );
+    assert_eq!(
+        headers.get("x-frame-options").and_then(|v| v.to_str().ok()),
+        Some("DENY")
+    );
+    assert!(headers.get("referrer-policy").is_some());
 }
 
 #[tokio::test]

@@ -1,2 +1,2 @@
-mod works_test;
 mod smoke_test;
+mod works_test;

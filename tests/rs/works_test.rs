@@ -3,7 +3,13 @@
 //! - Non-parameterized tests use plain `#[test]`.
 //! - Common test data is built via `#[fixture]`s (e.g. `cfg`); per-call data uses plain helper fns.
 
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, build_sitemap, released_to_lastmod, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
+use lightvn_works::{
+    build_creator_paths, build_query, build_sitemap, build_tag_index, build_tags_line, encode_path,
+    extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
+    get_related_paths, html_escape, is_composite_dimensions, load_aliases, load_tag_config,
+    parse_frontmatter, pick_priority_tag, released_to_lastmod, resize_thumbnail, split_creators,
+    strip_img_tags, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+};
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
 use std::path::Path;
@@ -74,7 +80,10 @@ fn build_sitemap_lists_home_and_encoded_game_urls() {
     // given: a base URL and canonical game entries, one with spaces
     let base = "https://example.com";
     let entries = vec![
-        ("/works/2024/42 Hallows Street".to_string(), Some("2024-03-15".to_string())),
+        (
+            "/works/2024/42 Hallows Street".to_string(),
+            Some("2024-03-15".to_string()),
+        ),
         ("/works/2016/KONKON".to_string(), None),
     ];
 
@@ -105,7 +114,9 @@ fn build_sitemap_emits_lastmod_only_when_present() {
     let xml = build_sitemap("https://example.com", &entries);
 
     // then: the dated entry carries <lastmod>, the undated one does not
-    assert!(xml.contains("<loc>https://example.com/works/2024/A</loc><lastmod>2024-03-15</lastmod></url>"));
+    assert!(xml.contains(
+        "<loc>https://example.com/works/2024/A</loc><lastmod>2024-03-15</lastmod></url>"
+    ));
     assert!(xml.contains("<loc>https://example.com/works/2016/B</loc></url>"));
     assert_eq!(xml.matches("<lastmod>").count(), 1);
 }
@@ -238,7 +249,7 @@ fn thumb_size_parses_valid_variants(#[case] input: &str, #[case] expected: Optio
 
 #[rstest]
 #[case::empty("")]
-#[case::wrong_case("Ribbon")]   // case-sensitive — capital R rejected
+#[case::wrong_case("Ribbon")] // case-sensitive — capital R rejected
 #[case::unknown("thumb")]
 #[case::with_slash("ribbon/extra")]
 fn thumb_size_rejects_invalid_variants(#[case] input: &str) {
@@ -265,10 +276,10 @@ fn thumb_size_dimensions(#[case] size: ThumbSize, #[case] expected: (u32, u32)) 
 #[rstest]
 #[case::four_to_one(1600, 400, true)]
 #[case::just_over_two(2001, 1000, true)]
-#[case::exactly_two(2000, 1000, false)]   // strict > threshold
+#[case::exactly_two(2000, 1000, false)] // strict > threshold
 #[case::sixteen_nine(1280, 720, false)]
 #[case::square(1000, 1000, false)]
-#[case::zero_height(100, 0, false)]       // guard against div-by-zero
+#[case::zero_height(100, 0, false)] // guard against div-by-zero
 fn composite_detection_threshold(#[case] w: u32, #[case] h: u32, #[case] expected: bool) {
     // given: a (width, height) pair
     // when: checking composite classification
@@ -301,7 +312,7 @@ fn resize_thumbnail_shrinks_composite_for_ribbon() {
 
     // then: scaled to fit within (900, 400), preserving 5.4:1 aspect
     assert_eq!(resized.width(), 900);
-    assert_eq!(resized.height(), 166);  // 900 * 216/1170 ≈ 166
+    assert_eq!(resized.height(), 166); // 900 * 216/1170 ≈ 166
 }
 
 #[test]
@@ -448,7 +459,10 @@ Full synopsis here."#;
     // then: tagline and og_image data are available for OG tags
     assert_eq!(meta.tagline.as_deref(), Some("A short description."));
     assert!(!images.is_empty());
-    assert_eq!(images[0].url, "https://github.com/user-attachments/assets/abc123");
+    assert_eq!(
+        images[0].url,
+        "https://github.com/user-attachments/assets/abc123"
+    );
     assert_eq!(images[0].width, Some(384));
     assert_eq!(images[0].height, Some(216));
     assert!(!images[0].is_composite());
@@ -534,10 +548,7 @@ fn validate_all_markdown_files() {
     // when: checking each file for valid frontmatter and images
     let mut errors = Vec::new();
 
-    for entry in WalkDir::new(works_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new(works_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
         if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
@@ -547,10 +558,14 @@ fn validate_all_markdown_files() {
         // - A colon or similar aborts `git checkout` on NTFS for every contributor
         //   on that platform (e.g. the `POV: Verity.md` breakage).
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if let Some(bad) = name.chars().find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+            if let Some(bad) = name
+                .chars()
+                .find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+            {
                 errors.push(format!(
                     "{}: filename contains '{}', which is illegal on Windows",
-                    path.display(), bad
+                    path.display(),
+                    bad
                 ));
             }
         }
@@ -577,23 +592,35 @@ fn validate_all_markdown_files() {
             errors.push(format!("{}: released date is empty", path.display()));
         }
         if meta.tags.is_none() {
-            errors.push(format!("{}: tags field missing from frontmatter", path.display()));
+            errors.push(format!(
+                "{}: tags field missing from frontmatter",
+                path.display()
+            ));
         }
 
         // released year should match the folder year
         let released = meta.released.as_deref().unwrap_or("");
-        let folder_year = path.parent()
+        let folder_year = path
+            .parent()
             .and_then(|p| p.file_name())
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        if !released.is_empty() && released != RELEASED_UNKNOWN && !folder_year.is_empty() && !released.starts_with(folder_year) {
+        if !released.is_empty()
+            && released != RELEASED_UNKNOWN
+            && !folder_year.is_empty()
+            && !released.starts_with(folder_year)
+        {
             errors.push(format!(
                 "{}: released '{}' does not match folder year '{}'",
-                path.display(), released, folder_year
+                path.display(),
+                released,
+                folder_year
             ));
         }
 
-        if !body.contains("<!-- TODO") && !body.contains("src=\"https://github.com/user-attachments/") {
+        if !body.contains("<!-- TODO")
+            && !body.contains("src=\"https://github.com/user-attachments/")
+        {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
         }
 
@@ -602,7 +629,9 @@ fn validate_all_markdown_files() {
             if idx >= image_count {
                 errors.push(format!(
                     "{}: thumbnail_index {} out of range (only {} images)",
-                    path.display(), idx, image_count
+                    path.display(),
+                    idx,
+                    image_count
                 ));
             }
         }
@@ -613,8 +642,14 @@ fn validate_all_markdown_files() {
             .split("\n---")
             .next()
             .unwrap_or("");
-        if !frontmatter_raw.lines().any(|l| l.trim_start().starts_with("thumbnail_index:")) {
-            errors.push(format!("{}: thumbnail_index field missing from frontmatter", path.display()));
+        if !frontmatter_raw
+            .lines()
+            .any(|l| l.trim_start().starts_with("thumbnail_index:"))
+        {
+            errors.push(format!(
+                "{}: thumbnail_index field missing from frontmatter",
+                path.display()
+            ));
         }
     }
 
@@ -669,9 +704,7 @@ fn creator_index_excludes_current_game() {
 #[test]
 fn creator_index_single_game_creator() {
     // given: creator with only 1 game
-    let games = games_map(vec![
-        make_game("2024", "Only Game", "Solo", "2024/01/01"),
-    ]);
+    let games = games_map(vec![make_game("2024", "Only Game", "Solo", "2024/01/01")]);
     let index = build_creator_paths(&games);
 
     // when: getting related paths
@@ -705,7 +738,13 @@ fn creator_index_multi_creator_game() {
     let index = build_creator_paths(&games);
 
     // when: getting related paths for the collab game
-    let related = get_related_paths(&index, "Alice, Bob", "/works/2024/Collab", 4, &HashMap::new());
+    let related = get_related_paths(
+        &index,
+        "Alice, Bob",
+        "/works/2024/Collab",
+        4,
+        &HashMap::new(),
+    );
 
     // then: Bob's section shows Solo
     assert_eq!(related.len(), 1);
@@ -896,7 +935,7 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
         "ai".into(),
         "Terrace and Ray".into(),
         "Spooktober".into(),
-        "mystery".into(),       // unconfigured noise
+        "mystery".into(), // unconfigured noise
     ];
 
     // when: deriving the two badge slots the way the renderers do
@@ -912,7 +951,10 @@ fn cards_emit_at_most_one_left_and_one_right_badge(cfg: HashMap<String, TagInfo>
 
     // total badges rendered = at most 1 (right) + at most 1 (left) = max 2
     let total_badges = right_slot.is_some() as usize + left_slot as usize;
-    assert_eq!(total_badges, 2, "exactly two badges rendered for this input");
+    assert_eq!(
+        total_badges, 2,
+        "exactly two badges rendered for this input"
+    );
     assert!(total_badges <= 2, "badge count is bounded at 2");
 }
 
@@ -934,17 +976,19 @@ fn cards_emit_zero_badges_when_no_tag_qualifies(cfg: HashMap<String, TagInfo>) {
 #[case::english("English")]
 #[case::korean("한국어")]
 #[case::chinese("中文")]
-fn language_tag_propagates_yaml_colour_to_bar(
-    cfg: HashMap<String, TagInfo>,
-    #[case] tag: &str,
-) {
+fn language_tag_propagates_yaml_colour_to_bar(cfg: HashMap<String, TagInfo>, #[case] tag: &str) {
     // given: a registered language tag and a game using it
-    let info = cfg.get(&tag.to_lowercase()).expect("tag is configured in yaml");
+    let info = cfg
+        .get(&tag.to_lowercase())
+        .expect("tag is configured in yaml");
     let games = games_map(vec![make_game_with_tags("2024", "g", vec![tag])]);
 
     // when: building the tag-index row
     let bar = build_tag_index(&games, &cfg);
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case(tag)).expect("row present");
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case(tag))
+        .expect("row present");
 
     // then: bar entry carries whatever colour yaml/config defined — no hardcoded hex, so the test tracks yaml changes
     assert_eq!(row.colour.as_deref(), Some(info.colour.as_str()));
@@ -1044,8 +1088,14 @@ fn alias_groups_resolve_bidirectionally() {
     assert_eq!(aliases.get("alice").unwrap().len(), 2);
     assert_eq!(aliases.get("アリス").unwrap().len(), 2);
     assert_eq!(aliases.get("a-chan").unwrap().len(), 2);
-    assert!(aliases.get("alice").unwrap().contains(&"アリス".to_string()));
-    assert!(aliases.get("alice").unwrap().contains(&"A-chan".to_string()));
+    assert!(aliases
+        .get("alice")
+        .unwrap()
+        .contains(&"アリス".to_string()));
+    assert!(aliases
+        .get("alice")
+        .unwrap()
+        .contains(&"A-chan".to_string()));
 }
 
 #[test]
@@ -1081,8 +1131,17 @@ fn alias_no_duplicate_games() {
     let related = get_related_paths(&index, "Alice, アリス", "/works/2024/Collab", 4, &aliases);
 
     // then: Solo appears only once (not duplicated across alias lookups)
-    let all_paths: Vec<&str> = related.iter().flat_map(|(_, paths)| paths.iter().copied()).collect();
-    assert_eq!(all_paths.iter().filter(|p| **p == "/works/2024/Solo").count(), 1);
+    let all_paths: Vec<&str> = related
+        .iter()
+        .flat_map(|(_, paths)| paths.iter().copied())
+        .collect();
+    assert_eq!(
+        all_paths
+            .iter()
+            .filter(|p| **p == "/works/2024/Solo")
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -1090,7 +1149,11 @@ fn special_tags_get_colour() {
     // given: tag config with palette and groups
     let yaml = "colours:\n  content: \"#dc2626\"\n  contest: \"#d97706\"\ntags:\n  - colour: content\n    tags: [r18]\n  - colour: contest\n    tags: [Summer Jam]";
     let config = load_tag_config(yaml);
-    let tags = vec!["r18".to_string(), "Summer Jam".to_string(), "mystery".to_string()];
+    let tags = vec![
+        "r18".to_string(),
+        "Summer Jam".to_string(),
+        "mystery".to_string(),
+    ];
 
     // when: building tags line
     let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
@@ -1157,7 +1220,8 @@ fn tag_index_excludes_r18() {
 #[test]
 fn tag_index_counts_games_per_tag() {
     // given: 3 games — 2 carry "Spooktober", 1 has no tags
-    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
+    let cfg =
+        load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [Spooktober]");
     let games = games_map(vec![
         make_game_with_tags("2024", "a", vec!["Spooktober"]),
         make_game_with_tags("2024", "b", vec!["Spooktober", "ai"]),
@@ -1168,7 +1232,10 @@ fn tag_index_counts_games_per_tag() {
     let bar = build_tag_index(&games, &cfg);
 
     // then: Spooktober's count reflects only the games that carry it
-    let spook = bar.iter().find(|e| e.name == "Spooktober").expect("Spooktober present");
+    let spook = bar
+        .iter()
+        .find(|e| e.name == "Spooktober")
+        .expect("Spooktober present");
     assert_eq!(spook.count, 2);
 }
 
@@ -1186,7 +1253,10 @@ fn tag_index_dedupes_case_insensitively() {
     let bar = build_tag_index(&games, &cfg);
 
     // then: collapses to a single entry whose count covers all 3 games
-    let ai_rows: Vec<_> = bar.iter().filter(|e| e.name.eq_ignore_ascii_case("ai")).collect();
+    let ai_rows: Vec<_> = bar
+        .iter()
+        .filter(|e| e.name.eq_ignore_ascii_case("ai"))
+        .collect();
     assert_eq!(ai_rows.len(), 1);
     assert_eq!(ai_rows[0].count, 3);
 }
@@ -1195,31 +1265,43 @@ fn tag_index_dedupes_case_insensitively() {
 fn tag_index_dedupes_within_single_game() {
     // given: a single game listing the same tag twice with different casings
     let cfg = HashMap::new();
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["mystery", "MYSTERY"]),
-    ]);
+    let games = games_map(vec![make_game_with_tags(
+        "2024",
+        "a",
+        vec!["mystery", "MYSTERY"],
+    )]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
 
     // then: the duplicate within one game still counts as 1
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("mystery")).unwrap();
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case("mystery"))
+        .unwrap();
     assert_eq!(row.count, 1);
 }
 
 #[test]
 fn tag_index_yaml_casing_wins_over_md_casing() {
     // given: yaml declares "Terrace and Ray", md uses lowercase "terrace and ray"
-    let cfg = load_tag_config("colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]");
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["terrace and ray"]),
-    ]);
+    let cfg = load_tag_config(
+        "colours:\n  pub: \"#0891b2\"\ntags:\n  - colour: pub\n    tags: [Terrace and Ray]",
+    );
+    let games = games_map(vec![make_game_with_tags(
+        "2024",
+        "a",
+        vec!["terrace and ray"],
+    )]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);
 
     // then: the entry uses the yaml's canonical display casing
-    let row = bar.iter().find(|e| e.name.eq_ignore_ascii_case("terrace and ray")).unwrap();
+    let row = bar
+        .iter()
+        .find(|e| e.name.eq_ignore_ascii_case("terrace and ray"))
+        .unwrap();
     assert_eq!(row.name, "Terrace and Ray");
 }
 
@@ -1244,7 +1326,8 @@ fn tag_index_includes_unconfigured_md_tags() {
 #[test]
 fn tag_index_includes_configured_tags_with_zero_uses() {
     // given: yaml configures a tag that no game currently uses
-    let cfg = load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
+    let cfg =
+        load_tag_config("colours:\n  c: \"#000\"\ntags:\n  - colour: c\n    tags: [GhostFest]");
     let games: HashMap<String, ParsedGame> = HashMap::new();
 
     // when: building the tag index
@@ -1279,9 +1362,7 @@ fn tag_index_sorts_count_desc_then_name_asc() {
 fn tag_index_configured_carries_colour() {
     // given: a configured tag with a known colour, used by one game
     let cfg = load_tag_config("colours:\n  c: \"#abcdef\"\ntags:\n  - colour: c\n    tags: [Foo]");
-    let games = games_map(vec![
-        make_game_with_tags("2024", "a", vec!["Foo"]),
-    ]);
+    let games = games_map(vec![make_game_with_tags("2024", "a", vec!["Foo"])]);
 
     // when: building the tag index
     let bar = build_tag_index(&games, &cfg);

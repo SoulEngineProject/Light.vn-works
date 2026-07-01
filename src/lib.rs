@@ -1,7 +1,7 @@
 pub mod app;
 
-use pulldown_cmark::{html, Parser, Event};
-use serde::{Serialize, Deserialize};
+use pulldown_cmark::{html, Event, Parser};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -199,7 +199,10 @@ pub fn extract_all_images(md: &str) -> Vec<ImageInfo> {
                     let url = html_str[abs_start..abs_start + end_quote].to_string();
                     // Find the tag boundaries to extract width/height
                     let tag_start = html_str[..search_from + src_start].rfind('<').unwrap_or(0);
-                    let tag_end = abs_start + end_quote + html_str[abs_start + end_quote..].find('>').unwrap_or(0) + 1;
+                    let tag_end = abs_start
+                        + end_quote
+                        + html_str[abs_start + end_quote..].find('>').unwrap_or(0)
+                        + 1;
                     let tag = &html_str[tag_start..tag_end];
                     images.push(ImageInfo {
                         url,
@@ -359,14 +362,14 @@ pub fn game_page_suffixes(
 /// - Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
 pub struct ParsedGame {
-    pub year: String,                // directory name
-    pub title: String,               // file stem, no .md
-    pub path: String,                // "/works/YYYY/title", no .md
+    pub year: String,  // directory name
+    pub title: String, // file stem, no .md
+    pub path: String,  // "/works/YYYY/title", no .md
     pub meta: GameMeta,
-    pub body_html: String,           // pre-rendered markdown
+    pub body_html: String, // pre-rendered markdown
     pub images: Vec<ImageInfo>,
-    pub thumbnail: Option<String>,           // card-size URL: "/thumb/UUID/card" or passthrough
-    pub thumbnail_ribbon: Option<String>,    // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
+    pub thumbnail: Option<String>, // card-size URL: "/thumb/UUID/card" or passthrough
+    pub thumbnail_ribbon: Option<String>, // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
     pub thumbnail_composite: bool,
 }
 
@@ -421,9 +424,7 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 /// - Build creator → paths index.
 /// - Paths are sorted by release date descending (unknown last).
 /// - Creators with commas are split into separate entries.
-pub fn build_creator_paths(
-    games: &HashMap<String, ParsedGame>,
-) -> HashMap<String, Vec<String>> {
+pub fn build_creator_paths(games: &HashMap<String, ParsedGame>) -> HashMap<String, Vec<String>> {
     let mut index: HashMap<String, Vec<String>> = HashMap::new();
 
     for game in games.values() {
@@ -572,18 +573,23 @@ pub fn load_tag_config(yaml: &str) -> HashMap<String, TagInfo> {
     });
     let mut map = HashMap::new();
     for group in config.tags {
-        let resolved_colour = config.colours.get(&group.colour)
+        let resolved_colour = config
+            .colours
+            .get(&group.colour)
             .cloned()
             .unwrap_or(group.colour.clone());
         let card_priority_badge = group.card_priority_badge.unwrap_or(true);
         for tag in &group.tags {
-            map.insert(tag.to_lowercase(), TagInfo {
-                colour: resolved_colour.clone(),
-                display_name: tag.clone(),
-                url: group.url.clone(),
-                label: group.label.clone(),
-                card_priority_badge,
-            });
+            map.insert(
+                tag.to_lowercase(),
+                TagInfo {
+                    colour: resolved_colour.clone(),
+                    display_name: tag.clone(),
+                    url: group.url.clone(),
+                    label: group.label.clone(),
+                    card_priority_badge,
+                },
+            );
         }
     }
     map
@@ -621,11 +627,14 @@ pub fn build_tag_index(
         if lower == "r18" {
             continue;
         }
-        rows.insert(lower.clone(), Row {
-            display: info.display_name.clone(),
-            colour: Some(info.colour.clone()),
-            count: 0,
-        });
+        rows.insert(
+            lower.clone(),
+            Row {
+                display: info.display_name.clone(),
+                colour: Some(info.colour.clone()),
+                count: 0,
+            },
+        );
     }
 
     for game in games.values() {
@@ -648,14 +657,18 @@ pub fn build_tag_index(
         }
     }
 
-    let mut out: Vec<TagBarEntry> = rows.into_values().map(|r| TagBarEntry {
-        name: r.display,
-        colour: r.colour,
-        count: r.count,
-    }).collect();
+    let mut out: Vec<TagBarEntry> = rows
+        .into_values()
+        .map(|r| TagBarEntry {
+            name: r.display,
+            colour: r.colour,
+            count: r.count,
+        })
+        .collect();
 
     out.sort_by(|a, b| {
-        b.count.cmp(&a.count)
+        b.count
+            .cmp(&a.count)
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
@@ -664,9 +677,9 @@ pub fn build_tag_index(
 
 /// Get inline style for a tag badge, or None if unknown.
 pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<String> {
-    tag_config.get(&tag.to_lowercase()).map(|info| {
-        format!("background:{};color:white", info.colour)
-    })
+    tag_config
+        .get(&tag.to_lowercase())
+        .map(|info| format!("background:{};color:white", info.colour))
 }
 
 /// Pick the tag for the top-right priority badge slot. Priority order:
@@ -685,11 +698,16 @@ pub fn pick_priority_tag<'a>(
     if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("r18")) {
         return Some(t.as_str());
     }
-    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("terrace and ray")) {
+    if let Some(t) = tags
+        .iter()
+        .find(|t| t.eq_ignore_ascii_case("terrace and ray"))
+    {
         return Some(t.as_str());
     }
     if let Some(t) = tags.iter().find(|t| {
-        config.get(&t.to_lowercase()).is_some_and(|info| info.card_priority_badge)
+        config
+            .get(&t.to_lowercase())
+            .is_some_and(|info| info.card_priority_badge)
     }) {
         return Some(t.as_str());
     }
@@ -727,47 +745,64 @@ pub fn build_tags_line(
     let tag_links: String = if tags.is_empty() {
         "<span class=\"tags-none\">\u{2014}</span>".to_string()
     } else {
-        tags.iter().map(|tag| {
-            let style_attr = match tag_style(tag, tag_config) {
-                Some(s) => format!(r#" style="{}""#, s),
-                None => String::new(),
-            };
-            let class = if tag_style(tag, tag_config).is_some() { "tag-link" } else { "tag-link tag-default" };
-            let href = if let Some(lang) = lang_param {
-                format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
-            } else {
-                format!("/?search={}", html_escape(tag))
-            };
-            format!(
-                r#"<a href="{}" class="{}"{}>{}</a>"#,
-                href,
-                class,
-                style_attr,
-                html_escape(&tag.to_uppercase())
-            )
-        }).collect()
+        tags.iter()
+            .map(|tag| {
+                let style_attr = match tag_style(tag, tag_config) {
+                    Some(s) => format!(r#" style="{}""#, s),
+                    None => String::new(),
+                };
+                let class = if tag_style(tag, tag_config).is_some() {
+                    "tag-link"
+                } else {
+                    "tag-link tag-default"
+                };
+                let href = if let Some(lang) = lang_param {
+                    format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
+                } else {
+                    format!("/?search={}", html_escape(tag))
+                };
+                format!(
+                    r#"<a href="{}" class="{}"{}>{}</a>"#,
+                    href,
+                    class,
+                    style_attr,
+                    html_escape(&tag.to_uppercase())
+                )
+            })
+            .collect()
     };
 
     // Build event links for tags that have url/label
-    let year = if released.len() >= 4 { &released[..4] } else { "" };
-    let event_links: String = tags.iter().filter_map(|tag| {
-        let info = tag_config.get(&tag.to_lowercase())?;
-        let url_template = info.url.as_deref()?;
-        let label_template = info.label.as_deref()?;
-        let url = url_template.replace("{year}", year).replace("{tag}", tag);
-        let label = label_template.replace("{year}", year).replace("{tag}", tag);
-        Some(format!(
-            r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
-            html_escape(&url),
-            html_escape(&label)
-        ))
-    }).collect();
+    let year = if released.len() >= 4 {
+        &released[..4]
+    } else {
+        ""
+    };
+    let event_links: String = tags
+        .iter()
+        .filter_map(|tag| {
+            let info = tag_config.get(&tag.to_lowercase())?;
+            let url_template = info.url.as_deref()?;
+            let label_template = info.label.as_deref()?;
+            let url = url_template.replace("{year}", year).replace("{tag}", tag);
+            let label = label_template.replace("{year}", year).replace("{tag}", tag);
+            Some(format!(
+                r#"<a href="{}" class="tag-event-link" target="_blank" rel="noopener">{}</a>"#,
+                html_escape(&url),
+                html_escape(&label)
+            ))
+        })
+        .collect();
 
     format!(
         r#"<div class="tags-line"><span class="tags-label">{}</span> {}{}</div>"#,
         html_escape(tags_label),
         tag_links,
-        if event_links.is_empty() { String::new() } else { format!(r#" {}"#, event_links) }
+        if event_links.is_empty() {
+            String::new()
+        } else {
+            format!(r#" {}"#, event_links)
+        }
     )
 }
 

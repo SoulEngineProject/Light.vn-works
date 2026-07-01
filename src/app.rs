@@ -1,12 +1,12 @@
 use axum::{
+    body::Body,
+    extract::Path as AxumPath,
+    extract::{Query, State},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::get,
     routing::get_service,
     Router,
-    body::Body,
-    extract::Path as AxumPath,
-    response::{Html, IntoResponse, Response},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    extract::{Query, State},
 };
 use dashmap::DashMap;
 use serde::Serialize;
@@ -23,11 +23,11 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use walkdir::WalkDir;
 
 use crate::{
-    GameMeta, ParsedGame, TagInfo, ThumbSize, extract_user_attachment_uuid,
-    parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
-    game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
-    build_tag_index, get_related_paths, gallery_rows, build_tags_line, load_aliases,
-    load_tag_config, pick_priority_tag, tag_style, get_lang, build_sitemap, released_to_lastmod,
+    build_creator_paths, build_sitemap, build_tag_index, build_tags_line, encode_path,
+    extract_all_images, extract_user_attachment_uuid, gallery_rows, game_page_suffixes, get_lang,
+    get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
+    parse_frontmatter, pick_priority_tag, released_to_lastmod, resize_thumbnail, strip_img_tags,
+    tag_style, GameMeta, ParsedGame, TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -138,7 +138,13 @@ async fn render_markdown(
     let detected_lang = match lang_param {
         Some("ja") => "ja",
         Some("en") => "en",
-        _ => if accept_lang.contains("ja") { "ja" } else { "en" },
+        _ => {
+            if accept_lang.contains("ja") {
+                "ja"
+            } else {
+                "en"
+            }
+        }
     };
     let lang = get_lang(detected_lang);
     let incoming_r18_zero = params.get("r18").map(|s| s.as_str()) == Some("0");
@@ -198,7 +204,13 @@ async fn render_markdown(
     // - Forward-link (more-from cards): preserves whatever r18 state the user arrived with.
     let (home_suffix, fwd_suffix) = game_page_suffixes(lang_param, is_r18, incoming_r18_zero);
     let released = meta.released.as_deref().unwrap_or("");
-    let tags_line = build_tags_line(tags, &lang.tags_label, lang_param, &state.tag_config, released);
+    let tags_line = build_tags_line(
+        tags,
+        &lang.tags_label,
+        lang_param,
+        &state.tag_config,
+        released,
+    );
 
     let mut extra_links_html = String::new();
     if let Some(extras) = &meta.extra_links {
@@ -228,9 +240,14 @@ async fn render_markdown(
     let gallery_count = match images.len() {
         0 | 1 => 0,
         n => {
-            let g = n - 1;            // exclude hero
-            if g % 2 == 1 { g - 1 }   // strip orphan; promoted to editor mockup
-            else { g }
+            let g = n - 1; // exclude hero
+            if g % 2 == 1 {
+                g - 1
+            }
+            // strip orphan; promoted to editor mockup
+            else {
+                g
+            }
         }
     };
 
@@ -260,7 +277,9 @@ async fn render_markdown(
     let synopsis_html = strip_img_tags(md_html);
 
     // Fallback to title if no tagline — only used in meta/OG tags (SEO), not visible on page
-    let tagline = meta.tagline.as_deref()
+    let tagline = meta
+        .tagline
+        .as_deref()
         .filter(|t| !t.is_empty())
         .unwrap_or(&title_display);
     let og_image = images.first().map(|img| img.url.as_str()).unwrap_or("");
@@ -270,7 +289,11 @@ async fn render_markdown(
 
     // - Editor mockup: show last screenshot inside the Light.vn editor frame.
     // - For composite images (width > height*2), crop to the rightmost third via CSS.
-    let editor_img = if detected_lang == "ja" { "editor_jp.webp" } else { "editor_en.webp" };
+    let editor_img = if detected_lang == "ja" {
+        "editor_jp.webp"
+    } else {
+        "editor_en.webp"
+    };
     let editor_mockup = images.last().map(|img| {
         let preview_html = if img.is_composite() {
             format!(
@@ -294,7 +317,13 @@ async fn render_markdown(
     }).unwrap_or_default();
 
     let creator_field = meta.creator.as_deref().unwrap_or("");
-    let related = get_related_paths(&state.creator_paths, creator_field, &canonical_path, usize::MAX, &state.aliases);
+    let related = get_related_paths(
+        &state.creator_paths,
+        creator_field,
+        &canonical_path,
+        usize::MAX,
+        &state.aliases,
+    );
     let more_from_creator: String = related
         .iter()
         .map(|(name, paths)| {
@@ -513,7 +542,11 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
             children: None,
             thumbnail: game.thumbnail.clone(),
             thumbnail_ribbon: game.thumbnail_ribbon.clone(),
-            thumbnail_composite: if game.thumbnail_composite { Some(true) } else { None },
+            thumbnail_composite: if game.thumbnail_composite {
+                Some(true)
+            } else {
+                None
+            },
             meta: Some(game.meta.clone()),
         });
     }
@@ -598,11 +631,7 @@ async fn serve_thumb(
 // - Fetch the original from GitHub, decode, resize, re-encode as JPEG q=80, insert into cache.
 // - Semaphore caps concurrent populates to avoid saturating free-tier CPU when many misses arrive in a burst.
 // - Failures are logged and the in-flight slot released so the next miss retries.
-async fn populate_thumbnail(
-    state: AppState,
-    key: (String, ThumbSize),
-    original_url: String,
-) {
+async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_url: String) {
     // - Record the first populate's start time for cumulative progress logging.
     // - OnceLock::set is a no-op after the first call.
     let _ = state.thumb_populate_start.set(Instant::now());
@@ -635,8 +664,7 @@ async fn populate_thumbnail(
             .thumb_fetch_millis
             .fetch_add(fetch_start.elapsed().as_millis() as u64, Ordering::Relaxed);
 
-        let img = image::load_from_memory(&bytes)
-            .map_err(|e| format!("decode: {}", e))?;
+        let img = image::load_from_memory(&bytes).map_err(|e| format!("decode: {}", e))?;
         let resized = resize_thumbnail(&img, size);
         // - WebP q=80 lossy via libwebp. Smaller than JPEG at equivalent visual quality.
         // - Preserves alpha channels (JPEG would flatten them).
@@ -723,8 +751,8 @@ pub fn build_app() -> Router {
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     // - Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts) and serialize it once.
     // - Static across requests.
-    let tag_bar_json = serde_json::to_string(&build_tag_index(&games, &tag_config))
-        .unwrap_or_default();
+    let tag_bar_json =
+        serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default();
     // - Pre-serialize the {[name]: {colour, card_priority_badge}} payload that the homepage embeds as the TAG_INFO global.
     // - Static across requests.
     let tag_info_json = {
@@ -733,11 +761,17 @@ pub fn build_app() -> Router {
             colour: &'a str,
             card_priority_badge: bool,
         }
-        let map: HashMap<&str, ClientTagInfo> = tag_config.iter()
-            .map(|(k, v)| (k.as_str(), ClientTagInfo {
-                colour: v.colour.as_str(),
-                card_priority_badge: v.card_priority_badge,
-            }))
+        let map: HashMap<&str, ClientTagInfo> = tag_config
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.as_str(),
+                    ClientTagInfo {
+                        colour: v.colour.as_str(),
+                        card_priority_badge: v.card_priority_badge,
+                    },
+                )
+            })
             .collect();
         serde_json::to_string(&map).unwrap_or_default()
     };
@@ -781,6 +815,23 @@ pub fn build_app() -> Router {
         HeaderValue::from_static("no-cache"),
     );
 
+    // - Baseline security headers for a public, user-content site.
+    // - nosniff: don't let browsers MIME-sniff proxied images/attachments.
+    // - DENY framing: anti-clickjacking (the site is never meant to be embedded).
+    // - Referrer-Policy: don't leak full URLs (with query params) to third parties.
+    let nosniff = SetResponseHeaderLayer::overriding(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    let frame_options = SetResponseHeaderLayer::overriding(
+        header::X_FRAME_OPTIONS,
+        HeaderValue::from_static("DENY"),
+    );
+    let referrer_policy = SetResponseHeaderLayer::overriding(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+
     Router::new()
         .route("/", get(serve_home))
         .route("/api/tree", get(get_tree))
@@ -791,6 +842,9 @@ pub fn build_app() -> Router {
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
         .layer(cache_control)
+        .layer(nosniff)
+        .layer(frame_options)
+        .layer(referrer_policy)
         .layer(CompressionLayer::new())
         .with_state(state)
 }
