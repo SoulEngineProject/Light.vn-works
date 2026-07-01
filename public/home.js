@@ -31,8 +31,8 @@ if (typeof LANG_DATA !== 'undefined') {
 setupLangToggle();
 applyStaticTranslations();
 
-// Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_INFO, TAG_BAR).
-// No API fetch needed — everything is baked into the HTML at serve time.
+// - Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_INFO, TAG_BAR)
+// - No API fetch needed; everything is baked into the HTML at serve time
 if (typeof TREE_DATA !== 'undefined') {
   allData = TREE_DATA;
   var initialQuery = document.getElementById('search').value.trim().toLowerCase();
@@ -100,14 +100,13 @@ function setHtml(id, html) {
 }
 
 // Percent-encode each path segment individually so reserved chars like '#'
-// in titles don't get interpreted as fragment separators by the browser.
+// in titles aren't read as fragment separators by the browser.
 function encodePath(path) {
   return path.split('/').map(encodeURIComponent).join('/');
 }
 
-// Build an href that preserves lang + r18 state so navigation doesn't silently
-// reset the user's filter. Reads live checkbox state each call so mid-session
-// toggles are reflected on re-render.
+// - Build an href that preserves lang + r18 state so navigation doesn't reset the user's filter
+// - Reads live checkbox state each call so mid-session toggles reflect on re-render
 function buildHref(linkPath) {
   var parts = [];
   if (LANG_PARAM) {
@@ -120,9 +119,8 @@ function buildHref(linkPath) {
   return encodePath(linkPath) + (parts.length ? '?' + parts.join('&') : '');
 }
 
-// Debounce typing so we don't churn the URL bar on every keystroke. ~250ms
-// is short enough to feel synchronous when sharing, long enough that mid-word
-// pauses don't trigger writes.
+// - Debounce typing so we don't churn the URL bar on every keystroke
+// - ~250ms feels synchronous when sharing, but long enough that mid-word pauses don't trigger writes
 var syncTimer = null;
 document.getElementById('search').addEventListener('input', function() {
   rerender();
@@ -143,9 +141,8 @@ function rerender() {
   }
 }
 
-// Mirror current UI state into the URL via replaceState — shareable links
-// without polluting browser history on every keystroke. Does not touch
-// ?lang (owned by the language toggle handler) or the hash.
+// - Mirror current UI state into the URL via replaceState for shareable links, without polluting browser history on every keystroke
+// - Does not touch ?lang (owned by the language toggle handler) or the hash
 function syncUrl() {
   const url = new URL(location.href);
   const search = document.getElementById('search').value.trim();
@@ -163,12 +160,10 @@ function syncUrl() {
   history.replaceState(null, '', url.toString());
 }
 
-// Pick the tag for the top-right priority badge slot. Mirrors
-// src/lib.rs::pick_priority_tag. Priority order: R18 → Terrace and Ray →
-// first other configured tag whose group has card_priority_badge: true.
-// AI and language tags have card_priority_badge: false in tags.yaml so they
-// never promote into this slot — AI uses the left-slot, languages are
-// metadata for the tag-bar filter only.
+// - Pick the tag for the top-right priority badge slot
+// - Mirrors src/lib.rs::pick_priority_tag
+// - Priority order: R18 → Terrace and Ray → first other configured tag whose group has card_priority_badge: true
+// - AI and language tags have card_priority_badge: false in tags.yaml, so they never promote here: AI uses the left slot, languages are metadata for the tag-bar filter only
 function pickPriorityTag(tags, tagInfo) {
   let t = tags.find(x => x.toLowerCase() === 'r18');
   if (t) {
@@ -215,10 +210,9 @@ function renderTree(data, query, hideR18) {
         return true;
       }
 
-      const name = item.name.replace(/\.md$/i, '').toLowerCase();
-      const creator = (item.meta && item.meta.creator) ? item.meta.creator.toLowerCase() : '';
-      const tagStr = tags.join(' ').toLowerCase();
-      return name.includes(query) || creator.includes(query) || tagStr.includes(query);
+      const name = item.name.replace(/\.md$/i, '');
+      const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
+      return workMatchesSearch(query, name, creator, tags);
     });
 
     items.sort((a, b) => {
@@ -262,8 +256,8 @@ function renderTree(data, query, hideR18) {
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
 
       var tagInfo = (typeof TAG_INFO !== 'undefined') ? TAG_INFO : {};
-      // Two-slot layout: priority badge (top-right) + AI (top-left).
-      // See pickPriorityTag() for priority order.
+      // - Two-slot layout: priority badge (top-right) + AI (top-left)
+      // - See pickPriorityTag() for priority order
       let badges = '';
       const priorityTag = pickPriorityTag(tags, tagInfo);
       if (priorityTag) {
@@ -284,7 +278,7 @@ function renderTree(data, query, hideR18) {
         thumbHtml = '<div class="card-thumb">' + badges +
           '<div class="card-thumb-composite" style="background-image:url(\'' + item.thumbnail + '\')"></div></div>';
       } else if (item.thumbnail) {
-        // alt="" is intentional: .card-title below is the accessible label, and empty alt avoids flashing game titles in the image box during slow loads.
+        // alt="" is intentional: .card-title below is the accessible label, and empty alt avoids flashing game titles in the image box during slow loads
         thumbHtml = '<div class="card-thumb">' + badges +
           '<img src="' + item.thumbnail + '" alt="" loading="lazy" onerror="retryImage.call(this)" /></div>';
       } else {
@@ -306,7 +300,9 @@ function renderTree(data, query, hideR18) {
   });
 
   if (totalVisible === 0 && query) {
-    const msg = (t.no_results || 'No results for "{q}"').replace('{q}', escapeHtml(query));
+    // Show the tag name for a tag: query, otherwise the raw text.
+    const shown = parseTagQuery(query) || query;
+    const msg = (t.no_results || 'No results for "{q}"').replace('{q}', escapeHtml(shown));
     container.innerHTML = '<p class="no-results">' + msg + '</p>';
   }
 }
@@ -327,8 +323,8 @@ function buildRibbon(data) {
             path = path.slice(0, -3);
           }
           const title = item.name.replace(/\.md$/i, '').trim();
-          // thumbnail_ribbon is the smaller (240x140) proxy URL for GitHub
-          // user-attachments; falls back to thumbnail for non-proxied URLs.
+          // - thumbnail_ribbon is the smaller (240x140) proxy URL for GitHub user-attachments
+          // - Falls back to thumbnail for non-proxied URLs
           const url = item.thumbnail_ribbon || item.thumbnail;
           items.push({ url: url, path: path, title: title, composite: !!item.thumbnail_composite });
         }
@@ -355,9 +351,8 @@ function buildRibbon(data) {
     const track = document.createElement('div');
     track.className = 'ribbon-track' + (reverse ? ' reverse' : '');
 
-    // Track the first N <img> elements per row — they're visible at rest and
-    // worth fetching before the off-screen ones. Composites are skipped (they
-    // use background-image, not <img>, so fetchpriority doesn't apply).
+    // - Track the first N <img> elements per row: visible at rest, worth fetching before the off-screen ones
+    // - Composites are skipped (they use background-image, not <img>, so fetchpriority doesn't apply)
     const HIGH_PRIORITY_LIMIT = 3;
     let imgIdx = 0;
 
@@ -365,7 +360,8 @@ function buildRibbon(data) {
     all.forEach(entry => {
       const a = document.createElement('a');
       a.href = buildHref(entry.path);
-      // aria-label is the accessible name for the link; title is the sighted-hover tooltip. img below uses alt="" since this link already carries the name.
+      // - aria-label is the accessible name for the link; title is the sighted-hover tooltip
+      // - img below uses alt="" since this link already carries the name
       a.title = entry.title;
       a.setAttribute('aria-label', entry.title);
       if (entry.composite) {
@@ -379,8 +375,8 @@ function buildRibbon(data) {
         img.loading = 'lazy';
         img.alt = '';
         img.onerror = retryImage;
-        // First ~3 visible at start get priority; the rest are off-screen
-        // and revealed via marquee scroll. Older browsers ignore the hint.
+        // - First ~3 visible at start get priority; the rest are off-screen, revealed via marquee scroll
+        // - Older browsers ignore the hint
         img.fetchPriority = imgIdx < HIGH_PRIORITY_LIMIT ? 'high' : 'low';
         imgIdx++;
         a.appendChild(img);
@@ -394,13 +390,10 @@ function buildRibbon(data) {
   container.appendChild(buildTrack(row1, false));
   container.appendChild(buildTrack(row2, true));
 
-  // Reveal when there's content to show. The first image's `load` event
-  // triggers fade-in — pairs with fetchpriority on visible imgs so content
-  // is already populated by reveal time. Composite-only ribbon: reveal
-  // immediately since composites don't fire load events but do have content.
-  // If every image fails permanently, ribbon stays hidden — correct, since
-  // a "revealed" empty container looks identical to a hidden one (opacity
-  // doesn't affect layout, container has no visible chrome of its own).
+  // - Reveal when there's content to show
+  // - The first image's `load` event triggers fade-in, pairing with fetchpriority on visible imgs so content is already populated by reveal time
+  // - Composite-only ribbon: reveal immediately, since composites don't fire load events but do have content
+  // - If every image fails permanently, ribbon stays hidden — correct, since a "revealed" empty container looks identical to a hidden one (opacity doesn't affect layout, container has no visible chrome of its own)
   var ribbonImages = container.querySelectorAll('img');
   function reveal() {
     container.classList.add('loaded');
@@ -417,9 +410,9 @@ function buildRibbon(data) {
   });
 }
 
-// Render the tag-filter bar from server-embedded TAG_BAR. Each chip is a
-// button that sets the search input to its tag name (idempotent click).
-// Configured tags use their colour; unconfigured tags get the default style.
+// - Render the tag-filter bar from server-embedded TAG_BAR
+// - Each chip is a button that sets the search input to its tag name (idempotent click)
+// - Configured tags use their colour; unconfigured tags get the default style
 function buildTagBar() {
   const container = document.getElementById('tag-bar');
   if (!container || typeof TAG_BAR === 'undefined' || !TAG_BAR.length) {
@@ -441,7 +434,14 @@ function buildTagBar() {
       ' <span class="tag-chip-count">' + entry.count + '</span>';
 
     btn.addEventListener('click', function() {
-      search.value = entry.name;
+      // - Toggle: clicking the active chip clears the filter; otherwise set a tag: query
+      // - Multi-word tags are quoted so they parse as one token
+      const current = parseTagQuery(search.value.trim().toLowerCase());
+      if (current === entry.name.toLowerCase()) {
+        search.value = '';
+      } else {
+        search.value = 'tag:' + (/\s/.test(entry.name) ? '"' + entry.name + '"' : entry.name);
+      }
       rerender();
       syncActiveTagChip();
       syncUrl();
@@ -455,19 +455,19 @@ function buildTagBar() {
   syncActiveTagChip();
 }
 
-// Mark the chip that exactly matches the current search input as active.
-// Exact match only (case-insensitive) — partial typing like "spook" doesn't
-// activate the Spooktober chip, matching how clicks set full tag names.
+// - Mark the chip matching the current tag: query as active
+// - Only a tag: query activates a chip: plain text like "spook" parses to null and lights nothing, while tag:Spooktober activates the Spooktober chip
 function syncActiveTagChip() {
   const container = document.getElementById('tag-bar');
   if (!container) {
     return;
   }
   const query = document.getElementById('search').value.trim().toLowerCase();
+  const activeTag = parseTagQuery(query);
   const chips = container.querySelectorAll('.tag-chip');
   let anyActive = false;
   chips.forEach(function(chip) {
-    const isActive = chip.dataset.tag.toLowerCase() === query;
+    const isActive = activeTag !== null && chip.dataset.tag.toLowerCase() === activeTag;
     chip.classList.toggle('active', isActive);
     if (isActive) {
       chip.setAttribute('aria-pressed', 'true');

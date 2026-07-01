@@ -16,6 +16,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+    # - Cache the cargo registry + target/ across runs so unchanged deps aren't recompiled.
+    # - Cold cache (first run, or a Cargo.lock/toolchain change) still rebuilds fully.
+    - name: Cache Rust build
+      uses: Swatinem/rust-cache@v2
     # All cargo steps below use --locked so CI fails (rather than silently
     # re-resolving) if Cargo.toml drifts from Cargo.lock — the safety net
     # that makes committing the lockfile load-bearing.
@@ -33,7 +37,16 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run tests
       run: cargo test --locked --verbose
-    - name: Install tarpaulin
-      run: cargo install cargo-tarpaulin
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - name: JS tests
+      run: node --test
+      working-directory: tests/js
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+    # - Cross-platform coverage (Linux/Windows/macOS), so local numbers match CI.
+    # - Gate: fail the build if line coverage drops below the floor; ratchet upward over time.
     - name: Coverage
-      run: cargo tarpaulin --locked --skip-clean
+      run: cargo llvm-cov --locked --summary-only --fail-under-lines 74

@@ -93,8 +93,8 @@ pub struct ExtraLink {
     pub url: String,
 }
 
-/// Split YAML frontmatter from markdown body.
-/// Returns (parsed meta, body without frontmatter).
+/// - Split YAML frontmatter from markdown body.
+/// - Returns (parsed meta, body without frontmatter).
 pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
     let trimmed = content.trim_start();
 
@@ -136,11 +136,13 @@ impl ImageInfo {
     }
 }
 
-/// A composite thumbnail is a wide-aspect strip (width more than 2× height),
-/// typically a side-by-side title screen. The site renders these with CSS
-/// `background-size: 340%` + center crop; preserving that wide aspect matters
-/// at every step (resize, detection, rendering). Single source of truth for
-/// the threshold so a future tweak only changes one place.
+/// - A composite thumbnail is a wide-aspect strip (width more than 2× height),
+///   typically a side-by-side title screen.
+/// - The site renders these with CSS `background-size: 340%` + center crop;
+///   preserving that wide aspect matters at every step (resize, detection,
+///   rendering).
+/// - Single source of truth for the threshold so a future tweak only changes
+///   one place.
 pub fn is_composite_dimensions(width: u32, height: u32) -> bool {
     height > 0 && width > height * 2
 }
@@ -229,10 +231,11 @@ pub fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Percent-encode reserved URL characters in a path. Preserves '/' (so callers
-/// can pass "/works/2021/title") and encodes everything else that's not an
-/// unreserved character per RFC 3986. Titles starting with '#' or containing
-/// '?' would otherwise be mis-parsed by the browser.
+/// - Percent-encode reserved URL characters in a path.
+/// - Preserves '/' (so callers can pass "/works/2021/title") and encodes
+///   everything else that's not an unreserved character per RFC 3986.
+/// - Titles starting with '#' or containing '?' would otherwise be mis-parsed
+///   by the browser.
 pub fn encode_path(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
     for byte in path.bytes() {
@@ -246,8 +249,9 @@ pub fn encode_path(path: &str) -> String {
     out
 }
 
-/// Build a URL query string from (key, value) pairs. Empty values are
-/// filtered out. Returns "" for no non-empty pairs, or "?k1=v1&k2=v2".
+/// - Build a URL query string from (key, value) pairs.
+/// - Empty values are filtered out.
+/// - Returns "" for no non-empty pairs, or "?k1=v1&k2=v2".
 pub fn build_query(params: &[(&str, &str)]) -> String {
     let parts: Vec<String> = params
         .iter()
@@ -261,10 +265,11 @@ pub fn build_query(params: &[(&str, &str)]) -> String {
     }
 }
 
-/// Compute the breadcrumb-back suffix and the forward-link suffix for a game
-/// page. Both propagate `lang`. Back-suffix forces `r18=0` if this page is R18
-/// (so the homepage shows it); forward-suffix only carries `r18=0` if the
-/// incoming request had it.
+/// - Compute the breadcrumb-back suffix and the forward-link suffix for a game
+///   page.
+/// - Both propagate `lang`.
+/// - Back-suffix forces `r18=0` if this page is R18 (so the homepage shows it);
+///   forward-suffix only carries `r18=0` if the incoming request had it.
 pub fn game_page_suffixes(
     lang_param: Option<&str>,
     is_r18: bool,
@@ -282,7 +287,8 @@ pub fn game_page_suffixes(
     (back, fwd)
 }
 
-/// A parsed markdown game file. Sole source of truth for game data in-memory.
+/// - A parsed markdown game file.
+/// - Sole source of truth for game data in-memory.
 #[derive(Clone, Debug)]
 pub struct ParsedGame {
     pub year: String,                // directory name
@@ -296,8 +302,9 @@ pub struct ParsedGame {
     pub thumbnail_composite: bool,
 }
 
-/// Size variant for the thumbnail proxy. Rendered dimensions are 2× display
-/// size for retina screens. The actual encoded output is JPEG q=80.
+/// - Size variant for the thumbnail proxy.
+/// - Rendered dimensions are 2× display size for retina screens.
+/// - The actual encoded output is JPEG q=80.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ThumbSize {
     Ribbon,
@@ -322,9 +329,9 @@ impl ThumbSize {
     }
 }
 
-/// Extract the UUID from a GitHub user-attachment URL.
-/// `https://github.com/user-attachments/assets/<UUID>` -> Some("<UUID>").
-/// Returns None for any other URL shape (non-GitHub hosts, different paths, etc).
+/// - Extract the UUID from a GitHub user-attachment URL.
+/// - `https://github.com/user-attachments/assets/<UUID>` -> Some("<UUID>").
+/// - Returns None for any other URL shape (non-GitHub hosts, different paths, etc).
 pub fn extract_user_attachment_uuid(url: &str) -> Option<&str> {
     let rest = url.strip_prefix("https://github.com/user-attachments/assets/")?;
     if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
@@ -343,8 +350,9 @@ pub fn split_creators(creator: &str) -> Vec<String> {
         .collect()
 }
 
-/// Build creator → paths index. Paths are sorted by release date descending
-/// (unknown last). Creators with commas are split into separate entries.
+/// - Build creator → paths index.
+/// - Paths are sorted by release date descending (unknown last).
+/// - Creators with commas are split into separate entries.
 pub fn build_creator_paths(
     games: &HashMap<String, ParsedGame>,
 ) -> HashMap<String, Vec<String>> {
@@ -383,8 +391,8 @@ fn released_for_sort(game: Option<&ParsedGame>) -> &str {
     }
 }
 
-/// Get related paths by the same creator(s), excluding the current path.
-/// Returns (creator_name, paths) pairs for each creator that has other games.
+/// - Get related paths by the same creator(s), excluding the current path.
+/// - Returns (creator_name, paths) pairs for each creator that has other games.
 pub fn get_related_paths<'a>(
     index: &'a HashMap<String, Vec<String>>,
     creator_field: &str,
@@ -439,10 +447,11 @@ pub fn get_related_paths<'a>(
     result
 }
 
-/// Compute gallery row sizes — max 2 per row. Bigger thumbnails for
-/// screenshot detail. Orphan (single trailing image) is handled upstream by
-/// promoting it to the editor mockup, so this function is typically called
-/// with even `n` in production.
+/// - Compute gallery row sizes — max 2 per row.
+/// - Bigger thumbnails for screenshot detail.
+/// - Orphan (single trailing image) is handled upstream by promoting it to the
+///   editor mockup, so this function is typically called with even `n` in
+///   production.
 pub fn gallery_rows(n: usize) -> Vec<usize> {
     if n == 0 {
         return vec![];
@@ -458,15 +467,17 @@ pub fn gallery_rows(n: usize) -> Vec<usize> {
 #[derive(Clone, Debug)]
 pub struct TagInfo {
     pub colour: String,
-    /// Original yaml casing (e.g. "Terrace and Ray"). Map keys are lowercased
-    /// for case-insensitive lookup; this preserves the canonical display form.
+    /// - Original yaml casing (e.g. "Terrace and Ray").
+    /// - Map keys are lowercased for case-insensitive lookup; this preserves the
+    ///   canonical display form.
     pub display_name: String,
     pub url: Option<String>,
     pub label: Option<String>,
-    /// Whether this tag is eligible for the card's priority (right-slot) badge.
-    /// `false` means the tag exists for filtering/discovery (e.g. languages,
-    /// AI which has its own dedicated left slot) but should not promote into
-    /// the priority cascade. Defaults to `true` when the yaml omits it.
+    /// - Whether this tag is eligible for the card's priority (right-slot) badge.
+    /// - `false` means the tag exists for filtering/discovery (e.g. languages,
+    ///   AI which has its own dedicated left slot) but should not promote into
+    ///   the priority cascade.
+    /// - Defaults to `true` when the yaml omits it.
     pub card_priority_badge: bool,
 }
 
@@ -519,12 +530,14 @@ pub struct TagBarEntry {
     pub count: usize,
 }
 
-/// Build the tag-filter bar entries: union of yaml-configured tags and tags
-/// found in game frontmatter, deduped case-insensitively. Counts are total
-/// games per tag (not affected by R18 toggle or current search). `r18` is
-/// excluded — already covered by the dedicated toggle. Sort: count desc,
-/// then name asc (case-insensitive). Configured tags use the yaml display
-/// casing; unconfigured (md-only) tags use first-seen casing.
+/// - Build the tag-filter bar entries: union of yaml-configured tags and tags
+///   found in game frontmatter, deduped case-insensitively.
+/// - Counts are total games per tag (not affected by R18 toggle or current
+///   search).
+/// - `r18` is excluded — already covered by the dedicated toggle.
+/// - Sort: count desc, then name asc (case-insensitive).
+/// - Configured tags use the yaml display casing; unconfigured (md-only) tags
+///   use first-seen casing.
 pub fn build_tag_index(
     games: &HashMap<String, ParsedGame>,
     config: &HashMap<String, TagInfo>,
