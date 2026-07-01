@@ -3,7 +3,7 @@
 //! - Non-parameterized tests use plain `#[test]`.
 //! - Common test data is built via `#[fixture]`s (e.g. `cfg`); per-call data uses plain helper fns.
 
-use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
+use lightvn_works::{parse_frontmatter, extract_all_images, strip_img_tags, html_escape, encode_path, extract_user_attachment_uuid, build_query, game_page_suffixes, is_composite_dimensions, resize_thumbnail, build_creator_paths, build_tag_index, get_related_paths, split_creators, get_lang, gallery_rows, build_tags_line, load_aliases, load_tag_config, pick_priority_tag, build_sitemap, released_to_lastmod, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN};
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
 use std::path::Path;
@@ -67,6 +67,77 @@ fn build_query_filters_empty_values(#[case] pairs: &[(&str, &str)], #[case] expe
 
     // then: empty-valued pair is dropped, remaining pair emitted
     assert_eq!(out, expected);
+}
+
+#[test]
+fn build_sitemap_lists_home_and_encoded_game_urls() {
+    // given: a base URL and canonical game entries, one with spaces
+    let base = "https://example.com";
+    let entries = vec![
+        ("/works/2024/42 Hallows Street".to_string(), Some("2024-03-15".to_string())),
+        ("/works/2016/KONKON".to_string(), None),
+    ];
+
+    // when: building the sitemap
+    let xml = build_sitemap(base, &entries);
+
+    // then:
+    // - well-formed XML header + urlset wrapper
+    // - the home page and both games appear as absolute, percent-encoded URLs
+    // - entries are sorted, so 2016 precedes 2024
+    assert!(xml.starts_with("<?xml version=\"1.0\""));
+    assert!(xml.contains("<loc>https://example.com/</loc>"));
+    assert!(xml.contains("<loc>https://example.com/works/2016/KONKON</loc>"));
+    assert!(xml.contains("<loc>https://example.com/works/2024/42%20Hallows%20Street</loc>"));
+    assert!(xml.trim_end().ends_with("</urlset>"));
+    assert!(xml.find("2016").unwrap() < xml.find("2024").unwrap());
+}
+
+#[test]
+fn build_sitemap_emits_lastmod_only_when_present() {
+    // given: one entry with a lastmod date and one without
+    let entries = vec![
+        ("/works/2024/A".to_string(), Some("2024-03-15".to_string())),
+        ("/works/2016/B".to_string(), None),
+    ];
+
+    // when: building the sitemap
+    let xml = build_sitemap("https://example.com", &entries);
+
+    // then: the dated entry carries <lastmod>, the undated one does not
+    assert!(xml.contains("<loc>https://example.com/works/2024/A</loc><lastmod>2024-03-15</lastmod></url>"));
+    assert!(xml.contains("<loc>https://example.com/works/2016/B</loc></url>"));
+    assert_eq!(xml.matches("<lastmod>").count(), 1);
+}
+
+#[test]
+fn build_sitemap_trims_trailing_slash_from_base() {
+    // given: a base URL with a trailing slash and no games
+    // when: building the sitemap
+    let xml = build_sitemap("https://example.com/", &[]);
+
+    // then: the home URL has no doubled slash
+    assert!(xml.contains("<loc>https://example.com/</loc>"));
+    assert!(!xml.contains("com//"));
+}
+
+#[rstest]
+#[case::full("2024/03/15", Some("2024-03-15"))]
+#[case::zero_pads("2024/3/5", Some("2024-03-05"))]
+#[case::year_month("2024/03", Some("2024-03"))]
+#[case::year_only("2018", Some("2018"))]
+#[case::empty("", None)]
+#[case::unknown(RELEASED_UNKNOWN, None)]
+#[case::bad_month("2024/13/01", None)]
+#[case::not_a_date("soon", None)]
+#[case::too_many("2024/01/02/03", None)]
+fn released_to_lastmod_normalizes(#[case] input: &str, #[case] expected: Option<&str>) {
+    // given: a frontmatter released value
+    // when: converting it to a sitemap lastmod
+    let got = released_to_lastmod(input);
+
+    // then: valid dates are zero-padded to W3C form; anything else yields None
+    assert_eq!(got.as_deref(), expected);
 }
 
 #[test]
@@ -670,7 +741,7 @@ fn lang_json_parses_both_languages() {
 /// - Tests bind to this so they track config changes — if a tag is removed (e.g. "Terrace and Ray"), the relevant priority test should start failing.
 #[fixture]
 fn cfg() -> HashMap<String, TagInfo> {
-    load_tag_config(include_str!("../config/tags.yaml"))
+    load_tag_config(include_str!("../../config/tags.yaml"))
 }
 
 #[rstest]

@@ -265,6 +265,74 @@ pub fn build_query(params: &[(&str, &str)]) -> String {
     }
 }
 
+/// - Convert a frontmatter `released` value into a W3C sitemap `<lastmod>` date.
+/// - Accepts "YYYY", "YYYY/MM", or "YYYY/MM/DD" (1–2 digit month/day) and zero-pads
+///   to a valid datetime (e.g. "2024/3/5" -> "2024-03-05", "2018" -> "2018").
+/// - Returns None for empty, RELEASED_UNKNOWN, or any malformed value, so the
+///   sitemap never emits an invalid date (search engines drop those).
+pub fn released_to_lastmod(released: &str) -> Option<String> {
+    let s = released.trim();
+    if s.is_empty() || s == RELEASED_UNKNOWN {
+        return None;
+    }
+    let mut parts = s.split('/');
+
+    let year = parts.next()?;
+    if year.len() != 4 || !year.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let mut out = year.to_string();
+
+    if let Some(month) = parts.next() {
+        let m: u32 = month.parse().ok()?;
+        if !(1..=12).contains(&m) {
+            return None;
+        }
+        out.push_str(&format!("-{:02}", m));
+
+        if let Some(day) = parts.next() {
+            let d: u32 = day.parse().ok()?;
+            if !(1..=31).contains(&d) {
+                return None;
+            }
+            out.push_str(&format!("-{:02}", d));
+        }
+    }
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(out)
+}
+
+/// - Build an XML sitemap listing the home page and every game URL.
+/// - `base_url` is scheme+host without a trailing slash (e.g. https://example.com).
+/// - `entries` are (canonical path "/works/YYYY/title", optional W3C lastmod); each
+///   path segment is percent-encoded and entries are sorted for deterministic output.
+pub fn build_sitemap(base_url: &str, entries: &[(String, Option<String>)]) -> String {
+    let base = base_url.trim_end_matches('/');
+    let mut sorted: Vec<&(String, Option<String>)> = entries.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
+    out.push_str(&format!("  <url><loc>{}/</loc></url>\n", html_escape(base)));
+    for (path, lastmod) in sorted {
+        let loc = format!("{}{}", base, encode_path(path));
+        match lastmod {
+            Some(date) => out.push_str(&format!(
+                "  <url><loc>{}</loc><lastmod>{}</lastmod></url>\n",
+                html_escape(&loc),
+                html_escape(date)
+            )),
+            None => out.push_str(&format!("  <url><loc>{}</loc></url>\n", html_escape(&loc))),
+        }
+    }
+    out.push_str("</urlset>\n");
+    out
+}
+
 /// - Compute the breadcrumb-back suffix and the forward-link suffix for a game
 ///   page.
 /// - Both propagate `lang`.

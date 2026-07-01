@@ -27,7 +27,7 @@ use crate::{
     parse_frontmatter, extract_all_images, markdown_to_html, html_escape, encode_path,
     game_page_suffixes, resize_thumbnail, strip_img_tags, build_creator_paths,
     build_tag_index, get_related_paths, gallery_rows, build_tags_line, load_aliases,
-    load_tag_config, pick_priority_tag, tag_style, get_lang,
+    load_tag_config, pick_priority_tag, tag_style, get_lang, build_sitemap, released_to_lastmod,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -80,6 +80,48 @@ async fn get_tree(State(state): State<AppState>) -> impl IntoResponse {
         [(header::CONTENT_TYPE, "application/json")],
         state.tree_json.to_string(),
     )
+}
+
+// - Absolute site base ("scheme://host", no trailing slash) for sitemap/robots.
+// - BASE_URL env wins; otherwise derived from the request's forwarded scheme + Host.
+// - Falls back to the production host so a missing Host header still yields valid URLs.
+fn base_url(headers: &HeaderMap) -> String {
+    if let Ok(url) = std::env::var("BASE_URL") {
+        return url.trim_end_matches('/').to_string();
+    }
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("https");
+    let host = headers
+        .get(header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("light-vn-works.onrender.com");
+    format!("{}://{}", scheme, host)
+}
+
+// - XML sitemap of the home page + every game URL, built from the in-memory index.
+// - Crawlers need this because the home page builds its game links in JavaScript.
+async fn serve_sitemap(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
+    let entries: Vec<(String, Option<String>)> = state
+        .games
+        .iter()
+        .map(|(path, game)| {
+            let lastmod = released_to_lastmod(game.meta.released.as_deref().unwrap_or(""));
+            (path.clone(), lastmod)
+        })
+        .collect();
+    let xml = build_sitemap(&base_url(&headers), &entries);
+    ([(header::CONTENT_TYPE, "application/xml")], xml)
+}
+
+// - Allow all crawlers and point them at the sitemap.
+async fn serve_robots(headers: HeaderMap) -> impl IntoResponse {
+    let body = format!(
+        "User-agent: *\nAllow: /\nSitemap: {}/sitemap.xml\n",
+        base_url(&headers)
+    );
+    ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body)
 }
 
 async fn render_markdown(
@@ -223,6 +265,9 @@ async fn render_markdown(
         .unwrap_or(&title_display);
     let og_image = images.first().map(|img| img.url.as_str()).unwrap_or("");
 
+    // - Param-less absolute URL so ?lang/?r18 variants don't read as duplicate content.
+    let canonical_url = format!("{}{}", base_url(&headers), encode_path(&canonical_path));
+
     // - Editor mockup: show last screenshot inside the Light.vn editor frame.
     // - For composite images (width > height*2), crop to the rightmost third via CSS.
     let editor_img = if detected_lang == "ja" { "editor_jp.webp" } else { "editor_en.webp" };
@@ -319,6 +364,7 @@ async fn render_markdown(
         .replace("{{year}}", &html_escape(&year))
         .replace("{{tagline}}", &html_escape(tagline))
         .replace("{{og_image}}", &html_escape(og_image))
+        .replace("{{canonical_url}}", &html_escape(&canonical_url))
         .replace("{{hero_html}}", &hero_html)
         .replace("{{tags_line}}", &tags_line)
         .replace("{{creator_html}}", &creator_html)
@@ -740,6 +786,8 @@ pub fn build_app() -> Router {
         .route("/api/tree", get(get_tree))
         .route("/works/{year}/{title}", get(render_markdown))
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
+        .route("/sitemap.xml", get(serve_sitemap))
+        .route("/robots.txt", get(serve_robots))
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
         .layer(cache_control)
@@ -747,10 +795,15 @@ pub fn build_app() -> Router {
         .with_state(state)
 }
 
-async fn serve_home(State(state): State<AppState>) -> Html<String> {
+async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+    let base = base_url(&headers);
+    let canonical_url = format!("{}/", base);
+    let og_image = format!("{}/lvn_icon.webp", base);
     let page = include_str!("../public/index.html")
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{game_count}}", &state.games.len().to_string())
+        .replace("{{canonical_url}}", &html_escape(&canonical_url))
+        .replace("{{og_image}}", &html_escape(&og_image))
         .replace("{{lang_json}}", include_str!("../config/lang.json"))
         .replace("{{tag_info_json}}", &state.tag_info_json)
         .replace("{{tag_bar_json}}", &state.tag_bar_json)
