@@ -5,12 +5,12 @@
 
 use lightvn_works::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
-    build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path,
+    build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
     extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
-    get_lang, get_related_paths, html_escape, is_composite_dimensions, load_aliases,
-    load_tag_config, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
-    split_creators, strip_img_tags, ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
-    RELEASED_UNKNOWN,
+    get_lang, get_related_paths, html_escape, is_canonical_released, is_composite_dimensions,
+    json_script_escape, load_aliases, load_tag_config, parse_frontmatter, pick_priority_tag,
+    released_to_iso, resize_thumbnail, split_creators, strip_img_tags, ExtraLink, FeedEntry,
+    GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -128,6 +128,25 @@ fn released_to_iso_normalizes(#[case] input: &str, #[case] expected: Option<&str
 
     // then: valid dates zero-pad to W3C form; anything else is None
     assert_eq!(got.as_deref(), expected);
+}
+
+#[rstest]
+#[case::full_date("2024/03/05", true)]
+#[case::unknown("unknown", true)]
+#[case::serialized_suffix("2014/09/15～ (連載作品)", true)]
+#[case::unpadded_month("2024/3/5", false)]
+#[case::unpadded_day("2024/03/5", false)]
+#[case::bare_year("2024", false)]
+#[case::bare_year_month("2024/03", false)]
+#[case::bad_month("2024/13/01", false)]
+#[case::digit_suffix("2024/09/155", false)]
+#[case::multibyte_after_day("2024/09/1あ", false)] // straddles byte 10; must not panic
+#[case::empty("", false)]
+fn is_canonical_released_checks_padding(#[case] input: &str, #[case] expected: bool) {
+    // given: a frontmatter released value
+    // when: checking the catalog-canonical shape
+    // then: zero-padded YYYY/MM/DD (optional non-digit suffix) or "unknown" pass
+    assert_eq!(is_canonical_released(input), expected);
 }
 
 #[test]
@@ -722,14 +741,70 @@ fn img_tag_stripping() {
 
 #[test]
 fn escape_html_special_chars() {
-    // given: string with HTML special characters
-    let input = "<b>\"test\"</b>";
+    // given: string with HTML special characters, including a single quote
+    let input = "<b>\"test's\"</b>";
 
     // when: escaping
     let result = html_escape(input);
 
     // then: all special characters are escaped
-    assert_eq!(result, "&lt;b&gt;&quot;test&quot;&lt;/b&gt;");
+    assert_eq!(result, "&lt;b&gt;&quot;test&#39;s&quot;&lt;/b&gt;");
+}
+
+#[rstest]
+#[case::proxy_url_unchanged("/thumb/abc-123/card", "/thumb/abc-123/card")]
+#[case::preencoded_untouched("https://example.com/a%27b", "https://example.com/a%27b")]
+#[case::backslash("a\\b", "a%5Cb")]
+#[case::breakout_payload(
+    "x') no-repeat; background:url('evil",
+    "x%27%29%20no-repeat;%20background:url%28%27evil"
+)]
+fn escape_css_url_encodes_breakout_chars(#[case] input: &str, #[case] expected: &str) {
+    // given: a URL headed for a CSS url('…') context
+    // when: encoding
+    // then: quotes, parens, backslash, and spaces are percent-encoded;
+    //       existing %XX sequences stay untouched (no double-encoding)
+    assert_eq!(escape_css_url(input), expected);
+}
+
+#[test]
+fn css_url_composes_with_html_escape_in_the_safe_order() {
+    // given: a thumbnail URL carrying a quote breakout
+    let url = "https://github.com/user-attachments/assets/x')";
+
+    // when: composing as the call sites do — CSS-encode first, entity-escape second
+    let out = html_escape(&escape_css_url(url));
+
+    // then: the quote survives only as %27; &#39; would decode back to '
+    //       inside url('…') (the reversed composition produces exactly that)
+    assert!(out.contains("%27"));
+    assert!(!out.contains("&#39;"));
+    assert!(!out.contains('\''));
+}
+
+#[rstest]
+#[case::script_close("</script>", "<\\/script>")]
+#[case::plain_text("no tags here", "no tags here")]
+#[case::open_tag_alone("<script>", "<script>")]
+fn json_script_escape_cases(#[case] input: &str, #[case] expected: &str) {
+    // given: text bound for an inline <script> JSON payload
+    // when: escaping
+    // then: only "</" is rewritten — that's what ends a script element
+    assert_eq!(json_script_escape(input), expected);
+}
+
+#[test]
+fn json_script_escape_keeps_json_parseable() {
+    // given: serialized JSON smuggling a closing script tag
+    let json = serde_json::to_string("</script><script>alert(1)</script>").unwrap();
+
+    // when: escaping for inline <script> embedding
+    let out = json_script_escape(&json);
+
+    // then: no "</" remains, and the JSON round-trips to the same string
+    assert!(!out.contains("</"));
+    let round: String = serde_json::from_str(&out).unwrap();
+    assert_eq!(round, "</script><script>alert(1)</script>");
 }
 
 #[test]
@@ -811,6 +886,30 @@ fn validate_all_markdown_files() {
                 released,
                 folder_year
             ));
+        }
+
+        // - Sorts compare `released` lexicographically (creator pages, homepage),
+        //   so it must be zero-padded YYYY/MM/DD — optionally suffixed for
+        //   serialized works — or "unknown".
+        if !released.is_empty() && !is_canonical_released(released) {
+            errors.push(format!(
+                "{}: released '{}' is not zero-padded YYYY/MM/DD (or 'unknown')",
+                path.display(),
+                released
+            ));
+        }
+
+        // - date_added feeds the Atom feed, which needs the full date to build
+        //   a valid RFC3339 timestamp. Partial dates like "2024" would emit
+        //   invalid <updated> values.
+        if let Some(da) = meta.date_added.as_deref() {
+            if released_to_iso(da).is_none_or(|iso| iso.len() != 10) {
+                errors.push(format!(
+                    "{}: date_added '{}' is not a full YYYY/MM/DD date",
+                    path.display(),
+                    da
+                ));
+            }
         }
 
         if !body.contains("<!-- TODO")

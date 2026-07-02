@@ -1,11 +1,11 @@
 # Searchability / SEO
 
 ## To Self: What SEO is
-- SEO (Search Engine Optimization) is making a site easy for search engines to **discover, understand, and index**, so its pages surface in search results.
+- SEO (Search Engine Optimization) is making a site easy for search engines to discover, understand, and index, so its pages surface in search results.
 - Two halves matter here:
   - **Discovery** — can a crawler find every page? (Handled by the sitemap + robots.txt below.)
   - **Understanding** — once found, does each page describe itself? (Handled by per-page `<title>` / `description` / `og:*` tags.)
-- It also covers **link previews**: the `og:*` tags decide how a URL looks when pasted into Discord, X, Bluesky, Slack, etc. Open Graph is the universal standard — every major platform reads it, including X (which falls back to `og:*` when the X-only `twitter:*` tags are absent), so we don't bother with `twitter:*`.
+- It also covers **link previews**: the `og:*` tags decide how a URL looks when pasted into Discord, X, Bluesky, Slack, etc. Every major platform reads `og:*`, including X (which falls back to it when the X-only `twitter:*` tags are absent), so we don't bother with `twitter:*`.
 
 ## The discoverability problem
 - The home page builds its game links in **JavaScript** (`home.js` renders the year tree client-side from embedded `TREE_DATA`).

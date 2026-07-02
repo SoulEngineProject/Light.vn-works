@@ -248,6 +248,14 @@ async fn responses_carry_security_headers() {
         Some("DENY")
     );
     assert!(headers.get("referrer-policy").is_some());
+    // CSP present, framing closed, and img-src still allows the GitHub S3
+    // redirect hop (dropping it would silently break every hero/gallery image)
+    let csp = headers
+        .get("content-security-policy")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(csp.contains("frame-ancestors 'none'"));
+    assert!(csp.contains("github-production-user-asset-6210df.s3.amazonaws.com"));
 }
 
 #[tokio::test]

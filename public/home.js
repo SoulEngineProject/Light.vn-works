@@ -5,6 +5,9 @@ const LANG_PARAM = new URLSearchParams(location.search).get('lang');
 const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
   ? LANG_PARAM
   : (navigator.language.startsWith('ja') ? 'ja' : 'en');
+// - The static HTML declares lang="en"; correct it to the language actually rendered
+// - Screen readers pick their voice from this, and it stops mismatched translate prompts
+document.documentElement.lang = LANG;
 
 // Restore state from URL
 const PARAMS = new URLSearchParams(location.search);
@@ -286,12 +289,13 @@ function renderTree(data, query, hideR18) {
 
       let thumbHtml;
       if (item.thumbnail && item.thumbnail_composite) {
+        // CSS-encode first, entity-escape second — &#39; would decode back to a quote inside url('…')
         thumbHtml = '<div class="card-thumb">' + badges +
-          '<div class="card-thumb-composite" style="background-image:url(\'' + item.thumbnail + '\')"></div></div>';
+          '<div class="card-thumb-composite" style="background-image:url(\'' + escapeHtml(escapeCssUrl(item.thumbnail)) + '\')"></div></div>';
       } else if (item.thumbnail) {
         // alt="" is intentional: .card-title below is the accessible label, and empty alt avoids flashing game titles in the image box during slow loads
         thumbHtml = '<div class="card-thumb">' + badges +
-          '<img src="' + item.thumbnail + '" alt="" loading="lazy" onerror="retryImage.call(this)" /></div>';
+          '<img src="' + escapeHtml(item.thumbnail) + '" alt="" loading="lazy" onerror="retryImage.call(this)" /></div>';
       } else {
         thumbHtml = '<div class="card-thumb-placeholder">' + badges + '✨</div>';
       }
@@ -391,7 +395,8 @@ function buildRibbon(data) {
       if (entry.composite) {
         const div = document.createElement('div');
         div.className = 'ribbon-thumb-composite';
-        div.style.backgroundImage = "url('" + entry.url + "')";
+        // DOM property, so CSS-encoding alone is enough (no HTML parsing here)
+        div.style.backgroundImage = "url('" + escapeCssUrl(entry.url) + "')";
         a.appendChild(div);
       } else {
         const img = document.createElement('img');
@@ -541,11 +546,4 @@ function retryImage() {
   } else {
     this.dataset.error = '1';
   }
-}
-
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }

@@ -24,11 +24,11 @@ use walkdir::WalkDir;
 
 use crate::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
-    build_tags_line, creator_work_key, detect_lang, encode_path, extract_all_images,
-    extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes, get_lang,
-    get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
-    parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail, split_creators,
-    strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
+    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
+    get_lang, get_related_paths, html_escape, json_script_escape, load_aliases, load_tag_config,
+    markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
+    split_creators, strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -192,9 +192,11 @@ fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) ->
         .as_deref()
         .map(|url| {
             if game.thumbnail_composite {
+                // - CSS-encode first, entity-escape second. Reversed, the quote comes
+                //   back: &#39; decodes to ' before the CSS engine parses url('…').
                 format!(
                     r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
-                    html_escape(url)
+                    html_escape(&escape_css_url(url))
                 )
             } else {
                 // - alt="" intentional: .more-creator-title below is the link's accessible name.
@@ -546,9 +548,11 @@ async fn render_markdown(
     };
     let editor_mockup = images.last().map(|img| {
         let preview_html = if img.is_composite() {
+            // - CSS-encode first, entity-escape second. Reversed, the quote comes
+            //   back: &#39; decodes to ' before the CSS engine parses url('…').
             format!(
                 r#"<div class="editor-preview-crop" style="background-image:url('{}')"></div>"#,
-                html_escape(&img.url)
+                html_escape(&escape_css_url(&img.url))
             )
         } else {
             // - alt="" intentional: the game page already has <h1>{title_display}</h1>, so this image is decorative.
@@ -952,7 +956,10 @@ pub fn build_app() -> Router {
     let (games, thumb_originals) = build_games_index();
     let creator_paths = build_creator_paths(&games);
     let tree = build_tree_from_games(&games);
-    let tree_json = serde_json::to_string(&tree).unwrap_or_default();
+    // - json_script_escape on every payload embedded in the homepage's inline
+    //   <script>: the HTML parser ends the script at the first "</" even inside
+    //   a JSON string, and serde_json doesn't escape '<'. "<\/" parses the same.
+    let tree_json = json_script_escape(&serde_json::to_string(&tree).unwrap_or_default());
     // Creator aliases: maps different names for the same person so "More from"
     // sections find games across all their aliases.
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
@@ -960,8 +967,9 @@ pub fn build_app() -> Router {
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     // - Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts) and serialize it once.
     // - Static across requests.
-    let tag_bar_json =
-        serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default();
+    let tag_bar_json = json_script_escape(
+        &serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default(),
+    );
     // - Pre-serialize the {[name]: {colour, card_priority_badge}} payload that the homepage embeds as the TAG_INFO global.
     // - Static across requests.
     let tag_info_json = {
@@ -982,7 +990,7 @@ pub fn build_app() -> Router {
                 )
             })
             .collect();
-        serde_json::to_string(&map).unwrap_or_default()
+        json_script_escape(&serde_json::to_string(&map).unwrap_or_default())
     };
     let state = AppState {
         games: Arc::new(games),
@@ -1040,6 +1048,35 @@ pub fn build_app() -> Router {
         header::REFERRER_POLICY,
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
+    // - CSP backstop: an injected script can't load anything external, and
+    //   base/object/form/framing vectors are closed outright.
+    // - 'unsafe-inline' stays for now — the inline data blob, lang-toggle
+    //   scripts, and onerror/onclick handlers need it (see tech_debt.md for
+    //   the strict follow-up).
+    // - img-src must allow every hop of the thumbnail/hero redirect chain:
+    //   github.com 302s anonymous user-attachment fetches to the
+    //   github-production-user-asset S3 bucket, and logged-in-to-GitHub
+    //   visitors to private-user-images.githubusercontent.com instead.
+    //   The bucket name is a GitHub implementation detail; if images break,
+    //   check whether it rotated.
+    // - goatcounter needs connect-src (sendBeacon) AND img-src (its image-GET
+    //   fallback when sendBeacon is unavailable or the queue is full).
+    // - frame-ancestors supersedes X-Frame-Options; DENY above stays as the
+    //   old-browser fallback.
+    let csp = SetResponseHeaderLayer::overriding(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'unsafe-inline' gc.zgo.at; \
+             style-src 'self' 'unsafe-inline' fonts.googleapis.com; \
+             font-src fonts.gstatic.com; \
+             img-src 'self' https://github.com https://*.githubusercontent.com \
+             https://github-production-user-asset-6210df.s3.amazonaws.com \
+             https://*.goatcounter.com; \
+             connect-src 'self' https://*.goatcounter.com; \
+             object-src 'none'; base-uri 'none'; frame-ancestors 'none'; \
+             form-action 'none'",
+        ),
+    );
 
     Router::new()
         .route("/", get(serve_home))
@@ -1056,6 +1093,7 @@ pub fn build_app() -> Router {
         .layer(nosniff)
         .layer(frame_options)
         .layer(referrer_policy)
+        .layer(csp)
         .layer(CompressionLayer::new())
         .with_state(state)
 }
@@ -1071,7 +1109,10 @@ async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         .replace("{{canonical_url}}", &html_escape(&canonical_url))
         .replace("{{og_image}}", &html_escape(&og_image))
         .replace("{{feed_url}}", &html_escape(&feed_url))
-        .replace("{{lang_json}}", include_str!("../config/lang.json"))
+        .replace(
+            "{{lang_json}}",
+            &json_script_escape(include_str!("../config/lang.json")),
+        )
         .replace("{{tag_info_json}}", &state.tag_info_json)
         .replace("{{tag_bar_json}}", &state.tag_bar_json)
         .replace("{{tree_json}}", &state.tree_json);

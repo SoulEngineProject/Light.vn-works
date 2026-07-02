@@ -271,6 +271,39 @@ pub fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+/// - Percent-encode the characters that could terminate a CSS `url('…')`
+///   token or its wrapping style attribute: quotes, parens, backslash, space.
+/// - HTML entities don't survive into CSS — the HTML parser decodes them
+///   before the CSS engine reads the style attribute, so `&#39;` turns back
+///   into a breakout quote. `%27` survives both parsers and the URL still
+///   resolves (percent-encoding is transparent to the server).
+/// - `%` itself is deliberately NOT encoded: source URLs are often already
+///   percent-encoded and double-encoding would break them.
+pub fn escape_css_url(url: &str) -> String {
+    let mut out = String::with_capacity(url.len());
+    for c in url.chars() {
+        match c {
+            '\'' => out.push_str("%27"),
+            '"' => out.push_str("%22"),
+            '(' => out.push_str("%28"),
+            ')' => out.push_str("%29"),
+            '\\' => out.push_str("%5C"),
+            ' ' => out.push_str("%20"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// - Make serialized JSON safe to embed in an inline `<script>`: the HTML
+///   parser ends the script element at the first "</" regardless of JSON
+///   string context, and serde_json doesn't escape '<'.
+/// - "<\/" is identical to "</" inside a JSON string, so parsing is unchanged.
+pub fn json_script_escape(s: &str) -> String {
+    s.replace("</", "<\\/")
 }
 
 /// - Percent-encode reserved URL characters in a path.
@@ -365,6 +398,36 @@ pub fn released_to_iso(date: &str) -> Option<String> {
         return None;
     }
     Some(out)
+}
+
+/// - Whether a frontmatter `released` value is catalog-canonical: "unknown",
+///   or zero-padded `YYYY/MM/DD` optionally followed by a non-digit suffix
+///   (e.g. "2014/09/15～ (連載作品)" for serialized works).
+/// - Sorts compare `released` strings lexicographically (build_creator_paths,
+///   creator_work_key, the homepage year sort), which is only correct when
+///   zero-padded; the works validator uses this so unpadded dates fail CI.
+/// - Positional byte checks, not `&s[..10]` — slicing panics when a multibyte
+///   char straddles byte 10 (malformed input like "2024/09/1あ").
+pub fn is_canonical_released(s: &str) -> bool {
+    if s == RELEASED_UNKNOWN {
+        return true;
+    }
+    let b = s.as_bytes();
+    if b.len() < 10 {
+        return false;
+    }
+    let all_digits = |r: std::ops::Range<usize>| b[r].iter().all(|c| c.is_ascii_digit());
+    if !(all_digits(0..4) && b[4] == b'/' && all_digits(5..7) && b[7] == b'/' && all_digits(8..10))
+    {
+        return false;
+    }
+    let month = (b[5] - b'0') * 10 + (b[6] - b'0');
+    let day = (b[8] - b'0') * 10 + (b[9] - b'0');
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return false;
+    }
+    // A suffix may follow the date, but not another digit ("2024/09/155").
+    !matches!(b.get(10), Some(c) if c.is_ascii_digit())
 }
 
 /// - The date a work is ordered/timestamped by in the feed.
