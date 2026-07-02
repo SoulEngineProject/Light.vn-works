@@ -1183,7 +1183,7 @@ pub fn build_app() -> Router {
              https://*.goatcounter.com; \
              connect-src 'self' https://*.goatcounter.com; \
              object-src 'none'; base-uri 'none'; frame-ancestors 'none'; \
-             form-action 'none'; report-uri /csp-report",
+             form-action 'none'; report-uri /api/csp-report",
         ),
     );
 
@@ -1192,8 +1192,8 @@ pub fn build_app() -> Router {
         .route("/api/tree", get(get_tree))
         .route("/works/{year}/{title}", get(render_markdown))
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
-        .route("/thumb-stats", get(serve_thumb_stats))
-        .route("/csp-report", post(serve_csp_report))
+        .route("/api/thumb-stats", get(serve_thumb_stats))
+        .route("/api/csp-report", post(serve_csp_report))
         .route("/sitemap.xml", get(serve_sitemap))
         .route("/robots.txt", get(serve_robots))
         .route("/feed.xml", get(serve_feed))

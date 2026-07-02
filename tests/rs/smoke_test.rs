@@ -257,7 +257,7 @@ async fn responses_carry_security_headers() {
     assert!(csp.contains("frame-ancestors 'none'"));
     assert!(csp.contains("github-production-user-asset-6210df.s3.amazonaws.com"));
     // CSP points violation reports at the report handler
-    assert!(csp.contains("report-uri /csp-report"));
+    assert!(csp.contains("report-uri /api/csp-report"));
 }
 
 #[tokio::test]
@@ -268,7 +268,7 @@ async fn thumb_stats_returns_json() {
     // when: requesting the thumbnail-proxy stats endpoint
     let response = app
         .oneshot(
-            Request::get("/thumb-stats")
+            Request::get("/api/thumb-stats")
                 .body(axum::body::Body::empty())
                 .unwrap(),
         )
@@ -295,7 +295,7 @@ async fn csp_report_accepts_post() {
     // when: a browser POSTs it to the report endpoint
     let response = app
         .oneshot(
-            Request::post("/csp-report")
+            Request::post("/api/csp-report")
                 .header("content-type", "application/csp-report")
                 .body(axum::body::Body::from(report))
                 .unwrap(),
