@@ -1,6 +1,6 @@
 # Tech Debt
 
-Known gaps, ordered by risk. All small fixes.
+To me: Known gaps, ordered by risk. All small fixes.
 
 ## `BASE_URL` not set in production
 
