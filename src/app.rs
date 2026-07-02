@@ -6,7 +6,8 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
     routing::get_service,
-    Router,
+    routing::post,
+    Json, Router,
 };
 use dashmap::DashMap;
 use serde::Serialize;
@@ -20,6 +21,8 @@ use tokio::sync::Semaphore;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use walkdir::WalkDir;
 
 use crate::{
@@ -57,6 +60,17 @@ struct AppState {
     thumb_populate_start: Arc<OnceLock<Instant>>,
     thumb_populate_count: Arc<AtomicUsize>,
     thumb_fetch_millis: Arc<AtomicU64>,
+    // - Live proxy health, surfaced at /thumb-stats.
+    // - `terminal` counts every populate outcome (success + permanent failure);
+    //   warmup is done when it reaches originals×2, which a success-only count
+    //   would never reach if any asset 404s. `warmup_millis` is frozen at that
+    //   point (0 until warm) so it doesn't keep growing.
+    thumb_cache_hits: Arc<AtomicU64>,
+    thumb_cache_misses: Arc<AtomicU64>,
+    thumb_populate_failures: Arc<AtomicU64>,
+    thumb_fetch_retries: Arc<AtomicU64>,
+    thumb_terminal: Arc<AtomicU64>,
+    thumb_warmup_millis: Arc<AtomicU64>,
     http_client: reqwest::Client,
 }
 
@@ -733,7 +747,7 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
                 games.insert(canonical_path, game);
             }
             Err(_) => {
-                eprintln!("[startup] panic parsing {}; skipping", path.display());
+                tracing::warn!(file = %path.display(), "panic parsing markdown; skipping");
             }
         }
     }
@@ -814,6 +828,7 @@ async fn serve_thumb(
     let key = (uuid.clone(), size);
 
     if let Some(bytes) = state.thumb_cache.get(&key) {
+        state.thumb_cache_hits.fetch_add(1, Ordering::Relaxed);
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/webp")
@@ -821,6 +836,7 @@ async fn serve_thumb(
             .body(Body::from(bytes.clone()))
             .unwrap();
     }
+    state.thumb_cache_misses.fetch_add(1, Ordering::Relaxed);
 
     // - Miss path. Debounce: only spawn a populate if this (uuid, size) isn't already in flight.
     // - Prevents thundering herd on first visit.
@@ -869,6 +885,7 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
         let bytes = match fetch_once().await {
             Ok(b) => b,
             Err(_) => {
+                state.thumb_fetch_retries.fetch_add(1, Ordering::Relaxed);
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
                 fetch_once().await?
             }
@@ -899,17 +916,8 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
     match result {
         Ok(bytes) => {
             state.thumb_cache.insert(key.clone(), bytes);
-            let count = state.thumb_populate_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if let Some(start) = state.thumb_populate_start.get() {
-                let secs = start.elapsed().as_secs_f32();
-                let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
-                let avg_fetch_secs = (fetch_ms as f32 / count as f32) / 1000.0;
-                let total = state.thumb_originals.len() * 2;
-                eprintln!(
-                    "[thumb] {} / {} images cached. Took {:.1}s (avg fetch {:.1}s/img)",
-                    count, total, secs, avg_fetch_secs
-                );
-            }
+            state.thumb_populate_count.fetch_add(1, Ordering::Relaxed);
+            note_warmup_progress(&state);
         }
         Err(e) => {
             // Walk the error's source chain so we see the underlying cause
@@ -921,7 +929,11 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
                 msg.push_str(&inner.to_string());
                 src = inner.source();
             }
-            eprintln!("[thumb] populate failed for {}/{:?}: {}", uuid, size, msg);
+            state
+                .thumb_populate_failures
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(uuid = %uuid, size = ?size, cause = %msg, "thumbnail populate failed");
+            note_warmup_progress(&state);
         }
     }
     state.thumb_in_flight.lock().unwrap().remove(&key);
@@ -948,6 +960,97 @@ async fn warm_all_thumbnails(state: AppState) {
             }
         }
     }
+}
+
+// - Bump the terminal-outcome counter and, on the transition that hits
+//   originals×2, freeze the warmup duration and log completion once.
+// - fetch_add hands each caller a unique value, so `== expected` fires exactly
+//   once; later re-populates of failed keys pass expected+1 and never re-trigger.
+fn note_warmup_progress(state: &AppState) {
+    let done = state.thumb_terminal.fetch_add(1, Ordering::Relaxed) + 1;
+    let expected = (state.thumb_originals.len() * 2) as u64;
+    if done != expected {
+        return;
+    }
+    let secs = state
+        .thumb_populate_start
+        .get()
+        .map(|s| s.elapsed().as_secs_f32())
+        .unwrap_or(0.0);
+    state
+        .thumb_warmup_millis
+        .store((secs * 1000.0) as u64, Ordering::Relaxed);
+    let populates = state.thumb_populate_count.load(Ordering::Relaxed);
+    let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
+    let avg_fetch_s = if populates == 0 {
+        0.0
+    } else {
+        (fetch_ms as f32 / populates as f32) / 1000.0
+    };
+    tracing::info!(
+        elapsed_s = secs,
+        populated = populates,
+        failures = state.thumb_populate_failures.load(Ordering::Relaxed),
+        avg_fetch_s,
+        "thumbnail warmup complete"
+    );
+}
+
+#[derive(Serialize)]
+struct ThumbStats {
+    hits: u64,
+    misses: u64,
+    hit_ratio: f64,
+    populates: u64,
+    failures: u64,
+    retries: u64,
+    avg_fetch_ms: f64,
+    cache_entries: usize,
+    expected: usize,
+    warm: bool,
+    warmup_elapsed_s: f64,
+}
+
+// - Live thumbnail-proxy health. Debug endpoint like /api/tree; leaks nothing.
+// - Ratios guard their denominators: before the first request/populate they'd
+//   be 0/0, which panics for ints and serializes as null for floats.
+async fn serve_thumb_stats(State(state): State<AppState>) -> impl IntoResponse {
+    let hits = state.thumb_cache_hits.load(Ordering::Relaxed);
+    let misses = state.thumb_cache_misses.load(Ordering::Relaxed);
+    let total = hits + misses;
+    let populates = state.thumb_populate_count.load(Ordering::Relaxed) as u64;
+    let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
+    let expected = state.thumb_originals.len() * 2;
+    Json(ThumbStats {
+        hits,
+        misses,
+        hit_ratio: if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        },
+        populates,
+        failures: state.thumb_populate_failures.load(Ordering::Relaxed),
+        retries: state.thumb_fetch_retries.load(Ordering::Relaxed),
+        avg_fetch_ms: if populates == 0 {
+            0.0
+        } else {
+            fetch_ms as f64 / populates as f64
+        },
+        cache_entries: state.thumb_cache.len(),
+        expected,
+        warm: state.thumb_terminal.load(Ordering::Relaxed) >= expected as u64,
+        warmup_elapsed_s: state.thumb_warmup_millis.load(Ordering::Relaxed) as f64 / 1000.0,
+    })
+}
+
+// - CSP violation sink (report-uri). Browsers POST application/csp-report, so
+//   take the raw body, not the JSON extractor.
+// - warn: a report means a real resource was blocked — e.g. the img-src S3
+//   bucket rotated, or a script-src regression.
+async fn serve_csp_report(body: axum::body::Bytes) -> StatusCode {
+    tracing::warn!(report = %String::from_utf8_lossy(&body), "csp violation report");
+    StatusCode::NO_CONTENT
 }
 
 pub fn build_app() -> Router {
@@ -1007,6 +1110,12 @@ pub fn build_app() -> Router {
         thumb_populate_start: Arc::new(OnceLock::new()),
         thumb_populate_count: Arc::new(AtomicUsize::new(0)),
         thumb_fetch_millis: Arc::new(AtomicU64::new(0)),
+        thumb_cache_hits: Arc::new(AtomicU64::new(0)),
+        thumb_cache_misses: Arc::new(AtomicU64::new(0)),
+        thumb_populate_failures: Arc::new(AtomicU64::new(0)),
+        thumb_fetch_retries: Arc::new(AtomicU64::new(0)),
+        thumb_terminal: Arc::new(AtomicU64::new(0)),
+        thumb_warmup_millis: Arc::new(AtomicU64::new(0)),
         http_client: reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             // - Drop idle pooled connections sooner than GitHub's ~60s.
@@ -1074,7 +1183,7 @@ pub fn build_app() -> Router {
              https://*.goatcounter.com; \
              connect-src 'self' https://*.goatcounter.com; \
              object-src 'none'; base-uri 'none'; frame-ancestors 'none'; \
-             form-action 'none'",
+             form-action 'none'; report-uri /csp-report",
         ),
     );
 
@@ -1083,6 +1192,8 @@ pub fn build_app() -> Router {
         .route("/api/tree", get(get_tree))
         .route("/works/{year}/{title}", get(render_markdown))
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
+        .route("/thumb-stats", get(serve_thumb_stats))
+        .route("/csp-report", post(serve_csp_report))
         .route("/sitemap.xml", get(serve_sitemap))
         .route("/robots.txt", get(serve_robots))
         .route("/feed.xml", get(serve_feed))
@@ -1095,6 +1206,15 @@ pub fn build_app() -> Router {
         .layer(referrer_policy)
         .layer(csp)
         .layer(CompressionLayer::new())
+        // - Outermost layer (last wins in axum), so it times the whole stack
+        //   incl. compression and logs the final status.
+        // - INFO because TraceLayer defaults to DEBUG, hidden under the default
+        //   `info` filter; on_response alone gives one line per request.
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .with_state(state)
 }
 

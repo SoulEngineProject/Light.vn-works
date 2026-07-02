@@ -6,11 +6,11 @@
 use lightvn_works::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
     build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
-    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
-    get_lang, get_related_paths, html_escape, is_canonical_released, is_composite_dimensions,
-    json_script_escape, load_aliases, load_tag_config, parse_frontmatter, pick_priority_tag,
-    released_to_iso, resize_thumbnail, split_creators, strip_img_tags, ExtraLink, FeedEntry,
-    GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    extract_all_images, extract_user_attachment_uuid, feed_date, first_offsite_image, gallery_rows,
+    game_page_suffixes, get_lang, get_related_paths, html_escape, is_canonical_released,
+    is_composite_dimensions, json_script_escape, load_aliases, load_tag_config, parse_frontmatter,
+    pick_priority_tag, released_to_iso, resize_thumbnail, split_creators, strip_img_tags,
+    ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -793,6 +793,46 @@ fn json_script_escape_cases(#[case] input: &str, #[case] expected: &str) {
     assert_eq!(json_script_escape(input), expected);
 }
 
+#[rstest]
+#[case::github_html(
+    r#"<img src="https://github.com/user-attachments/assets/abc" />"#,
+    None
+)]
+#[case::offsite_html(
+    r#"<img src="https://evil.example/p.gif">"#,
+    Some("https://evil.example/p.gif")
+)]
+#[case::uppercase_tag(
+    r#"<IMG SRC="https://evil.example/p.gif">"#,
+    Some("https://evil.example/p.gif")
+)]
+#[case::single_quoted(
+    r#"<img src='https://evil.example/x'>"#,
+    Some("https://evil.example/x")
+)]
+#[case::spaced_equals(
+    r#"<img src = "https://evil.example/x">"#,
+    Some("https://evil.example/x")
+)]
+#[case::protocol_relative(r#"<img src="//evil.example/x">"#, Some("//evil.example/x"))]
+#[case::srcset_offsite(
+    r#"<img srcset="https://evil.example/x 2x">"#,
+    Some("https://evil.example/x")
+)]
+#[case::markdown_offsite(
+    "![shot](https://evil.example/x.png)",
+    Some("https://evil.example/x.png")
+)]
+#[case::markdown_github("![shot](https://github.com/user-attachments/assets/x)", None)]
+#[case::prose_with_src_word("Full source in the src folder, described below.", None)]
+#[case::no_images("Just a synopsis paragraph.", None)]
+fn first_offsite_image_flags_non_github(#[case] body: &str, #[case] expected: Option<&str>) {
+    // given: a markdown body with zero or more image sources
+    // when: scanning for the first non-GitHub image
+    // then: off-site sources are flagged; GitHub user-attachments and non-images pass
+    assert_eq!(first_offsite_image(body).as_deref(), expected);
+}
+
 #[test]
 fn json_script_escape_keeps_json_parseable() {
     // given: serialized JSON smuggling a closing script tag
@@ -916,6 +956,16 @@ fn validate_all_markdown_files() {
             && !body.contains("src=\"https://github.com/user-attachments/")
         {
             errors.push(format!("{}: no GitHub image found in body", path.display()));
+        }
+
+        // - Every image must be a GitHub user-attachment. Blocks a PR that slips
+        //   an off-site <img> (e.g. a tracking pixel) into a synopsis body.
+        if let Some(bad) = first_offsite_image(body) {
+            errors.push(format!(
+                "{}: off-site image source '{}' (images must be GitHub user-attachments)",
+                path.display(),
+                bad
+            ));
         }
 
         if let Some(idx) = meta.thumbnail_index {

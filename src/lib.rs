@@ -259,6 +259,92 @@ pub fn extract_all_images(md: &str) -> Vec<ImageInfo> {
     images
 }
 
+/// - Return the first image source in a markdown body that is NOT a GitHub
+///   user-attachment URL, if any.
+/// - Covers the sinks contributor content actually uses: `<img src>` / `srcset`
+///   attributes (case- and whitespace-tolerant) and markdown `![](url)`.
+/// - CI lint against a tracking-pixel PR, run over every works file. It's
+///   defense-in-depth with the CSP `img-src` allowlist, not a hard boundary —
+///   a browser parses more image sinks than this scan does, so the CSP stays
+///   the enforcement backstop.
+pub fn first_offsite_image(body: &str) -> Option<String> {
+    const OK: &str = "https://github.com/user-attachments/";
+    let lower = body.to_lowercase();
+    let b = lower.as_bytes();
+    let n = b.len();
+
+    let flag = |url: &str| -> Option<String> {
+        let url = url.trim();
+        (!url.is_empty() && !url.starts_with(OK)).then(|| url.to_string())
+    };
+
+    // Read the value of an attribute whose '=' is at `eq`; handles quoted and
+    // bare forms. Returns the raw value.
+    let read_value = |eq: usize| -> Option<&str> {
+        let mut j = eq + 1;
+        while j < n && b[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        if j >= n {
+            return None;
+        }
+        if b[j] == b'"' || b[j] == b'\'' {
+            let q = b[j];
+            let start = j + 1;
+            let end = start + lower[start..].find(q as char)?;
+            Some(&lower[start..end])
+        } else {
+            let start = j;
+            let end = start
+                + lower[start..]
+                    .find(|c: char| c.is_whitespace() || c == '>')
+                    .unwrap_or(lower.len() - start);
+            Some(&lower[start..end])
+        }
+    };
+
+    for (i, _) in lower.char_indices() {
+        // markdown image: ![alt](url "optional title")
+        if b[i] == b'!' && lower[i..].starts_with("![") {
+            if let Some(rel) = lower[i..].find("](") {
+                let us = i + rel + 2;
+                if let Some(e) = lower[us..].find(')') {
+                    let url = lower[us..us + e].split_whitespace().next().unwrap_or("");
+                    if let Some(bad) = flag(url) {
+                        return Some(bad);
+                    }
+                }
+            }
+        }
+
+        // src= / srcset= attribute, at an attribute-name boundary (so
+        // "described" and "data-src" don't match).
+        let boundary = i == 0 || matches!(b[i - 1], b' ' | b'\t' | b'\n' | b'\r' | b'<' | b'/');
+        if boundary && lower[i..].starts_with("src") {
+            let mut j = i + 3;
+            if lower[j..].starts_with("set") {
+                j += 3;
+            }
+            while j < n && b[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            if j < n && b[j] == b'=' {
+                if let Some(val) = read_value(j) {
+                    // srcset is a comma-separated "url descriptor" list.
+                    for cand in val.split(',') {
+                        let url = cand.split_whitespace().next().unwrap_or("");
+                        if let Some(bad) = flag(url) {
+                            return Some(bad);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub fn markdown_to_html(md_content: &str) -> String {
     let mut html_output = String::new();
     let parser = Parser::new(md_content);
