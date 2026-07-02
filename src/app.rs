@@ -6,7 +6,8 @@ use axum::{
     response::{Html, IntoResponse, Response},
     routing::get,
     routing::get_service,
-    Router,
+    routing::post,
+    Json, Router,
 };
 use dashmap::DashMap;
 use serde::Serialize;
@@ -20,15 +21,17 @@ use tokio::sync::Semaphore;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use walkdir::WalkDir;
 
 use crate::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
-    build_tags_line, creator_work_key, detect_lang, encode_path, extract_all_images,
-    extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes, get_lang,
-    get_related_paths, html_escape, load_aliases, load_tag_config, markdown_to_html,
-    parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail, split_creators,
-    strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
+    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
+    get_lang, get_related_paths, html_escape, json_script_escape, load_aliases, load_tag_config,
+    markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
+    split_creators, strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -57,6 +60,17 @@ struct AppState {
     thumb_populate_start: Arc<OnceLock<Instant>>,
     thumb_populate_count: Arc<AtomicUsize>,
     thumb_fetch_millis: Arc<AtomicU64>,
+    // - Live proxy health, surfaced at /thumb-stats.
+    // - `terminal` counts every populate outcome (success + permanent failure);
+    //   warmup is done when it reaches originals×2, which a success-only count
+    //   would never reach if any asset 404s. `warmup_millis` is frozen at that
+    //   point (0 until warm) so it doesn't keep growing.
+    thumb_cache_hits: Arc<AtomicU64>,
+    thumb_cache_misses: Arc<AtomicU64>,
+    thumb_populate_failures: Arc<AtomicU64>,
+    thumb_fetch_retries: Arc<AtomicU64>,
+    thumb_terminal: Arc<AtomicU64>,
+    thumb_warmup_millis: Arc<AtomicU64>,
     http_client: reqwest::Client,
 }
 
@@ -192,9 +206,11 @@ fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) ->
         .as_deref()
         .map(|url| {
             if game.thumbnail_composite {
+                // - CSS-encode first, entity-escape second. Reversed, the quote comes
+                //   back: &#39; decodes to ' before the CSS engine parses url('…').
                 format!(
                     r#"<div class="more-creator-thumb-composite" style="background-image:url('{}')"></div>"#,
-                    html_escape(url)
+                    html_escape(&escape_css_url(url))
                 )
             } else {
                 // - alt="" intentional: .more-creator-title below is the link's accessible name.
@@ -546,9 +562,11 @@ async fn render_markdown(
     };
     let editor_mockup = images.last().map(|img| {
         let preview_html = if img.is_composite() {
+            // - CSS-encode first, entity-escape second. Reversed, the quote comes
+            //   back: &#39; decodes to ' before the CSS engine parses url('…').
             format!(
                 r#"<div class="editor-preview-crop" style="background-image:url('{}')"></div>"#,
-                html_escape(&img.url)
+                html_escape(&escape_css_url(&img.url))
             )
         } else {
             // - alt="" intentional: the game page already has <h1>{title_display}</h1>, so this image is decorative.
@@ -729,7 +747,7 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
                 games.insert(canonical_path, game);
             }
             Err(_) => {
-                eprintln!("[startup] panic parsing {}; skipping", path.display());
+                tracing::warn!(file = %path.display(), "panic parsing markdown; skipping");
             }
         }
     }
@@ -810,6 +828,7 @@ async fn serve_thumb(
     let key = (uuid.clone(), size);
 
     if let Some(bytes) = state.thumb_cache.get(&key) {
+        state.thumb_cache_hits.fetch_add(1, Ordering::Relaxed);
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "image/webp")
@@ -817,6 +836,7 @@ async fn serve_thumb(
             .body(Body::from(bytes.clone()))
             .unwrap();
     }
+    state.thumb_cache_misses.fetch_add(1, Ordering::Relaxed);
 
     // - Miss path. Debounce: only spawn a populate if this (uuid, size) isn't already in flight.
     // - Prevents thundering herd on first visit.
@@ -865,6 +885,7 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
         let bytes = match fetch_once().await {
             Ok(b) => b,
             Err(_) => {
+                state.thumb_fetch_retries.fetch_add(1, Ordering::Relaxed);
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
                 fetch_once().await?
             }
@@ -895,17 +916,8 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
     match result {
         Ok(bytes) => {
             state.thumb_cache.insert(key.clone(), bytes);
-            let count = state.thumb_populate_count.fetch_add(1, Ordering::Relaxed) + 1;
-            if let Some(start) = state.thumb_populate_start.get() {
-                let secs = start.elapsed().as_secs_f32();
-                let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
-                let avg_fetch_secs = (fetch_ms as f32 / count as f32) / 1000.0;
-                let total = state.thumb_originals.len() * 2;
-                eprintln!(
-                    "[thumb] {} / {} images cached. Took {:.1}s (avg fetch {:.1}s/img)",
-                    count, total, secs, avg_fetch_secs
-                );
-            }
+            state.thumb_populate_count.fetch_add(1, Ordering::Relaxed);
+            note_warmup_progress(&state);
         }
         Err(e) => {
             // Walk the error's source chain so we see the underlying cause
@@ -917,7 +929,11 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
                 msg.push_str(&inner.to_string());
                 src = inner.source();
             }
-            eprintln!("[thumb] populate failed for {}/{:?}: {}", uuid, size, msg);
+            state
+                .thumb_populate_failures
+                .fetch_add(1, Ordering::Relaxed);
+            tracing::warn!(uuid = %uuid, size = ?size, cause = %msg, "thumbnail populate failed");
+            note_warmup_progress(&state);
         }
     }
     state.thumb_in_flight.lock().unwrap().remove(&key);
@@ -946,13 +962,107 @@ async fn warm_all_thumbnails(state: AppState) {
     }
 }
 
+// - Bump the terminal-outcome counter and, on the transition that hits
+//   originals×2, freeze the warmup duration and log completion once.
+// - fetch_add hands each caller a unique value, so `== expected` fires exactly
+//   once; later re-populates of failed keys pass expected+1 and never re-trigger.
+fn note_warmup_progress(state: &AppState) {
+    let done = state.thumb_terminal.fetch_add(1, Ordering::Relaxed) + 1;
+    let expected = (state.thumb_originals.len() * 2) as u64;
+    if done != expected {
+        return;
+    }
+    let secs = state
+        .thumb_populate_start
+        .get()
+        .map(|s| s.elapsed().as_secs_f32())
+        .unwrap_or(0.0);
+    state
+        .thumb_warmup_millis
+        .store((secs * 1000.0) as u64, Ordering::Relaxed);
+    let populates = state.thumb_populate_count.load(Ordering::Relaxed);
+    let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
+    let avg_fetch_s = if populates == 0 {
+        0.0
+    } else {
+        (fetch_ms as f32 / populates as f32) / 1000.0
+    };
+    tracing::info!(
+        elapsed_s = secs,
+        populated = populates,
+        failures = state.thumb_populate_failures.load(Ordering::Relaxed),
+        avg_fetch_s,
+        "thumbnail warmup complete"
+    );
+}
+
+#[derive(Serialize)]
+struct ThumbStats {
+    hits: u64,
+    misses: u64,
+    hit_ratio: f64,
+    populates: u64,
+    failures: u64,
+    retries: u64,
+    avg_fetch_ms: f64,
+    cache_entries: usize,
+    expected: usize,
+    warm: bool,
+    warmup_elapsed_s: f64,
+}
+
+// - Live thumbnail-proxy health. Debug endpoint like /api/tree; leaks nothing.
+// - Ratios guard their denominators: before the first request/populate they'd
+//   be 0/0, which panics for ints and serializes as null for floats.
+async fn serve_thumb_stats(State(state): State<AppState>) -> impl IntoResponse {
+    let hits = state.thumb_cache_hits.load(Ordering::Relaxed);
+    let misses = state.thumb_cache_misses.load(Ordering::Relaxed);
+    let total = hits + misses;
+    let populates = state.thumb_populate_count.load(Ordering::Relaxed) as u64;
+    let fetch_ms = state.thumb_fetch_millis.load(Ordering::Relaxed);
+    let expected = state.thumb_originals.len() * 2;
+    Json(ThumbStats {
+        hits,
+        misses,
+        hit_ratio: if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        },
+        populates,
+        failures: state.thumb_populate_failures.load(Ordering::Relaxed),
+        retries: state.thumb_fetch_retries.load(Ordering::Relaxed),
+        avg_fetch_ms: if populates == 0 {
+            0.0
+        } else {
+            fetch_ms as f64 / populates as f64
+        },
+        cache_entries: state.thumb_cache.len(),
+        expected,
+        warm: state.thumb_terminal.load(Ordering::Relaxed) >= expected as u64,
+        warmup_elapsed_s: state.thumb_warmup_millis.load(Ordering::Relaxed) as f64 / 1000.0,
+    })
+}
+
+// - CSP violation sink (report-uri). Browsers POST application/csp-report, so
+//   take the raw body, not the JSON extractor.
+// - warn: a report means a real resource was blocked — e.g. the img-src S3
+//   bucket rotated, or a script-src regression.
+async fn serve_csp_report(body: axum::body::Bytes) -> StatusCode {
+    tracing::warn!(report = %String::from_utf8_lossy(&body), "csp violation report");
+    StatusCode::NO_CONTENT
+}
+
 pub fn build_app() -> Router {
     // - Walk works/ once, parse every markdown file into a ParsedGame.
     // - All derived data (creator index, tree JSON for home-page embedding) is built from this single source of truth.
     let (games, thumb_originals) = build_games_index();
     let creator_paths = build_creator_paths(&games);
     let tree = build_tree_from_games(&games);
-    let tree_json = serde_json::to_string(&tree).unwrap_or_default();
+    // - json_script_escape on every payload embedded in the homepage's inline
+    //   <script>: the HTML parser ends the script at the first "</" even inside
+    //   a JSON string, and serde_json doesn't escape '<'. "<\/" parses the same.
+    let tree_json = json_script_escape(&serde_json::to_string(&tree).unwrap_or_default());
     // Creator aliases: maps different names for the same person so "More from"
     // sections find games across all their aliases.
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
@@ -960,8 +1070,9 @@ pub fn build_app() -> Router {
     let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     // - Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts) and serialize it once.
     // - Static across requests.
-    let tag_bar_json =
-        serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default();
+    let tag_bar_json = json_script_escape(
+        &serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default(),
+    );
     // - Pre-serialize the {[name]: {colour, card_priority_badge}} payload that the homepage embeds as the TAG_INFO global.
     // - Static across requests.
     let tag_info_json = {
@@ -982,7 +1093,7 @@ pub fn build_app() -> Router {
                 )
             })
             .collect();
-        serde_json::to_string(&map).unwrap_or_default()
+        json_script_escape(&serde_json::to_string(&map).unwrap_or_default())
     };
     let state = AppState {
         games: Arc::new(games),
@@ -999,6 +1110,12 @@ pub fn build_app() -> Router {
         thumb_populate_start: Arc::new(OnceLock::new()),
         thumb_populate_count: Arc::new(AtomicUsize::new(0)),
         thumb_fetch_millis: Arc::new(AtomicU64::new(0)),
+        thumb_cache_hits: Arc::new(AtomicU64::new(0)),
+        thumb_cache_misses: Arc::new(AtomicU64::new(0)),
+        thumb_populate_failures: Arc::new(AtomicU64::new(0)),
+        thumb_fetch_retries: Arc::new(AtomicU64::new(0)),
+        thumb_terminal: Arc::new(AtomicU64::new(0)),
+        thumb_warmup_millis: Arc::new(AtomicU64::new(0)),
         http_client: reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             // - Drop idle pooled connections sooner than GitHub's ~60s.
@@ -1040,12 +1157,43 @@ pub fn build_app() -> Router {
         header::REFERRER_POLICY,
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
+    // - CSP backstop: an injected script can't load anything external, and
+    //   base/object/form/framing vectors are closed outright.
+    // - 'unsafe-inline' stays for now — the inline data blob, lang-toggle
+    //   scripts, and onerror/onclick handlers need it (see tech_debt.md for
+    //   the strict follow-up).
+    // - img-src must allow every hop of the thumbnail/hero redirect chain:
+    //   github.com 302s anonymous user-attachment fetches to the
+    //   github-production-user-asset S3 bucket, and logged-in-to-GitHub
+    //   visitors to private-user-images.githubusercontent.com instead.
+    //   The bucket name is a GitHub implementation detail; if images break,
+    //   check whether it rotated.
+    // - goatcounter needs connect-src (sendBeacon) AND img-src (its image-GET
+    //   fallback when sendBeacon is unavailable or the queue is full).
+    // - frame-ancestors supersedes X-Frame-Options; DENY above stays as the
+    //   old-browser fallback.
+    let csp = SetResponseHeaderLayer::overriding(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'unsafe-inline' gc.zgo.at; \
+             style-src 'self' 'unsafe-inline' fonts.googleapis.com; \
+             font-src fonts.gstatic.com; \
+             img-src 'self' https://github.com https://*.githubusercontent.com \
+             https://github-production-user-asset-6210df.s3.amazonaws.com \
+             https://*.goatcounter.com; \
+             connect-src 'self' https://*.goatcounter.com; \
+             object-src 'none'; base-uri 'none'; frame-ancestors 'none'; \
+             form-action 'none'; report-uri /api/csp-report",
+        ),
+    );
 
     Router::new()
         .route("/", get(serve_home))
         .route("/api/tree", get(get_tree))
         .route("/works/{year}/{title}", get(render_markdown))
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
+        .route("/api/thumb-stats", get(serve_thumb_stats))
+        .route("/api/csp-report", post(serve_csp_report))
         .route("/sitemap.xml", get(serve_sitemap))
         .route("/robots.txt", get(serve_robots))
         .route("/feed.xml", get(serve_feed))
@@ -1056,7 +1204,17 @@ pub fn build_app() -> Router {
         .layer(nosniff)
         .layer(frame_options)
         .layer(referrer_policy)
+        .layer(csp)
         .layer(CompressionLayer::new())
+        // - Outermost layer (last wins in axum), so it times the whole stack
+        //   incl. compression and logs the final status.
+        // - INFO because TraceLayer defaults to DEBUG, hidden under the default
+        //   `info` filter; on_response alone gives one line per request.
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .with_state(state)
 }
 
@@ -1071,7 +1229,10 @@ async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<S
         .replace("{{canonical_url}}", &html_escape(&canonical_url))
         .replace("{{og_image}}", &html_escape(&og_image))
         .replace("{{feed_url}}", &html_escape(&feed_url))
-        .replace("{{lang_json}}", include_str!("../config/lang.json"))
+        .replace(
+            "{{lang_json}}",
+            &json_script_escape(include_str!("../config/lang.json")),
+        )
         .replace("{{tag_info_json}}", &state.tag_info_json)
         .replace("{{tag_bar_json}}", &state.tag_bar_json)
         .replace("{{tree_json}}", &state.tree_json);

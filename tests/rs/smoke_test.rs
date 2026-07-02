@@ -248,6 +248,63 @@ async fn responses_carry_security_headers() {
         Some("DENY")
     );
     assert!(headers.get("referrer-policy").is_some());
+    // CSP present, framing closed, and img-src still allows the GitHub S3
+    // redirect hop (dropping it would silently break every hero/gallery image)
+    let csp = headers
+        .get("content-security-policy")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(csp.contains("frame-ancestors 'none'"));
+    assert!(csp.contains("github-production-user-asset-6210df.s3.amazonaws.com"));
+    // CSP points violation reports at the report handler
+    assert!(csp.contains("report-uri /api/csp-report"));
+}
+
+#[tokio::test]
+async fn thumb_stats_returns_json() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting the thumbnail-proxy stats endpoint
+    let response = app
+        .oneshot(
+            Request::get("/api/thumb-stats")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 200 with a JSON body carrying the metric fields
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("hit_ratio"));
+    assert!(text.contains("cache_entries"));
+    assert!(text.contains("warm"));
+}
+
+#[tokio::test]
+async fn csp_report_accepts_post() {
+    // given: the app and a sample violation report
+    let app = build_app();
+    let report = r#"{"csp-report":{"blocked-uri":"https://evil.example/x"}}"#;
+
+    // when: a browser POSTs it to the report endpoint
+    let response = app
+        .oneshot(
+            Request::post("/api/csp-report")
+                .header("content-type", "application/csp-report")
+                .body(axum::body::Body::from(report))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 204 No Content (the raw body is read, not the JSON extractor)
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]
