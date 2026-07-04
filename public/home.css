@@ -22,65 +22,6 @@ body::after {
   -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
 }
 
-.container {
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-header {
-  text-align: center;
-  margin-bottom: 1.5rem;
-  padding-top: 2rem;
-}
-
-h1 {
-  font-size: 2.8rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, #e9d5ff, #c084fc, #a78bfa, #e9d5ff);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradient-shift 8s ease infinite;
-  margin-bottom: 0.4rem;
-}
-
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-header {
-  position: relative;
-}
-
-header::before {
-  content: '';
-  position: absolute;
-  top: -2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 500px;
-  height: 300px;
-  background: radial-gradient(ellipse, rgba(192, 132, 252, 0.08) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-.subtitle {
-  color: var(--text-muted);
-  font-size: 1rem;
-}
-
-.subtitle a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.subtitle a:hover {
-  color: var(--accent);
-}
-
 .cta-btn {
   display: inline-block;
   margin-top: 1rem;
@@ -98,22 +39,6 @@ header::before {
   background: var(--accent-hover);
   transform: translateY(-1px);
   color: var(--bg);
-}
-
-.contribute {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 2rem;
-}
-
-.contribute a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.contribute a:hover {
-  color: var(--accent-hover);
 }
 
 /* Thumbnail ribbon */
@@ -307,6 +232,13 @@ header::before {
   pointer-events: none;
 }
 
+.result-count {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0 auto 1rem;
+}
+
 /* Year sections */
 .year-section {
   margin-bottom: 1.25rem;
@@ -475,17 +407,6 @@ header::before {
   margin-top: auto;
 }
 
-.card-badge {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  border-radius: 0.25rem;
-  z-index: 2;
-}
-
 .card-thumb-placeholder {
   width: 100%;
   height: 150px;
@@ -533,9 +454,17 @@ footer a:hover { color: var(--accent-hover); }
 }
 
 @media (max-width: 640px) {
-  h1 { font-size: 2rem; }
   .files {
     grid-template-columns: 1fr;
   }
   .card-thumb { height: 120px; }
+}
+
+/* Reduce-motion: stop the continuous/decorative animation — marquee ribbons,
+   the shifting gradient title, and the card entrance. Placed last so it wins
+   over the `@media (hover: hover)` card-enter rule. Hover/focus transitions
+   stay: they're small and user-initiated. */
+@media (prefers-reduced-motion: reduce) {
+  .ribbon-track { animation: none; }
+  .file-card { animation: none; }
 }

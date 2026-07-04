@@ -39,6 +39,10 @@
     "en": "No results for \"{q}\"",
     "ja": "「{q}」の検索結果なし"
   },
+  "result_count": {
+    "en": "{n} results",
+    "ja": "{n}件"
+  },
   "loading": {
     "en": "Loading works...",
     "ja": "読み込み中..."

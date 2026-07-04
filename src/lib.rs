@@ -765,22 +765,22 @@ pub fn get_related_paths<'a>(
     result
 }
 
-/// - A creator's recurring links (homepage / socials / shop), gathered from the
-///   games they appear on.
-/// - Keeps any link (primary or extra) present on >= 2 of the games; one-off
-///   per-game store pages are dropped. Deduped by URL (first label wins),
-///   in first-encountered order.
+/// - A creator's links (homepage / socials / shop / store), gathered from all
+///   their games (primary + extras).
+/// - One button per label: deduped by label (case-insensitive), keeping the
+///   first-seen version. `metas` arrive newest-first, so a repeated label (e.g.
+///   several "itch.io" works) resolves to the newest game that carries it.
+/// - "HP" (homepage) leads when present.
 pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    let mut seen_url: HashSet<String> = HashSet::new();
-    let mut order: Vec<ExtraLink> = Vec::new();
+    let mut seen_label: HashSet<String> = HashSet::new();
+    let mut links: Vec<ExtraLink> = Vec::new();
 
     for meta in metas {
-        // Collect this game's links (primary + extras).
-        let mut links: Vec<ExtraLink> = Vec::new();
+        // Collect this game's links (primary + extras) in order.
+        let mut game_links: Vec<ExtraLink> = Vec::new();
         if let (Some(label), Some(url)) = (meta.link_label.as_deref(), meta.link_url.as_deref()) {
             if !url.is_empty() {
-                links.push(ExtraLink {
+                game_links.push(ExtraLink {
                     label: label.to_string(),
                     url: url.to_string(),
                 });
@@ -789,31 +789,17 @@ pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
         if let Some(extras) = &meta.extra_links {
             for l in extras {
                 if !l.url.is_empty() {
-                    links.push(l.clone());
+                    game_links.push(l.clone());
                 }
             }
         }
 
-        // Count each URL at most once per game; record first-seen label/order.
-        let mut this_game: HashSet<String> = HashSet::new();
-        for l in links {
-            if this_game.insert(l.url.clone()) {
-                *counts.entry(l.url.clone()).or_insert(0) += 1;
-            }
-            if seen_url.insert(l.url.clone()) {
-                order.push(l);
+        for l in game_links {
+            if seen_label.insert(l.label.to_lowercase()) {
+                links.push(l);
             }
         }
     }
-
-    // Keep recurring links (>= 2 games), then collapse same-label duplicates,
-    // keeping the first (newest work's) version since `order` is newest-first.
-    let mut seen_label: HashSet<String> = HashSet::new();
-    let mut links: Vec<ExtraLink> = order
-        .into_iter()
-        .filter(|l| counts.get(&l.url).copied().unwrap_or(0) >= 2)
-        .filter(|l| seen_label.insert(l.label.to_lowercase()))
-        .collect();
 
     // - Always lead with the creator's homepage ("HP") when present.
     // - Stable sort, so the remaining links keep their newest-first order.
