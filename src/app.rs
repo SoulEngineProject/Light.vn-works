@@ -37,8 +37,8 @@ use crate::{
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
 // - Without this, slow CSS loads (e.g., Render free-tier cold start) cause a white flash.
 // - Hex values mirror --bg and --text in style.css.
-// - ⚠ Setting `html` bg here (vs. only `body`) interacts with the homepage mascot: `public/home.css` has `body::after { z-index: -1 }` for the LX pseudo, trapped in body's stacking context (body has `z-index: 0` in home.css).
-// - If you ever change the body's stacking — or move the bg off `html` — re-verify the mascot still paints. See `body::after` and the `body { z-index: 0 }` rule in home.css.
+// - ⚠ Setting `html` bg here (vs. only `body`) interacts with the LX mascot: `public/style.css` has `body::after { z-index: -1 }` for the pseudo, trapped in body's stacking context (body has `z-index: 0` in style.css). The mascot is site-wide (style.css is loaded everywhere).
+// - If you ever change the body's stacking — or move the bg off `html` — re-verify the mascot still paints. See `body::after` and the `body { z-index: 0 }` rule in style.css.
 const CRITICAL_CSS: &str = "<style>html,body{background:#0d0b12;color:#ede9fe}</style>";
 
 #[derive(Clone)]
