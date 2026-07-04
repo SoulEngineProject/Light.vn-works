@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     # - Cache the cargo registry + target/ across runs so unchanged deps aren't recompiled.
     # - Cold cache (first run, or a Cargo.lock/toolchain change) still rebuilds fully.
     - name: Cache Rust build
