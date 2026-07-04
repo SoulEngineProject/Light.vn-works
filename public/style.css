@@ -21,6 +21,28 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   padding: 0 1rem;
+  /* Stacking context so body::after { z-index: -1 } is trapped here and paints
+     above body's bg but below content. Without it the pseudo escapes to the
+     root SC and gets occluded by html's bg from critical CSS. */
+  position: relative;
+  z-index: 0;
+}
+
+/* LX mascot, bottom-right on every page. */
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -5%;
+  right: -5%;
+  width: 500px;
+  height: 600px;
+  background: url('/LX.webp') no-repeat center;
+  background-size: contain;
+  opacity: 0.2;
+  pointer-events: none;
+  z-index: -1;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 70%);
 }
 
 a { color: var(--accent); }
