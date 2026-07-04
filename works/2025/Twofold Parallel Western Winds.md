@@ -1,5 +1,5 @@
 ---
-creator: 2nd draft!
+creator: endpaper
 released: 2025/10/28
 link_label: itch.io
 link_url: "https://2nd-draft.itch.io/twofold-parallel-ww"

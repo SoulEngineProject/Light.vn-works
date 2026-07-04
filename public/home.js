@@ -327,6 +327,19 @@ function renderTree(data, query, hideR18) {
     container.appendChild(section);
   });
 
+  // - Live count while a search/tag filter is active; hidden when unfiltered
+  //   (the header already carries the catalogue total) or empty (the no-results
+  //   message speaks for itself).
+  const countEl = document.getElementById('result-count');
+  if (countEl) {
+    if (query && totalVisible > 0) {
+      countEl.textContent = (t.result_count || '{n} results').replace('{n}', totalVisible);
+      countEl.hidden = false;
+    } else {
+      countEl.hidden = true;
+    }
+  }
+
   if (totalVisible === 0 && query) {
     // Show the tag name for a tag: query, otherwise the raw text.
     const shown = parseTagQuery(query) || query;

@@ -181,8 +181,8 @@ fn feed_date_prefers_date_added_then_released() {
 }
 
 #[test]
-fn aggregate_creator_links_keeps_only_recurring_links() {
-    // given: two games sharing a homepage + Twitter, each with its own one-off store link
+fn aggregate_creator_links_keeps_one_per_label() {
+    // given: two games with their own store links, sharing a homepage + Twitter
     let shared = |extra: Vec<ExtraLink>, label: &str, url: &str| GameMeta {
         link_label: Some(label.to_string()),
         link_url: Some(url.to_string()),
@@ -210,15 +210,16 @@ fn aggregate_creator_links_keeps_only_recurring_links() {
 
     // when: aggregating the creator's links
     let links = aggregate_creator_links(&[&g1, &g2]);
-    let urls: Vec<&str> = links.iter().map(|l| l.url.as_str()).collect();
+    let labels: Vec<&str> = links.iter().map(|l| l.label.as_str()).collect();
 
     // then:
-    // - the homepage + Twitter (present on both games) are kept
-    // - the one-off DLsite / BOOTH store pages (a single game each) are dropped
-    assert!(urls.contains(&"https://creator.example"));
-    assert!(urls.contains(&"https://twitter.example/me"));
-    assert!(!urls.contains(&"https://dlsite.example/a"));
-    assert!(!urls.contains(&"https://booth.example/b"));
+    // - one button per distinct label — the per-game store links show too now
+    // - HP / Twitter (on both games) dedupe to a single button each
+    assert!(labels.contains(&"HP"));
+    assert!(labels.contains(&"Twitter"));
+    assert!(labels.contains(&"DLsite"));
+    assert!(labels.contains(&"BOOTH"));
+    assert_eq!(labels.iter().filter(|l| **l == "HP").count(), 1);
 }
 
 #[rstest]
@@ -280,7 +281,7 @@ fn creator_work_key_orders_newest_first_with_undated_by_folder_year() {
 
 #[test]
 fn aggregate_creator_links_leads_with_hp() {
-    // given: recurring links where Twitter is encountered before HP
+    // given: HP and Twitter on both games, with Twitter listed before HP
     let make = |extras: Vec<ExtraLink>| GameMeta {
         extra_links: Some(extras),
         ..Default::default()
@@ -306,8 +307,7 @@ fn aggregate_creator_links_leads_with_hp() {
 
 #[test]
 fn aggregate_creator_links_dedupes_same_label_keeping_newest() {
-    // given: newest-first games where two different URLs both carry the label "Twitter",
-    //        each appearing on 2 games so both survive the recurring filter
+    // given: newest-first games where two different URLs both carry the label "Twitter"
     let tw = |url: &str| ExtraLink {
         label: "Twitter".into(),
         url: url.into(),
@@ -316,17 +316,13 @@ fn aggregate_creator_links_dedupes_same_label_keeping_newest() {
         extra_links: Some(vec![tw("https://x.com/new")]),
         ..Default::default()
     };
-    let g_mid = GameMeta {
-        extra_links: Some(vec![tw("https://x.com/new"), tw("https://twitter.com/old")]),
-        ..Default::default()
-    };
     let g_old = GameMeta {
         extra_links: Some(vec![tw("https://twitter.com/old")]),
         ..Default::default()
     };
 
     // when: aggregating (metas are newest-first)
-    let links = aggregate_creator_links(&[&g_new, &g_mid, &g_old]);
+    let links = aggregate_creator_links(&[&g_new, &g_old]);
 
     // then: one "Twitter" link only — the newest work's
     assert_eq!(links.len(), 1);

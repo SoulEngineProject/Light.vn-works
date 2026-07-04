@@ -28,10 +28,23 @@ a:hover { color: var(--accent-hover); }
 
 html { scroll-behavior: smooth; overflow-x: hidden; }
 
+/* Priority/AI badge on a card (home, game more-from, creator). Base position
+   top-right; the -left variant below flips it. */
+.card-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  z-index: 2;
+}
+
 /* AI badge (or any badge that should explicitly sit top-left) overrides the
    default `.card-badge { right: 0.5rem }` to anchor on the left side.
    Selector is `.card-badge.card-badge-left` (specificity 0,2,0) so it beats
-   `.card-badge` rules in home.css regardless of cascade order. */
+   `.card-badge` regardless of cascade order. */
 .card-badge.card-badge-left {
   right: auto;
   left: 0.5rem;
@@ -93,4 +106,9 @@ html { scroll-behavior: smooth; overflow-x: hidden; }
 .lang-toggle:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+
+/* Honour the OS "reduce motion" setting site-wide: no smooth-scroll jumps. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

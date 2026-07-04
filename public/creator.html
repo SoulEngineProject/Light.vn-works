@@ -12,8 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="/lvn_icon.webp">
   <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/home.css">
-  <link rel="stylesheet" href="/game.css">
+  <link rel="stylesheet" href="/components.css">
   <link rel="stylesheet" href="/creator.css">
   <meta name="description" content="{{count_label}} by {{creator_name}}." />
   <meta property="og:title" content="{{creator_name}} — Light.vn Works" />
@@ -25,25 +24,12 @@
 </head>
 <body>
   <button class="lang-toggle" id="lang-toggle"></button>
-  <script>
-  (function() {
-      var p = new URLSearchParams(location.search).get('lang');
-      var lang = p === 'ja' || p === 'en' ? p : '{{lang_detected_lang}}';
-      var btn = document.getElementById('lang-toggle');
-      btn.textContent = lang === 'ja' ? 'English' : '日本語';
-      btn.addEventListener('click', function() {
-          var url = new URL(location.href);
-          url.searchParams.set('lang', lang === 'ja' ? 'en' : 'ja');
-          location.href = url.toString();
-      });
-  })();
-  </script>
 
   <div class="container">
     <header>
       <h1>{{creator_name}}</h1>
       <p class="subtitle">{{count_label}}{{active_since}}</p>
-      <div class="meta-row">{{creator_links}}</div>
+      <div class="meta-row">{{creator_links}}<button class="share-btn" data-share="{{lang_share}}" data-copied="{{lang_copied}}">{{lang_share}}</button></div>
     </header>
 
     {{hero}}
@@ -51,6 +37,7 @@
 
     <p class="contribute creator-back"><a href="/{{back_suffix}}">{{all_works}}</a></p>
   </div>
+  <script src="/page.js" defer></script>
   <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

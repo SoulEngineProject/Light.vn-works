@@ -1,5 +1,13 @@
 /* Creator page: latest-work hero + "more works" heading. */
 
+/* Centre the links + share button under the centred header (game.css leaves
+   .meta-row flex-start, which is right for the game page's left-aligned column),
+   and give them breathing room below the "N works · Active since" line. */
+header .meta-row {
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
 .creator-hero {
   display: flex;
   gap: 1.5rem;

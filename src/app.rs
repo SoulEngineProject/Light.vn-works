@@ -365,7 +365,14 @@ async fn serve_creator(
 
     let base = base_url(&headers);
     let canonical = format!("{}/creator/{}", base, encode_path(&display));
-    let og_image = format!("{}/lvn_icon.webp", base);
+    // - Share preview = the newest work's hero art (absolute GitHub URL), so a
+    //   shared creator link shows their game, not the generic site icon.
+    // - Falls back to the icon only if the newest work somehow has no image.
+    let og_image = games
+        .first()
+        .and_then(|g| g.images.first())
+        .map(|img| img.url.clone())
+        .unwrap_or_else(|| format!("{}/lvn_icon.webp", base));
     let back_suffix = if detected_lang == "ja" {
         "?lang=ja"
     } else {
@@ -382,6 +389,8 @@ async fn serve_creator(
         .replace("{{hero}}", &hero)
         .replace("{{more_works}}", &more_works)
         .replace("{{all_works}}", &html_escape(&lang.creator_all_works))
+        .replace("{{lang_share}}", &lang.share)
+        .replace("{{lang_copied}}", &lang.copied)
         .replace("{{back_suffix}}", back_suffix)
         .replace("{{canonical_url}}", &html_escape(&canonical))
         .replace("{{og_image}}", &html_escape(&og_image));

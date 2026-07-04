@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="icon" href="/lvn_icon.webp">
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/components.css">
     <link rel="stylesheet" href="/game.css">
     <meta name="description" content="{{tagline}}" />
     <meta property="og:title" content="{{title_display}} - Light.vn Works" />
@@ -21,19 +22,6 @@
 </head>
 <body>
     <button class="lang-toggle" id="lang-toggle"></button>
-    <script>
-    (function() {
-        var p = new URLSearchParams(location.search).get('lang');
-        var lang = p === 'ja' || p === 'en' ? p : '{{lang_detected_lang}}';
-        var btn = document.getElementById('lang-toggle');
-        btn.textContent = lang === 'ja' ? 'English' : '\u65E5\u672C\u8A9E';
-        btn.addEventListener('click', function() {
-            var url = new URL(location.href);
-            url.searchParams.set('lang', lang === 'ja' ? 'en' : 'ja');
-            location.href = url.toString();
-        });
-    })();
-    </script>
     <nav class="breadcrumb">
         <a href="/{{home_suffix}}">{{lang_breadcrumb_works}}</a>
         <span>/</span>
@@ -49,16 +37,9 @@
             {{released_html}}
             {{link_html}}
             {{extra_links_html}}
-            <button class="share-btn" data-share="{{lang_share}}" data-copied="{{lang_copied}}" onclick="copyLink(this)">{{lang_share}}</button>
+            <button class="share-btn" data-share="{{lang_share}}" data-copied="{{lang_copied}}">{{lang_share}}</button>
         </div>
         {{tags_line}}
-    <script>
-    function copyLink(btn) {
-        navigator.clipboard.writeText(window.location.href);
-        btn.textContent = btn.dataset.copied;
-        setTimeout(function() { btn.textContent = btn.dataset.share; }, 1500);
-    }
-    </script>
         <div class="synopsis">{{synopsis_html}}</div>
         {{gallery_html}}
         {{editor_mockup}}
@@ -67,6 +48,8 @@
     <footer class="game-footer">
         {{lang_footer}}
     </footer>
+    <script src="/page.js" defer></script>
+    <script src="/lightbox.js" defer></script>
     <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
 </html>

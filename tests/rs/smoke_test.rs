@@ -389,6 +389,10 @@ async fn creator_page_lists_works() {
     assert!(html.contains("creator-hero"));
     assert!(html.contains("Latest"));
     assert!(html.contains("lang-toggle"));
+    // share button (reused game-page pattern)
+    assert!(html.contains("share-btn"));
+    // OG image is the newest work's hero art, not the generic site icon
+    assert!(html.contains("og:image\" content=\"https://github.com/user-attachments"));
 }
 
 #[tokio::test]
