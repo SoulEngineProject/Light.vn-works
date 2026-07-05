@@ -384,7 +384,7 @@ async fn creator_page_lists_works() {
     assert!(html.contains("more-creator-card"));
     // hub links (their HP/Twitter recur across games) + "active since" the earliest release
     assert!(html.contains("extra-link"));
-    assert!(html.contains("Active since"));
+    assert!(html.contains("Star since"));
     // latest-work hero + language toggle
     assert!(html.contains("creator-hero"));
     assert!(html.contains("Latest"));

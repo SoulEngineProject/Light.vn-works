@@ -80,8 +80,8 @@
     "ja": "開発例"
   },
   "creator_active_since": {
-    "en": "Active since {year}",
-    "ja": "{year}年から活動"
+    "en": "Light.vn Star since {year}",
+    "ja": "Light.vn世界への初降臨：{year}年"
   },
   "creator_latest": {
     "en": "Latest",
@@ -96,7 +96,7 @@
     "ja": "見る →"
   },
   "creator_all_works": {
-    "en": "← All works",
-    "ja": "← 作品一覧"
+    "en": "← All works (All stars)",
+    "ja": "← 作品一覧 (星一覧)"
   }
 }
