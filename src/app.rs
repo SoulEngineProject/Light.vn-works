@@ -424,7 +424,7 @@ async fn render_markdown(
         );
     }
 
-    let canonical_path = format!("/works/{}/{}", &year, &title);
+    let canonical_path = format!("/works/{}/{}", year, title);
     let game = match state.games.get(&canonical_path) {
         Some(g) => g,
         None => return not_found_html(&year, &title),
