@@ -1,6 +1,6 @@
 ---
 creator: OREO NAUTS
-released: 2025/12/30
+released: 2026/08/15
 link_label: X
 link_url: "https://x.com/oreonauts"
 tagline: グサデレ後輩に告白されるバレンタインデー
