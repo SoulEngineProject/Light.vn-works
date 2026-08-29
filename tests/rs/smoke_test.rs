@@ -518,3 +518,29 @@ async fn robots_points_to_sitemap() {
     assert!(text.contains("Sitemap:"));
     assert!(text.contains("/sitemap.xml"));
 }
+
+#[tokio::test]
+async fn healthz_returns_ok_uncached() {
+    // given: the app
+    let app = build_app();
+
+    // when: requesting /healthz
+    let response = app
+        .oneshot(
+            Request::get("/healthz")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // then: 200 OK, and no layer downgraded it to a cacheable response
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok()),
+        Some("no-store")
+    );
+}

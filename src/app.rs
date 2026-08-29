@@ -145,6 +145,18 @@ async fn serve_robots(headers: HeaderMap) -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body)
 }
 
+// - Liveness probe for the platform health check; constant-time, touches no state.
+// - no-store so a proxy never answers 200 on behalf of a dead instance.
+async fn serve_healthz() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-store"),
+        ],
+        "ok\n",
+    )
+}
+
 // - Atom feed of the most recently added/released works (30 newest).
 async fn serve_feed(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let mut dated: Vec<(&ParsedGame, String)> = state
@@ -1205,6 +1217,7 @@ pub fn build_app() -> Router {
         .route("/api/csp-report", post(serve_csp_report))
         .route("/sitemap.xml", get(serve_sitemap))
         .route("/robots.txt", get(serve_robots))
+        .route("/healthz", get(serve_healthz))
         .route("/feed.xml", get(serve_feed))
         .route("/creator/{name}", get(serve_creator))
         .nest_service("/raw", ServeDir::new("works"))
