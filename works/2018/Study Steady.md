@@ -1,5 +1,5 @@
 ---
-creator: "飽きた県 | ナトリニウム | 日陰の本棚"
+creator: "飽きた県, ナトリニウム, 日陰の本棚"
 released: 2018/08/10
 link_label: ふりーむ！
 link_url: "https://www.freem.ne.jp/win/game/15485"
