@@ -891,8 +891,23 @@ fn validate_all_markdown_files() {
 
         let (meta, body) = parse_frontmatter(&content);
 
-        if meta.creator.as_deref().unwrap_or("").is_empty() {
+        let creator = meta.creator.as_deref().unwrap_or("");
+        if creator.is_empty() {
             errors.push(format!("{}: creator is empty", path.display()));
+        }
+        // - Multi-creator fields split on commas and nothing else (`split_creators`).
+        // - Any other separator silently mints one creator page named after all of
+        //   them, which is how "飽きた県 | ナトリニウム | 日陰の本棚" shipped.
+        // - ASCII "/" is not listed: "TitleA+++/WtmMif" is one name, not two.
+        if let Some(bad) = creator
+            .chars()
+            .find(|c| matches!(c, '|' | '｜' | '／' | '、'))
+        {
+            errors.push(format!(
+                "{}: creator uses '{}' as a separator (multi-creator fields split on ',' only)",
+                path.display(),
+                bad
+            ));
         }
         if meta.released.as_deref().unwrap_or("").is_empty() {
             errors.push(format!("{}: released date is empty", path.display()));
@@ -1436,6 +1451,39 @@ fn alias_groups_resolve_bidirectionally() {
         .get("alice")
         .unwrap()
         .contains(&"A-chan".to_string()));
+}
+
+// - Binds to the real config/aliases.yaml, the way `cfg()` binds to tags.yaml.
+// - `load_aliases` swallows parse errors into an empty map, so a YAML typo would
+//   otherwise disable every alias with the whole suite still green.
+#[test]
+fn production_aliases_parse() {
+    // given: the real alias config
+    let yaml = include_str!("../../config/aliases.yaml");
+
+    // when: loading it
+    let aliases = load_aliases(yaml);
+
+    // then: it parsed — an empty map means the file broke, not that groups were removed
+    assert!(
+        !aliases.is_empty(),
+        "config/aliases.yaml parsed to nothing — check its YAML syntax"
+    );
+
+    // then: every name resolves to at least one other (a 1-name group is a no-op)
+    for (name, others) in &aliases {
+        assert!(!others.is_empty(), "alias '{}' maps to nothing", name);
+    }
+
+    // then: a known group round-trips both ways
+    assert!(aliases
+        .get("みゃう缶ソフト")
+        .unwrap()
+        .contains(&"由乃もも".to_string()));
+    assert!(aliases
+        .get("由乃もも")
+        .unwrap()
+        .contains(&"みゃう缶ソフト".to_string()));
 }
 
 #[test]

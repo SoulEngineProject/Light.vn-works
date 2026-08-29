@@ -33,6 +33,14 @@ Homepage thumbnails (ribbon + card) are served via `/thumb/:uuid/:size` — a Ru
 - **Scope**: thumbnails only. Hero, gallery, and editor-mockup images fetch full-size directly from GitHub — resizing them would lose the detail users care about.
 - **Tradeoff accepted**: CPU/RAM on the server vs. bandwidth + roundtrip latency for visitors. At 241 games × 2 sizes × ~15KB = ~7MB RAM, well worth it.
 
+## `tags.yaml` is opt-in, not a registry
+
+`config/tags.yaml` lists only tags that need special treatment — a colour, a link, a rewritten label. Any tag a work uses is valid whether or not it appears there; an unlisted tag renders plain and uncoloured, which is the default, not a mistake. `早稲田大学` sits unlisted on 9 works today.
+
+- **Unlisted tags still work**: `build_tag_index` folds every tag it sees into the tag bar (unlisted ones just carry `colour: None`), so they filter like any other. What listing buys is the colour, the optional `url`/`label`, and eligibility for the card's priority badge — `pick_priority_badge` deliberately has no fallback to unconfigured tags.
+- **No "unknown tag" validation, on purpose**: the markdown validator checks dates, images, and `thumbnail_index`, but never tags. Rejecting a tag for being absent from `tags.yaml` would invert the design and make every new tag a two-file change.
+- **Adding to `tags.yaml` is a promotion**: do it when a tag earns a colour or a link, not to register it.
+
 ## Restart on content change
 
 All markdown files are parsed once at startup into an in-memory `HashMap<canonical_path, ParsedGame>` (`src/app.rs::build_games_index`). This is the sole source of truth; the tree JSON, creator index, and game-page rendering all derive from it. Editing a file on disk does **not** live-update — the server must be restarted.
