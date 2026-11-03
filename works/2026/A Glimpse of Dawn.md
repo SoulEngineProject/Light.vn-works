@@ -3,7 +3,7 @@ creator: calygreyhound
 released: 2026/09/30
 link_label: itch.io
 link_url: "https://calygreyhound.itch.io/glimpse-of-dawn"
-tagline: "Love will have its sacrifices... and there is no sacrifice without blood."
+tagline: "Yae soon finds herself trapped in a web of obsession and lies"
 tags: [Spooktober, English]
 thumbnail_index:
 ---
@@ -14,5 +14,4 @@ thumbnail_index:
 <img width="1438" height="1079" alt="image" src="https://github.com/user-attachments/assets/f024ecd6-1071-41b1-8c36-6bfd783700cf" />
 
 ---
-Some strange fate has brought the struggling writer, Yae, and the enigmatic Hisako together. But there's more to Hisako than first meets the eye, and Yae soon finds herself trapped in a web of obsession and lies.  
-For, after all, love will have its sacrifices... and there is no sacrifice without blood.
+Some strange fate has brought the struggling writer, Yae, and the enigmatic Hisako together. But there's more to Hisako than first meets the eye, and Yae soon finds herself trapped in a web of obsession and lies.
