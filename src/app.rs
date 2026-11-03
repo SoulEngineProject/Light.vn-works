@@ -5,7 +5,6 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::get,
-    routing::get_service,
     routing::post,
     Json, Router,
 };
@@ -27,11 +26,12 @@ use walkdir::WalkDir;
 
 use crate::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
-    build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
-    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, game_page_suffixes,
-    get_lang, get_related_paths, html_escape, json_script_escape, load_aliases, load_tag_config,
-    markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso, resize_thumbnail,
-    split_creators, strip_img_tags, tag_style, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize,
+    build_tags_line, card_badges_html, detect_lang, encode_path, escape_css_url,
+    extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, get_lang,
+    get_related_paths, has_tag, html_escape, json_script_escape, layout_images, load_aliases,
+    load_tag_config, make_thumbnail, markdown_to_html, parse_frontmatter, split_creators,
+    strip_img_tags, valid_lang_param, work_order, DevExample, FeedEntry, GameMeta, Nav, ParsedGame,
+    TagInfo, ThumbSize,
 };
 
 // - Inlined into <head> on both index.html and game.html so the first frame paints with the dark theme before external CSS arrives.
@@ -48,7 +48,6 @@ struct AppState {
     aliases: Arc<HashMap<String, Vec<String>>>,
     tag_config: Arc<HashMap<String, TagInfo>>,
     tag_bar_json: Arc<String>,
-    tag_info_json: Arc<String>,
     tree_json: Arc<String>,
     // Thumbnail proxy state
     thumb_cache: Arc<DashMap<(String, ThumbSize), Vec<u8>>>,
@@ -88,6 +87,22 @@ struct Node {
     thumbnail_composite: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     meta: Option<GameMeta>,
+    // - Display data the homepage uses as-is, so it never re-derives what the server already decided.
+    // - `href`s carry no query; home.js appends the visitor's lang/r18 state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    href: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    creators: Option<Vec<CreatorRef>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    badges_html: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+struct CreatorRef {
+    name: String,
+    href: String,
 }
 
 async fn get_tree(State(state): State<AppState>) -> impl IntoResponse {
@@ -185,34 +200,26 @@ async fn serve_feed(State(state): State<AppState>, headers: HeaderMap) -> impl I
     )
 }
 
-// - Priority badge (top-right) + AI badge (top-left) for a game's tags.
-fn card_badges(tags: &[String], config: &HashMap<String, TagInfo>) -> String {
-    let mut badge = String::new();
-    if let Some(t) = pick_priority_tag(tags, config) {
-        let style_attr = match tag_style(t, config) {
-            Some(s) => format!(r#" style="{}""#, s),
-            None => String::new(),
-        };
-        badge.push_str(&format!(
-            r#"<span class="card-badge"{}>{}</span>"#,
-            style_attr,
-            html_escape(&t.to_uppercase())
-        ));
-    }
-    if tags.iter().any(|t| t.eq_ignore_ascii_case("ai")) {
-        if let Some(style) = tag_style("ai", config) {
-            badge.push_str(&format!(
-                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
-                style
-            ));
-        }
-    }
-    badge
+// - One `<a class="creator-link">` per credited name, all through `Nav::creator_href`.
+fn creator_links_html(creator_field: &str, nav: Nav) -> String {
+    split_creators(creator_field)
+        .iter()
+        .map(|name| creator_link_html(name, nav))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn creator_link_html(name: &str, nav: Nav) -> String {
+    format!(
+        r#"<a href="{}" class="creator-link">{}</a>"#,
+        html_escape(&nav.creator_href(name)),
+        html_escape(name)
+    )
 }
 
 // - One game card (thumb + priority/AI badges + title link) for the
 //   "more from creator" strip and creator pages.
-fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) -> String {
+fn render_creator_card(game: &ParsedGame, state: &AppState, nav: Nav) -> String {
     let thumb = game
         .thumbnail
         .as_deref()
@@ -233,12 +240,11 @@ fn render_creator_card(game: &ParsedGame, state: &AppState, fwd_suffix: &str) ->
         .unwrap_or_else(|| r#"<div class="more-creator-placeholder">&#10024;</div>"#.to_string());
 
     let tags = game.meta.tags.as_deref().unwrap_or(&[]);
-    let badge = card_badges(tags, &state.tag_config);
+    let badge = card_badges_html(tags, &state.tag_config);
 
     format!(
-        r#"<a href="{}{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
-        html_escape(&encode_path(&game.path)),
-        fwd_suffix,
+        r#"<a href="{}" class="more-creator-card"><div class="more-creator-thumb">{}{}</div><span class="more-creator-title">{}</span></a>"#,
+        html_escape(&nav.work_href(&game.path)),
         badge,
         thumb,
         html_escape(&game.title)
@@ -256,11 +262,7 @@ async fn serve_creator(
     // current_path "" excludes nothing, so this returns the full alias-merged set.
     let groups = get_related_paths(&state.creator_paths, &name, "", usize::MAX, &state.aliases);
     if groups.is_empty() {
-        return (
-            StatusCode::NOT_FOUND,
-            Html(include_str!("../public/404.html").to_string()),
-        )
-            .into_response();
+        return not_found_page(&headers, &params);
     }
 
     let detected_lang = detect_lang(
@@ -268,19 +270,17 @@ async fn serve_creator(
         headers.get("accept-language").and_then(|v| v.to_str().ok()),
     );
     let lang = get_lang(detected_lang);
+    let nav = Nav::from_query(
+        params.get("lang").map(|s| s.as_str()),
+        params.get("r18").map(|s| s.as_str()),
+    );
 
     let mut games: Vec<&ParsedGame> = groups
         .iter()
         .flat_map(|(_, paths)| paths.iter().filter_map(|p| state.games.get(*p)))
         .collect();
-    // - Newest first, keyed on the release date, falling back to the folder year
-    //   when the date is missing/"unknown" — so an undated work sorts by its year
-    //   (e.g. a 2014-folder work never sorts above a 2018 release as the hero).
-    games.sort_by(|a, b| {
-        let ka = creator_work_key(a.meta.released.as_deref(), &a.year);
-        let kb = creator_work_key(b.meta.released.as_deref(), &b.year);
-        kb.cmp(ka).then_with(|| a.title.cmp(&b.title))
-    });
+    // - Newest first; undated works sort by folder year, so they never become the hero.
+    games.sort_by(|a, b| work_order(a, b));
 
     // Display name: recover original casing from a matching creator credit.
     let key = name.to_lowercase();
@@ -303,9 +303,8 @@ async fn serve_creator(
                 .unwrap_or_else(|| {
                     r#"<div class="creator-hero-placeholder">&#10024;</div>"#.to_string()
                 });
-            let year = released_to_iso(g.meta.released.as_deref().unwrap_or(""))
-                .map(|iso| iso[..4].to_string())
-                .unwrap_or_else(|| g.year.clone());
+            // - Folder year: the validator ties it to `released`, and undated works have one too.
+            let year = g.year.clone();
             let tags = g.meta.tags.as_deref().unwrap_or(&[]);
             let tagline = g.meta.tagline.as_deref().unwrap_or("");
             let tagline_html = if tagline.is_empty() {
@@ -318,8 +317,8 @@ async fn serve_creator(
             };
             format!(
                 r#"<a href="{}" class="creator-hero"><div class="creator-hero-img">{}{}</div><div class="creator-hero-info"><span class="creator-hero-label">{}</span><h2>{}</h2><div class="creator-hero-meta"><span>{}</span></div>{}<span class="creator-hero-view">{}</span></div></a>"#,
-                html_escape(&encode_path(&g.path)),
-                card_badges(tags, &state.tag_config),
+                html_escape(&nav.work_href(&g.path)),
+                card_badges_html(tags, &state.tag_config),
                 img,
                 html_escape(&lang.creator_latest),
                 html_escape(&g.title),
@@ -335,7 +334,7 @@ async fn serve_creator(
         let cards: String = games
             .iter()
             .skip(1)
-            .map(|g| render_creator_card(g, &state, ""))
+            .map(|g| render_creator_card(g, &state, nav))
             .collect();
         format!(
             r#"<h2 class="more-works-heading">{}</h2><div class="more-creator-grid">{}</div>"#,
@@ -376,7 +375,7 @@ async fn serve_creator(
     };
 
     let base = base_url(&headers);
-    let canonical = format!("{}/creator/{}", base, encode_path(&display));
+    let canonical = format!("{}{}", base, Nav::default().creator_href(&display));
     // - Share preview = the newest work's hero art (absolute GitHub URL), so a
     //   shared creator link shows their game, not the generic site icon.
     // - Falls back to the icon only if the newest work somehow has no image.
@@ -385,15 +384,11 @@ async fn serve_creator(
         .and_then(|g| g.images.first())
         .map(|img| img.url.clone())
         .unwrap_or_else(|| format!("{}/lvn_icon.webp", base));
-    let back_suffix = if detected_lang == "ja" {
-        "?lang=ja"
-    } else {
-        ""
-    };
 
-    let page = include_str!("../public/creator.html")
+    let page = include_str!("../templates/creator.html")
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{lang_detected_lang}}", detected_lang)
+        .replace("{{lang_toggle}}", &html_escape(&lang.lang_toggle))
         .replace("{{creator_name}}", &html_escape(&display))
         .replace("{{count_label}}", &html_escape(&count_label))
         .replace("{{active_since}}", &html_escape(&active_since))
@@ -403,7 +398,7 @@ async fn serve_creator(
         .replace("{{all_works}}", &html_escape(&lang.creator_all_works))
         .replace("{{lang_share}}", &lang.share)
         .replace("{{lang_copied}}", &lang.copied)
-        .replace("{{back_suffix}}", back_suffix)
+        .replace("{{home_href}}", &html_escape(&nav.home_href(&[])))
         .replace("{{canonical_url}}", &html_escape(&canonical))
         .replace("{{og_image}}", &html_escape(&og_image));
     Html(page).into_response()
@@ -414,14 +409,17 @@ async fn render_markdown(
     headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
     AxumPath((year, title)): AxumPath<(String, String)>,
-) -> impl IntoResponse {
-    let lang_param = params.get("lang").map(|s| s.as_str());
+) -> Response {
+    // - Only en/ja go back into links; anything else is dropped, never echoed.
+    let nav = Nav::from_query(
+        params.get("lang").map(|s| s.as_str()),
+        params.get("r18").map(|s| s.as_str()),
+    );
     let detected_lang = detect_lang(
         params.get("lang").map(|s| s.as_str()),
         headers.get("accept-language").and_then(|v| v.to_str().ok()),
     );
     let lang = get_lang(detected_lang);
-    let incoming_r18_zero = params.get("r18").map(|s| s.as_str()) == Some("0");
 
     if year.len() > 20
         || title.len() > 300
@@ -430,16 +428,14 @@ async fn render_markdown(
         || year.contains('/')
         || title.contains('/')
     {
-        return (
-            StatusCode::BAD_REQUEST,
-            Html("<h1>400 Bad Request</h1><p>Invalid year or title</p>".to_string()),
-        );
+        // - Blocked by the path guard: shown as a plain 404, so the guard's rules aren't advertised.
+        return not_found_page(&headers, &params);
     }
 
     let canonical_path = format!("/works/{}/{}", year, title);
     let game = match state.games.get(&canonical_path) {
         Some(g) => g,
-        None => return not_found_html(&year, &title),
+        None => return not_found_page(&headers, &params),
     };
     let meta = &game.meta;
     let images = &game.images;
@@ -452,18 +448,10 @@ async fn render_markdown(
         .as_deref()
         .filter(|c| !c.is_empty())
         .map(|c| {
-            // - Link each credited name to its creator page.
-            let links: Vec<String> = split_creators(c)
-                .iter()
-                .map(|name| {
-                    format!(
-                        r#"<a href="/creator/{}" class="creator-link">{}</a>"#,
-                        html_escape(&encode_path(name)),
-                        html_escape(name)
-                    )
-                })
-                .collect();
-            format!(r#"<span class="meta-item">by {}</span>"#, links.join(", "))
+            format!(
+                r#"<span class="meta-item">by {}</span>"#,
+                creator_links_html(c, nav)
+            )
         })
         .unwrap_or_default();
 
@@ -486,17 +474,16 @@ async fn render_markdown(
     }
 
     let tags = meta.tags.as_deref().unwrap_or(&[]);
-    let is_r18 = tags.iter().any(|t| t == "r18");
-    // - Back-link (to homepage): forces r18=0 if this page is R18 so the game stays visible in the list.
-    // - Forward-link (more-from cards): preserves whatever r18 state the user arrived with.
-    let (home_suffix, fwd_suffix) = game_page_suffixes(lang_param, is_r18, incoming_r18_zero);
-    let released = meta.released.as_deref().unwrap_or("");
+    let is_r18 = has_tag(tags, "r18");
+    // - Links back to the homepage (breadcrumb, tags) show R18 if this work is R18, so it stays in the list.
+    // - Links onward (creators, more-from cards) carry the state the visitor arrived with.
+    let home_nav = if is_r18 { nav.showing_r18() } else { nav };
     let tags_line = build_tags_line(
         tags,
         &lang.tags_label,
-        lang_param,
+        home_nav,
         &state.tag_config,
-        released,
+        &game.year,
     );
 
     let mut extra_links_html = String::new();
@@ -521,45 +508,22 @@ async fn render_markdown(
         )
     }).unwrap_or_default();
 
-    // - Gallery layout: max 2 per row.
-    // - If a trailing single image (orphan) would result, strip it from the gallery — it becomes the editor mockup's source instead via images.last() below.
-    // - Half of all games (those with even total image count) get a unique editor image this way instead of duplicating the last gallery thumbnail.
-    let gallery_count = match images.len() {
-        0 | 1 => 0,
-        n => {
-            let g = n - 1; // exclude hero
-            if g % 2 == 1 {
-                g - 1
-            }
-            // strip orphan; promoted to editor mockup
-            else {
-                g
-            }
-        }
-    };
+    let layout = layout_images(images.len(), meta.dev_example_index);
 
     // - alt="" intentional: gallery screenshots are decorative on a page that already has tagline, synopsis, and hero for descriptive content.
     // - No meaningful per-image description exists; a generic "Screenshot" adds nothing for screen readers and flashes as overlay text during slow loads.
-    let gallery_html = if gallery_count > 0 {
-        let gallery_images = &images[1..1 + gallery_count];
-        let rows = gallery_rows(gallery_images.len());
-        let mut idx = 0;
-        let mut html = String::new();
-        for cols in &rows {
-            html += &format!(r#"<div class="gallery gallery-{}">"#, cols);
-            for _ in 0..*cols {
-                html += &format!(
-                    r#"<img src="{}" alt="" loading="lazy" />"#,
-                    html_escape(&gallery_images[idx].url)
-                );
-                idx += 1;
-            }
-            html += "</div>";
+    let mut gallery_html = String::new();
+    let mut gallery_iter = layout.gallery.iter().map(|&i| &images[i]);
+    for cols in gallery_rows(layout.gallery.len()) {
+        gallery_html += &format!(r#"<div class="gallery gallery-{}">"#, cols);
+        for img in gallery_iter.by_ref().take(cols) {
+            gallery_html += &format!(
+                r#"<img src="{}" alt="" loading="lazy" />"#,
+                html_escape(&img.url)
+            );
         }
-        html
-    } else {
-        String::new()
-    };
+        gallery_html += "</div>";
+    }
 
     let synopsis_html = strip_img_tags(md_html);
 
@@ -574,34 +538,55 @@ async fn render_markdown(
     // - Param-less absolute URL so ?lang/?r18 variants don't read as duplicate content.
     let canonical_url = format!("{}{}", base_url(&headers), encode_path(&canonical_path));
 
-    // - Editor mockup: show last screenshot inside the Light.vn editor frame.
-    // - For composite images (width > height*2), crop to the rightmost third via CSS.
-    let editor_img = if detected_lang == "ja" {
-        "editor_jp.webp"
-    } else {
-        "editor_en.webp"
-    };
-    let editor_mockup = images.last().map(|img| {
-        let preview_html = if img.is_composite() {
-            // - CSS-encode first, entity-escape second. Reversed, the quote comes
-            //   back: &#39; decodes to ' before the CSS engine parses url('…').
-            format!(
-                r#"<div class="editor-preview-crop" style="background-image:url('{}')"></div>"#,
-                html_escape(&escape_css_url(&img.url))
-            )
-        } else {
-            // - alt="" intentional: the game page already has <h1>{title_display}</h1>, so this image is decorative.
-            // - Empty alt avoids flashing the title as overlay text during slow loads.
-            format!(
-                r#"<img class="editor-preview" src="{}" alt="" loading="lazy" />"#,
-                html_escape(&img.url)
-            )
+    // - Development example: either an editor screenshot shown as-is, or the last screenshot placed inside the Light.vn editor frame.
+    // - Framed composites (width > height*2) are cropped to the rightmost third via CSS.
+    // - alt="" intentional: the game page already has <h1>{title_display}</h1>, so these images are decorative.
+    // - Empty alt avoids flashing the title as overlay text during slow loads.
+    let editor_mockup = layout.dev_example.map(|dev| {
+        let body = match dev {
+            // - width/height from the .md reserve the box before the lazy load lands, so the sections below don't jump.
+            DevExample::AsIs(i) => {
+                let img = &images[i];
+                let size = match (img.width, img.height) {
+                    (Some(w), Some(h)) => format!(r#" width="{}" height="{}""#, w, h),
+                    _ => String::new(),
+                };
+                format!(
+                    r#"<img class="dev-example" src="{}"{} alt="" loading="lazy" />"#,
+                    html_escape(&img.url),
+                    size
+                )
+            }
+            DevExample::Framed(i) => {
+                let img = &images[i];
+                let preview_html = if img.is_composite() {
+                    // - CSS-encode first, entity-escape second. Reversed, the quote comes
+                    //   back: &#39; decodes to ' before the CSS engine parses url('…').
+                    format!(
+                        r#"<div class="editor-preview-crop" style="background-image:url('{}')"></div>"#,
+                        html_escape(&escape_css_url(&img.url))
+                    )
+                } else {
+                    format!(
+                        r#"<img class="editor-preview" src="{}" alt="" loading="lazy" />"#,
+                        html_escape(&img.url)
+                    )
+                };
+                let editor_img = if detected_lang == "ja" {
+                    "editor_jp.webp"
+                } else {
+                    "editor_en.webp"
+                };
+                format!(
+                    r#"<div class="editor-mockup-frame"><img class="editor-frame" src="/{}" alt="" />{}</div>"#,
+                    editor_img, preview_html
+                )
+            }
         };
         format!(
-            r#"<div class="editor-mockup"><h2>{}</h2><div class="editor-mockup-frame"><img class="editor-frame" src="/{}" alt="" />{}</div></div>"#,
+            r#"<div class="editor-mockup"><h2>{}</h2>{}</div>"#,
             html_escape(&lang.dev_example),
-            editor_img,
-            preview_html
+            body
         )
     }).unwrap_or_default();
 
@@ -619,14 +604,10 @@ async fn render_markdown(
             let cards: String = paths
                 .iter()
                 .filter_map(|p| state.games.get(*p))
-                .map(|g| render_creator_card(g, &state, &fwd_suffix))
+                .map(|g| render_creator_card(g, &state, nav))
                 .collect();
             // - Link the creator name in the heading to their creator page.
-            let creator_link = format!(
-                r#"<a href="/creator/{}" class="creator-link">{}</a>"#,
-                html_escape(&encode_path(name)),
-                html_escape(name)
-            );
+            let creator_link = creator_link_html(name, nav);
             format!(
                 r#"<div class="more-creator"><h2>{}</h2><div class="more-creator-grid">{}</div></div>"#,
                 lang.more_from.replace("{creator}", &creator_link),
@@ -635,7 +616,7 @@ async fn render_markdown(
         })
         .collect();
 
-    let page = include_str!("../public/game.html")
+    let page = include_str!("../templates/game.html")
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{title_display}}", &html_escape(&title_display))
         .replace("{{year}}", &html_escape(&year))
@@ -657,30 +638,42 @@ async fn render_markdown(
         .replace("{{lang_footer}}", &lang.footer)
         .replace("{{lang_breadcrumb_works}}", &lang.breadcrumb_works)
         .replace("{{lang_detected_lang}}", detected_lang)
-        .replace("{{home_suffix}}", &home_suffix);
+        .replace("{{lang_toggle}}", &html_escape(&lang.lang_toggle))
+        .replace("{{home_href}}", &html_escape(&home_nav.home_href(&[])));
 
-    (StatusCode::OK, Html(page))
+    Html(page).into_response()
 }
 
-fn not_found_html(year: &str, title: &str) -> (StatusCode, Html<String>) {
+// - The one "not here" page: unknown works, unknown creators, blocked paths, any other URL.
+// - Same language rule and link state as every other page.
+// - Doesn't echo the requested path: nothing user-supplied to escape, and no internal file names shown.
+fn not_found_page(headers: &HeaderMap, params: &HashMap<String, String>) -> Response {
+    let detected_lang = detect_lang(
+        params.get("lang").map(|s| s.as_str()),
+        headers.get("accept-language").and_then(|v| v.to_str().ok()),
+    );
+    let lang = get_lang(detected_lang);
+    let nav = Nav::from_query(
+        params.get("lang").map(|s| s.as_str()),
+        params.get("r18").map(|s| s.as_str()),
+    );
+    let page = include_str!("../templates/404.html")
+        .replace("{{critical_css}}", CRITICAL_CSS)
+        .replace("{{lang_detected_lang}}", detected_lang)
+        .replace("{{lang_toggle}}", &html_escape(&lang.lang_toggle))
+        .replace("{{not_found_title}}", &html_escape(&lang.not_found_title))
+        .replace(
+            "{{not_found_message}}",
+            &html_escape(&lang.not_found_message),
+        )
+        .replace("{{all_works}}", &html_escape(&lang.creator_all_works))
+        .replace("{{home_href}}", &html_escape(&nav.home_href(&[])));
     (
         StatusCode::NOT_FOUND,
-        Html(format!(
-            r#"<!DOCTYPE html>
-<html lang="en">
-<head><title>404 Not Found</title>
-<style>body {{ background:#0d0b12; color:#ede9fe; font-family:sans-serif; padding:4rem; text-align:center; }}</style>
-</head>
-<body>
-    <h1>404 - Not Found</h1>
-    <p>Could not find: <code>{year}/{title}.md</code></p>
-    <p><a href="/" style="color:#c084fc;">Back to archive</a></p>
-</body>
-</html>"#,
-            year = year,
-            title = title
-        )),
+        [(header::VARY, "Accept-Language")],
+        Html(page),
     )
+        .into_response()
 }
 
 // - Walk works/ once at startup. Parses each .md into a ParsedGame, keyed by canonical path ("/works/YYYY/title").
@@ -779,10 +772,16 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
 // - Build Node tree from pre-parsed games, grouped by year.
 // - Directory shape is always works/YYYY/file.md, so no recursive traversal is needed.
 // - Output JSON shape matches the legacy walker (node names and paths keep their .md suffix for client compat).
-fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
-    let mut by_year: BTreeMap<String, Vec<Node>> = BTreeMap::new();
+fn build_tree_from_games(
+    games: &HashMap<String, ParsedGame>,
+    tag_config: &HashMap<String, TagInfo>,
+) -> Node {
+    // - Works within a year follow `work_order`; home.js keeps this order instead of sorting again.
+    let mut sorted: Vec<&ParsedGame> = games.values().collect();
+    sorted.sort_by(|a, b| work_order(a, b));
 
-    for game in games.values() {
+    let mut by_year: BTreeMap<String, Vec<Node>> = BTreeMap::new();
+    for game in sorted {
         by_year.entry(game.year.clone()).or_default().push(Node {
             name: format!("{}.md", game.title),
             path: format!("{}.md", game.path),
@@ -796,11 +795,23 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
                 None
             },
             meta: Some(game.meta.clone()),
+            title: Some(game.title.clone()),
+            href: Some(Nav::default().work_href(&game.path)),
+            creators: Some(
+                split_creators(game.meta.creator.as_deref().unwrap_or(""))
+                    .into_iter()
+                    .map(|name| CreatorRef {
+                        href: Nav::default().creator_href(&name),
+                        name,
+                    })
+                    .collect(),
+            ),
+            badges_html: Some(card_badges_html(
+                game.meta.tags.as_deref().unwrap_or(&[]),
+                tag_config,
+            ))
+            .filter(|h| !h.is_empty()),
         });
-    }
-
-    for nodes in by_year.values_mut() {
-        nodes.sort_by(|a, b| a.name.cmp(&b.name));
     }
 
     let year_nodes: Vec<Node> = by_year
@@ -814,6 +825,10 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
             thumbnail_ribbon: None,
             thumbnail_composite: None,
             meta: None,
+            title: None,
+            href: None,
+            creators: None,
+            badges_html: None,
         })
         .collect();
 
@@ -826,6 +841,10 @@ fn build_tree_from_games(games: &HashMap<String, ParsedGame>) -> Node {
         thumbnail_ribbon: None,
         thumbnail_composite: None,
         meta: None,
+        title: None,
+        href: None,
+        creators: None,
+        badges_html: None,
     }
 }
 
@@ -878,7 +897,7 @@ async fn serve_thumb(
         .unwrap()
 }
 
-// - Fetch the original from GitHub, decode, resize, re-encode as JPEG q=80, insert into cache.
+// - Fetch the original from GitHub, decode, resize, re-encode as WebP q=80, insert into cache.
 // - Semaphore caps concurrent populates to avoid saturating free-tier CPU when many misses arrive in a burst.
 // - Failures are logged and the in-flight slot released so the next miss retries.
 async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_url: String) {
@@ -915,21 +934,8 @@ async fn populate_thumbnail(state: AppState, key: (String, ThumbSize), original_
             .thumb_fetch_millis
             .fetch_add(fetch_start.elapsed().as_millis() as u64, Ordering::Relaxed);
 
-        let img = image::load_from_memory(&bytes).map_err(|e| format!("decode: {}", e))?;
-        let resized = resize_thumbnail(&img, size);
-        // - WebP q=80 lossy via libwebp. Smaller than JPEG at equivalent visual quality.
-        // - Preserves alpha channels (JPEG would flatten them).
-        let out: Vec<u8> = if resized.color().has_alpha() {
-            let rgba = resized.to_rgba8();
-            webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height())
-                .encode(80.0)
-                .to_vec()
-        } else {
-            let rgb = resized.to_rgb8();
-            webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height())
-                .encode(80.0)
-                .to_vec()
-        };
+        // - Never panics: a panic inside comes back as Err, so the in-flight slot below is always released.
+        let out = make_thumbnail(&bytes, size)?;
         Ok::<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>(out)
     }
     .await;
@@ -1079,7 +1085,9 @@ pub fn build_app() -> Router {
     // - All derived data (creator index, tree JSON for home-page embedding) is built from this single source of truth.
     let (games, thumb_originals) = build_games_index();
     let creator_paths = build_creator_paths(&games);
-    let tree = build_tree_from_games(&games);
+    // Tag config: defines colours and optional contest URLs per tag.
+    let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
+    let tree = build_tree_from_games(&games, &tag_config);
     // - json_script_escape on every payload embedded in the homepage's inline
     //   <script>: the HTML parser ends the script at the first "</" even inside
     //   a JSON string, and serde_json doesn't escape '<'. "<\/" parses the same.
@@ -1087,42 +1095,17 @@ pub fn build_app() -> Router {
     // Creator aliases: maps different names for the same person so "More from"
     // sections find games across all their aliases.
     let aliases = load_aliases(include_str!("../config/aliases.yaml"));
-    // Tag config: defines colours and optional contest URLs per tag.
-    let tag_config = load_tag_config(include_str!("../config/tags.yaml"));
     // - Pre-compute the homepage tag-filter bar (union of yaml + md tags, with counts) and serialize it once.
     // - Static across requests.
     let tag_bar_json = json_script_escape(
         &serde_json::to_string(&build_tag_index(&games, &tag_config)).unwrap_or_default(),
     );
-    // - Pre-serialize the {[name]: {colour, card_priority_badge}} payload that the homepage embeds as the TAG_INFO global.
-    // - Static across requests.
-    let tag_info_json = {
-        #[derive(serde::Serialize)]
-        struct ClientTagInfo<'a> {
-            colour: &'a str,
-            card_priority_badge: bool,
-        }
-        let map: HashMap<&str, ClientTagInfo> = tag_config
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.as_str(),
-                    ClientTagInfo {
-                        colour: v.colour.as_str(),
-                        card_priority_badge: v.card_priority_badge,
-                    },
-                )
-            })
-            .collect();
-        json_script_escape(&serde_json::to_string(&map).unwrap_or_default())
-    };
     let state = AppState {
         games: Arc::new(games),
         creator_paths: Arc::new(creator_paths),
         aliases: Arc::new(aliases),
         tag_config: Arc::new(tag_config),
         tag_bar_json: Arc::new(tag_bar_json),
-        tag_info_json: Arc::new(tag_info_json),
         tree_json: Arc::new(tree_json),
         thumb_cache: Arc::new(DashMap::new()),
         thumb_in_flight: Arc::new(Mutex::new(HashSet::new())),
@@ -1150,9 +1133,8 @@ pub fn build_app() -> Router {
     // - Server is already listening by the time the spawned task progresses.
     tokio::spawn(warm_all_thumbnails(state.clone()));
 
-    let serve_dir = ServeDir::new("public").not_found_service(
-        ServeDir::new("public").fallback(get_service(axum::routing::get(handler_404))),
-    );
+    // - Static files from public/; anything else gets the shared 404 page.
+    let serve_dir = ServeDir::new("public").fallback(get(handler_404));
 
     // - "no-cache" means "cache, but revalidate every time". Combined with the Last-Modified header that ServeDir emits, browsers send conditional requests and get 304 Not Modified (no body) for unchanged static files.
     // - Zero stale-content risk; no build-time versioning needed.
@@ -1208,10 +1190,18 @@ pub fn build_app() -> Router {
         ),
     );
 
+    // - Pages rendered in the visitor's language: a shared cache must not hand one visitor's language to another.
+    let vary_lang = || {
+        SetResponseHeaderLayer::appending(header::VARY, HeaderValue::from_static("Accept-Language"))
+    };
+
     Router::new()
-        .route("/", get(serve_home))
+        .route("/", get(serve_home).layer(vary_lang()))
         .route("/api/tree", get(get_tree))
-        .route("/works/{year}/{title}", get(render_markdown))
+        .route(
+            "/works/{year}/{title}",
+            get(render_markdown).layer(vary_lang()),
+        )
         .route("/thumb/{uuid}/{size}", get(serve_thumb))
         .route("/api/thumb-stats", get(serve_thumb_stats))
         .route("/api/csp-report", post(serve_csp_report))
@@ -1219,7 +1209,7 @@ pub fn build_app() -> Router {
         .route("/robots.txt", get(serve_robots))
         .route("/healthz", get(serve_healthz))
         .route("/feed.xml", get(serve_feed))
-        .route("/creator/{name}", get(serve_creator))
+        .route("/creator/{name}", get(serve_creator).layer(vary_lang()))
         .nest_service("/raw", ServeDir::new("works"))
         .fallback_service(serve_dir)
         .layer(cache_control)
@@ -1240,12 +1230,30 @@ pub fn build_app() -> Router {
         .with_state(state)
 }
 
-async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<String> {
+async fn serve_home(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> Html<String> {
+    // - Same language rule as game and creator pages; home.js reads PAGE_LANG instead of guessing on its own.
+    let page_lang = detect_lang(
+        params.get("lang").map(|s| s.as_str()),
+        headers.get("accept-language").and_then(|v| v.to_str().ok()),
+    );
+    // - The explicit, validated ?lang= (or null) that home.js carries into links, like Nav does server-side.
+    let nav_lang = serde_json::to_string(&valid_lang_param(params.get("lang").map(|s| s.as_str())))
+        .unwrap_or_else(|_| "null".to_string());
     let base = base_url(&headers);
     let canonical_url = format!("{}/", base);
     let og_image = format!("{}/lvn_icon.webp", base);
     let feed_url = format!("{}/feed.xml", base);
-    let page = include_str!("../public/index.html")
+    let page = include_str!("../templates/index.html")
+        .replace("{{page_lang}}", page_lang)
+        .replace(
+            "{{lang_toggle}}",
+            &html_escape(&get_lang(page_lang).lang_toggle),
+        )
+        .replace("{{nav_lang}}", &nav_lang)
         .replace("{{critical_css}}", CRITICAL_CSS)
         .replace("{{game_count}}", &state.games.len().to_string())
         .replace("{{canonical_url}}", &html_escape(&canonical_url))
@@ -1255,12 +1263,14 @@ async fn serve_home(State(state): State<AppState>, headers: HeaderMap) -> Html<S
             "{{lang_json}}",
             &json_script_escape(include_str!("../config/lang.json")),
         )
-        .replace("{{tag_info_json}}", &state.tag_info_json)
         .replace("{{tag_bar_json}}", &state.tag_bar_json)
         .replace("{{tree_json}}", &state.tree_json);
     Html(page)
 }
 
-async fn handler_404() -> axum::response::Html<&'static str> {
-    axum::response::Html(include_str!("../public/404.html"))
+async fn handler_404(
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    not_found_page(&headers, &params)
 }

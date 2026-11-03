@@ -98,5 +98,17 @@
   "creator_all_works": {
     "en": "← All works (All stars)",
     "ja": "← 作品一覧 (星一覧)"
+  },
+  "not_found_title": {
+    "en": "Page not found",
+    "ja": "ページが見つかりません"
+  },
+  "lang_toggle": {
+    "en": "日本語",
+    "ja": "English"
+  },
+  "not_found_message": {
+    "en": "There's nothing here. It may have moved or been removed.",
+    "ja": "お探しのページは見つかりませんでした。移動または削除された可能性があります。"
   }
 }

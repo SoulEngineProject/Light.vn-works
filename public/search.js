@@ -16,6 +16,32 @@
     return rest ? rest.toLowerCase() : null;
   }
 
+  // - The work's own spelling of tag `name`, matched case-insensitively; undefined if absent.
+  // - Every tag comparison goes through here (or hasTag) so none can quietly be case-sensitive.
+  // - Mirrors src/lib.rs::find_tag / has_tag.
+  function findTag(tags, name) {
+    var want = name.toLowerCase();
+    return (tags || []).find(function (t) { return t.toLowerCase() === want; });
+  }
+
+  function hasTag(tags, name) {
+    return findTag(tags, name) !== undefined;
+  }
+
+  // - The search that filters to exactly one tag: tag:ai, or tag:"Terrace and Ray" when the name has spaces.
+  // - Mirrors src/lib.rs::tag_query; both are checked against tests/fixtures/tag_queries.json.
+  function tagQuery(name) {
+    return name.indexOf(' ') !== -1 ? 'tag:"' + name + '"' : 'tag:' + name;
+  }
+
+  // - Whether a search names exactly this tag, as `tag:x` or plain `x`, ignoring case.
+  // - Used where a search implies a setting (searching r18 turns off "Hide R18").
+  function searchNamesTag(query, name) {
+    var q = (query || '').trim();
+    var want = name.toLowerCase();
+    return q.toLowerCase() === want || parseTagQuery(q) === want;
+  }
+
   // - Whether a work matches the search box.
   // - `tag:` queries match a tag exactly; everything else is broad substring over title / creator / tags.
   // - Matching is case-insensitive throughout.
@@ -26,7 +52,7 @@
     }
     var tag = parseTagQuery(q);
     if (tag !== null) {
-      return tags.some(function (t) { return t.toLowerCase() === tag; });
+      return hasTag(tags, tag);
     }
     var joined = tags.join(' ').toLowerCase();
     return name.toLowerCase().indexOf(q) !== -1 ||
@@ -34,11 +60,22 @@
       joined.indexOf(q) !== -1;
   }
 
-  var api = { parseTagQuery: parseTagQuery, workMatchesSearch: workMatchesSearch };
+  var api = {
+    parseTagQuery: parseTagQuery,
+    workMatchesSearch: workMatchesSearch,
+    findTag: findTag,
+    hasTag: hasTag,
+    searchNamesTag: searchNamesTag,
+    tagQuery: tagQuery
+  };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {
     root.parseTagQuery = parseTagQuery;
     root.workMatchesSearch = workMatchesSearch;
+    root.findTag = findTag;
+    root.hasTag = hasTag;
+    root.searchNamesTag = searchNamesTag;
+    root.tagQuery = tagQuery;
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

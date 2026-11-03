@@ -40,9 +40,16 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 
 - **Path traversal guard in `render_markdown`** (`src/app.rs`, rejects `..`, `/`, oversized year/title).
   - Why: defense in depth. `ServeDir` and `read_to_string` might not block every variant equivalently.
+  - A blocked request gets the ordinary 404 page, not a 400, so the guard's rules aren't advertised to anyone probing for them.
+
+- **One 404 page for every miss** (`src/app.rs::not_found_page`, template `templates/404.html`): unknown works, unknown creators, blocked paths and any other URL.
+  - Why: same look, language and link state as the rest of the site. It never echoes the requested path, so there's nothing user-supplied to escape and no internal file names shown.
 
 - **Thumbnail chain never fails** (`src/app.rs::build_games_index`: `thumbnail_index` → first image → sparkle placeholder at render time).
   - Why: an out-of-bounds `thumbnail_index` falls back to the first image, and an absent thumbnail renders the ✨ placeholder rather than leaving empty space.
+
+- **Bad `dev_example_index` → default layout** (`src/lib.rs::layout_images`).
+  - Why: same as the thumbnail chain. An out-of-range index, or `0` (the hero), falls back to framing the last image. The validator still flags it so it gets fixed.
 
 - **Per-file parse panic at startup → log + skip** (`src/app.rs::build_games_index`, wrapped in `catch_unwind`).
   - Why: a malformed file shouldn't crash the whole server. The bad file is missing from the games index (404 on request); everything else serves normally. Log identifies which file needs attention.
@@ -60,6 +67,9 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 
 - **Populate failures don't poison the cache** (populate_thumbnail).
   - Why: if GitHub has a 30-second blip, caching a sentinel would lock the UUID into broken state until expiry. Instead we log + release the in-flight slot; next miss retries. Worst case for a permanently-broken UUID is one fetch attempt per request, which is cheap.
+
+- **Decode/resize/encode panics become ordinary failures** (`src/lib.rs::make_thumbnail`, `catch_unwind`).
+  - Why: `webp::Encoder::encode` unwraps internally. An escaped panic would skip the in-flight release and the warmup counter, wedging that thumbnail until restart. Caught, it's logged and retried like any other failure — same idea as the per-file `catch_unwind` at startup.
 
 - **Single retry with 300ms delay on transient fetch failures** (populate_thumbnail).
   - Why: HTTP/2 pooled connections occasionally die mid-response — "connection closed before message complete". A cheap single retry covers the flake. 4xx/5xx are not retried (those are genuine, not transient).

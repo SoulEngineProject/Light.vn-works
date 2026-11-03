@@ -5,17 +5,110 @@
 
 use lightvn_works::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
-    build_tag_index, build_tags_line, creator_work_key, detect_lang, encode_path, escape_css_url,
-    extract_all_images, extract_user_attachment_uuid, feed_date, first_offsite_image, gallery_rows,
-    game_page_suffixes, get_lang, get_related_paths, html_escape, is_canonical_released,
-    is_composite_dimensions, json_script_escape, load_aliases, load_tag_config, parse_frontmatter,
-    pick_priority_tag, released_to_iso, resize_thumbnail, split_creators, strip_img_tags,
-    ExtraLink, FeedEntry, GameMeta, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    build_tag_index, build_tags_line, card_badges_html, detect_lang, encode_component, encode_path,
+    escape_css_url, extract_all_images, extract_user_attachment_uuid, feed_date, find_tag,
+    first_offsite_image, gallery_rows, get_lang, get_related_paths, has_tag, html_escape,
+    is_canonical_released, is_composite_dimensions, json_script_escape, layout_images,
+    load_aliases, load_tag_config, make_thumbnail, parse_frontmatter, pick_priority_tag,
+    released_to_iso, resize_thumbnail, split_creators, strip_img_tags, tag_query, valid_lang_param,
+    work_order, work_sort_key, DevExample, ExtraLink, FeedEntry, GameMeta, Nav, ParsedGame,
+    TagInfo, ThumbSize, RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
 use std::path::Path;
 use walkdir::WalkDir;
+
+#[rstest]
+#[case::plain("abc-_.~", "abc-_.~")]
+#[case::space_and_quote("That's (x)", "That%27s%20%28x%29")]
+#[case::slash("a/b", "a%2Fb")]
+#[case::japanese("姉弟", "%E5%A7%89%E5%BC%9F")]
+fn encode_component_encodes_all_but_unreserved(#[case] input: &str, #[case] expected: &str) {
+    // given: a URL component
+
+    // when: encoding it
+    let out = encode_component(input);
+
+    // then: only RFC 3986 unreserved characters stay as-is
+    assert_eq!(out, expected);
+}
+
+#[test]
+fn escape_helpers_match_shared_fixture() {
+    // given: the cases public/escape.js is also tested against
+    #[derive(serde::Deserialize)]
+    struct Cases {
+        html: Vec<(String, String)>,
+        css_url: Vec<(String, String)>,
+    }
+    let cases: Cases = serde_json::from_str(include_str!("../fixtures/escape_cases.json")).unwrap();
+
+    // when: escaping each input
+    let html: Vec<(String, String)> = cases
+        .html
+        .iter()
+        .map(|(i, _)| (i.clone(), html_escape(i)))
+        .collect();
+    let css_url: Vec<(String, String)> = cases
+        .css_url
+        .iter()
+        .map(|(i, _)| (i.clone(), escape_css_url(i)))
+        .collect();
+
+    // then: Rust and JS agree, case for case
+    assert_eq!(html, cases.html);
+    assert_eq!(css_url, cases.css_url);
+}
+
+#[test]
+fn tag_queries_match_shared_fixture() {
+    // given: the tag → query pairs public/search.js is also tested against
+    let cases: Vec<(String, String)> =
+        serde_json::from_str(include_str!("../fixtures/tag_queries.json")).unwrap();
+
+    // when: building each query
+    let built: Vec<(String, String)> = cases
+        .iter()
+        .map(|(tag, _)| (tag.clone(), tag_query(tag)))
+        .collect();
+
+    // then: Rust and JS agree, case for case
+    assert_eq!(built, cases);
+}
+
+#[rstest]
+#[case::r18_and_ai(&["ai", "r18"], &["class=\"card-badge\" style=\"background:#dc2626;color:white\">R18<", "card-badge-left\" style=\"background:#2563eb;color:white\">AI<"])]
+#[case::unconfigured_r18_still_badged(&["R18"], &["class=\"card-badge\">R18<"])]
+fn card_badges_html_renders_priority_and_ai(#[case] tags: &[&str], #[case] expected: &[&str]) {
+    // given: a work's tags, with r18 and ai coloured only in the first case
+    let config = if tags.contains(&"ai") {
+        load_tag_config("colours:\n  c1: \"#dc2626\"\n  c2: \"#2563eb\"\ntags:\n  - colour: c1\n    tags: [r18]\n  - colour: c2\n    tags: [ai]")
+    } else {
+        HashMap::new()
+    };
+    let tags: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
+
+    // when: rendering the badges
+    let html = card_badges_html(&tags, &config);
+
+    // then: each expected badge is present
+    for part in expected {
+        assert!(html.contains(part), "missing {part} in {html}");
+    }
+}
+
+#[test]
+fn build_query_encodes_values() {
+    // given: a value with reserved characters
+    let pairs = &[("search", "tag:a&b")];
+
+    // when: building the query string
+    let out = build_query(pairs);
+
+    // then: the value can't break out of its parameter
+    assert_eq!(out, "?search=tag%3Aa%26b");
+}
 
 #[test]
 fn build_query_empty_input() {
@@ -229,6 +322,16 @@ fn aggregate_creator_links_keeps_one_per_label() {
 #[case::accept_en(None, Some("en-US"), "en")]
 #[case::default_none(None, None, "en")]
 #[case::unknown_param_falls_through(Some("fr"), Some("ja"), "ja")]
+#[case::english_first_japanese_second(None, Some("en-US,en;q=0.9,ja;q=0.8"), "en")]
+#[case::japanese_first_english_second(None, Some("ja-JP,ja;q=0.9,en;q=0.8"), "ja")]
+#[case::q_beats_order(None, Some("en;q=0.5,ja;q=0.9"), "ja")]
+#[case::implicit_q_is_one(None, Some("en;q=0.5,ja"), "ja")]
+#[case::tie_keeps_first(None, Some("en,ja"), "en")]
+#[case::other_langs_skipped(None, Some("fr-FR,ja;q=0.5"), "ja")]
+#[case::neither_present(None, Some("fr,de"), "en")]
+#[case::q_zero_means_never(None, Some("ja;q=0,en;q=0.1"), "en")]
+#[case::not_a_substring_match(None, Some("jam,en;q=0.5"), "en")]
+#[case::uppercase_tag(None, Some("JA"), "ja")]
 fn detect_lang_resolves(
     #[case] param: Option<&str>,
     #[case] accept: Option<&str>,
@@ -236,7 +339,7 @@ fn detect_lang_resolves(
 ) {
     // given: a ?lang param and an Accept-Language header
     // when: resolving the display language
-    // then: explicit ja/en param wins, else Accept-Language, else English
+    // then: explicit ja/en param wins, else the higher-ranked of ja/en in Accept-Language, else English
     assert_eq!(detect_lang(param, accept), expected);
 }
 
@@ -245,7 +348,7 @@ fn detect_lang_resolves(
 #[case::unknown(Some(RELEASED_UNKNOWN), "2014", "2014")]
 #[case::empty(Some(""), "2015", "2015")]
 #[case::missing(None, "2016", "2016")]
-fn creator_work_key_falls_back_to_folder_year(
+fn work_sort_key_falls_back_to_folder_year(
     #[case] released: Option<&str>,
     #[case] year: &str,
     #[case] expected: &str,
@@ -253,11 +356,11 @@ fn creator_work_key_falls_back_to_folder_year(
     // given: a work's released value and its folder year
     // when: computing the sort key
     // then: a real date is used, otherwise the folder year
-    assert_eq!(creator_work_key(released, year), expected);
+    assert_eq!(work_sort_key(released, year), expected);
 }
 
 #[test]
-fn creator_work_key_orders_newest_first_with_undated_by_folder_year() {
+fn work_sort_key_orders_newest_first_with_undated_by_folder_year() {
     // given: (folder_year, released, title) works including an undated 2014 one
     let mut works = [
         ("2014", Some(RELEASED_UNKNOWN), "undated 2014"),
@@ -267,8 +370,8 @@ fn creator_work_key_orders_newest_first_with_undated_by_folder_year() {
 
     // when: sorting newest-first by the key (as serve_creator does)
     works.sort_by(|a, b| {
-        let ka = creator_work_key(a.1, a.0);
-        let kb = creator_work_key(b.1, b.0);
+        let ka = work_sort_key(a.1, a.0);
+        let kb = work_sort_key(b.1, b.0);
         kb.cmp(ka).then_with(|| a.2.cmp(b.2))
     });
 
@@ -361,50 +464,73 @@ fn build_atom_feed_emits_entries_newest_first() {
     assert!(xml.find("New Game").unwrap() < xml.find("Old Game").unwrap());
 }
 
-#[test]
-fn game_page_suffixes_non_r18_no_params() {
-    // given: a non-R18 game with no incoming lang or r18 params
-    // when: computing back/fwd suffixes
-    let (back, fwd) = game_page_suffixes(None, false, false);
+#[rstest]
+#[case::nothing(None, None, "")]
+#[case::lang(Some("ja"), None, "?lang=ja")]
+#[case::r18_shown(None, Some("0"), "?r18=0")]
+#[case::both(Some("en"), Some("0"), "?lang=en&r18=0")]
+#[case::invalid_lang_dropped(Some("\"><b>"), None, "")]
+#[case::other_r18_value_ignored(None, Some("1"), "")]
+fn nav_carries_only_valid_state(
+    #[case] lang: Option<&str>,
+    #[case] r18: Option<&str>,
+    #[case] expected: &str,
+) {
+    // given: a request's ?lang= and ?r18=
 
-    // then: both suffixes are empty — nothing to propagate
-    assert_eq!(back, "");
-    assert_eq!(fwd, "");
+    // when: building the state links carry
+    let nav = Nav::from_query(lang, r18);
+
+    // then: only a valid lang and r18=0 survive, in a fixed order
+    assert_eq!(nav.query(&[]), expected);
 }
 
 #[test]
-fn game_page_suffixes_r18_game_forces_back_r18() {
-    // given: an R18 game with no incoming params
-    // when: computing back/fwd suffixes
-    let (back, fwd) = game_page_suffixes(None, true, false);
+fn nav_showing_r18_keeps_lang() {
+    // given: a visitor on an R18 work with ?lang=ja and Hide R18 on
+    let nav = Nav::from_query(Some("ja"), None);
+
+    // when: building the link back to the homepage
+    let home = nav.showing_r18().home_href(&[]);
+
+    // then: language kept, R18 shown so the work stays in the list
+    assert_eq!(home, "/?lang=ja&r18=0");
+}
+
+#[test]
+fn nav_links_encode_once_with_state() {
+    // given: a visitor with ?lang=ja
+    let nav = Nav::from_query(Some("ja"), None);
+
+    // when: linking to a work, a creator, and a homepage search
+    let work = nav.work_href("/works/2026/That's What the Coin Said");
+    let creator = nav.creator_href("炯淳 (hsdk.bd)");
+    let search = nav.home_href(&[("search", "tag:\"Terrace and Ray\"")]);
 
     // then:
-    // - back forces r18=0 (so homepage shows it after navigating back)
-    // - fwd stays empty (incoming request didn't carry r18=0)
-    assert_eq!(back, "?r18=0");
-    assert_eq!(fwd, "");
+    // - one encoding everywhere: ' and () are encoded too
+    // - the state follows every link
+    assert_eq!(
+        work,
+        "/works/2026/That%27s%20What%20the%20Coin%20Said?lang=ja"
+    );
+    assert_eq!(
+        creator,
+        "/creator/%E7%82%AF%E6%B7%B3%20%28hsdk.bd%29?lang=ja"
+    );
+    assert_eq!(search, "/?lang=ja&search=tag%3A%22Terrace%20and%20Ray%22");
 }
 
 #[test]
-fn game_page_suffixes_propagates_incoming_r18() {
-    // given: a non-R18 game whose incoming request carried r18=0
-    // when: computing back/fwd suffixes
-    let (back, fwd) = game_page_suffixes(None, false, true);
+fn creator_href_encodes_slash() {
+    // given: a name containing '/' (the validator blocks these, but the link must still be one segment)
+    let name = "A/B";
 
-    // then: both carry r18=0 — preserve the user's filter state
-    assert_eq!(back, "?r18=0");
-    assert_eq!(fwd, "?r18=0");
-}
+    // when: linking to the creator
+    let href = Nav::default().creator_href(name);
 
-#[test]
-fn game_page_suffixes_combines_lang_and_r18() {
-    // given: an R18 game with lang=ja, no incoming r18
-    // when: computing back/fwd suffixes
-    let (back, fwd) = game_page_suffixes(Some("ja"), true, false);
-
-    // then: both carry lang; back additionally forces r18=0
-    assert_eq!(back, "?lang=ja&r18=0");
-    assert_eq!(fwd, "?lang=ja");
+    // then: the slash is encoded, so the route still matches
+    assert_eq!(href, "/creator/A%2FB");
 }
 
 #[test]
@@ -497,6 +623,38 @@ fn composite_detection_threshold(#[case] w: u32, #[case] h: u32, #[case] expecte
 
     // then: classification matches the 2:1-strict threshold rule
     assert_eq!(is_comp, expected);
+}
+
+#[test]
+fn make_thumbnail_encodes_webp() {
+    // given: a small PNG
+    let mut png = Vec::new();
+    image::DynamicImage::new_rgb8(1280, 720)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+
+    // when: making a card thumbnail
+    let out = make_thumbnail(&png, ThumbSize::Card).unwrap();
+
+    // then: WebP bytes at card size
+    let thumb = webp::Decoder::new(&out).decode().unwrap();
+    assert_eq!(&out[8..12], b"WEBP");
+    assert_eq!(
+        (thumb.width(), thumb.height()),
+        ThumbSize::Card.dimensions()
+    );
+}
+
+#[test]
+fn make_thumbnail_rejects_non_image() {
+    // given: bytes that aren't an image (e.g. a GitHub error page)
+    let bytes = b"<html>not found</html>";
+
+    // when: making a thumbnail
+    let out = make_thumbnail(bytes, ThumbSize::Ribbon);
+
+    // then: an error, not a panic
+    assert!(out.unwrap_err().starts_with("decode:"));
 }
 
 #[test]
@@ -853,6 +1011,8 @@ fn validate_all_markdown_files() {
 
     // when: checking each file for valid frontmatter and images
     let mut errors = Vec::new();
+    // - lowercased creator name -> (first spelling seen, file it came from)
+    let mut creator_spellings: HashMap<String, (String, std::path::PathBuf)> = HashMap::new();
 
     for entry in WalkDir::new(works_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
@@ -898,16 +1058,35 @@ fn validate_all_markdown_files() {
         // - Multi-creator fields split on commas and nothing else (`split_creators`).
         // - Any other separator silently mints one creator page named after all of
         //   them, which is how "飽きた県 | ナトリニウム | 日陰の本棚" shipped.
-        // - ASCII "/" is not listed: "TitleA+++/WtmMif" is one name, not two.
+        // - ASCII "/" too: "TitleA+++/WtmMif" turned out to be two creators, and a
+        //   name with "/" builds a /creator/ URL that 404s.
         if let Some(bad) = creator
             .chars()
-            .find(|c| matches!(c, '|' | '｜' | '／' | '、'))
+            .find(|c| matches!(c, '|' | '｜' | '／' | '、' | '/'))
         {
             errors.push(format!(
                 "{}: creator uses '{}' as a separator (multi-creator fields split on ',' only)",
                 path.display(),
                 bad
             ));
+        }
+        // - One spelling per creator across all works.
+        // - Creator pages ignore case, but the sitemap and canonical URL take one
+        //   spelling, so "Theo" next to "theo" makes a creator's URL flip around.
+        for name in split_creators(creator) {
+            match creator_spellings.get(&name.to_lowercase()) {
+                Some((first, first_path)) if *first != name => errors.push(format!(
+                    "{}: creator '{}' is spelled '{}' in {}; use one spelling",
+                    path.display(),
+                    name,
+                    first,
+                    first_path.display()
+                )),
+                Some(_) => {}
+                None => {
+                    creator_spellings.insert(name.to_lowercase(), (name, path.to_path_buf()));
+                }
+            }
         }
         if meta.released.as_deref().unwrap_or("").is_empty() {
             errors.push(format!("{}: released date is empty", path.display()));
@@ -979,14 +1158,38 @@ fn validate_all_markdown_files() {
             ));
         }
 
+        let image_count = extract_all_images(body).len();
+
         if let Some(idx) = meta.thumbnail_index {
-            let image_count = extract_all_images(body).len();
             if idx >= image_count {
                 errors.push(format!(
                     "{}: thumbnail_index {} out of range (only {} images)",
                     path.display(),
                     idx,
                     image_count
+                ));
+            }
+        }
+
+        // - Ask layout_images rather than restating its rule: an index it falls back on is invalid.
+        // - Index 0 is the hero, so it can't double as the development example.
+        if let Some(idx) = meta.dev_example_index {
+            let used =
+                layout_images(image_count, Some(idx)).dev_example == Some(DevExample::AsIs(idx));
+            if !used {
+                errors.push(format!(
+                    "{}: dev_example_index {} doesn't point at a non-hero image ({} images, 0 is the hero)",
+                    path.display(),
+                    idx,
+                    image_count
+                ));
+            }
+            // - The thumbnail is game art on the homepage; an editor screenshot doesn't belong there.
+            if meta.thumbnail_index == Some(idx) {
+                errors.push(format!(
+                    "{}: thumbnail_index and dev_example_index both point at image {}",
+                    path.display(),
+                    idx
                 ));
             }
         }
@@ -1016,6 +1219,51 @@ fn validate_all_markdown_files() {
             errors.join("\n")
         );
     }
+}
+
+#[rstest]
+#[case::newer_first(("2024", "A", "2024/01/01"), ("2024", "B", "2024/06/01"), ["B", "A"])]
+#[case::same_day_by_title(("2023", "Zeta", "2023/08/15"), ("2023", "Alpha", "2023/08/15"), ["Alpha", "Zeta"])]
+#[case::undated_last_in_its_year(("2014", "姉弟", "unknown"), ("2014", "Dated", "2014/03/01"), ["Dated", "姉弟"])]
+#[case::undated_above_older_years(("2020", "Undated", "unknown"), ("2016", "Old", "2016/01/01"), ["Undated", "Old"])]
+fn work_order_sorts_newest_then_title(
+    #[case] a: (&str, &str, &str),
+    #[case] b: (&str, &str, &str),
+    #[case] expected: [&str; 2],
+) {
+    // given: two works
+    let mut works = [make_game(a.0, a.1, "X", a.2), make_game(b.0, b.1, "X", b.2)];
+
+    // when: sorting with the shared order
+    works.sort_by(work_order);
+
+    // then: newest first, title breaks ties, undated sorts by folder year
+    assert_eq!([works[0].title.as_str(), works[1].title.as_str()], expected);
+}
+
+#[test]
+fn creator_index_uses_work_order() {
+    // given: three same-day works by one creator, plus an older one
+    let games = games_map(vec![
+        make_game("2021", "Charlie", "Studio", "2021/12/24"),
+        make_game("2020", "Old", "Studio", "2020/01/01"),
+        make_game("2021", "Alpha", "Studio", "2021/12/24"),
+        make_game("2021", "Bravo", "Studio", "2021/12/24"),
+    ]);
+
+    // when: building the creator index
+    let index = build_creator_paths(&games);
+
+    // then: same order as work_order, so "More from" matches the creator page
+    assert_eq!(
+        index["studio"],
+        vec![
+            "/works/2021/Alpha",
+            "/works/2021/Bravo",
+            "/works/2021/Charlie",
+            "/works/2020/Old"
+        ]
+    );
 }
 
 #[test]
@@ -1376,8 +1624,7 @@ fn language_tags_share_a_colour(cfg: HashMap<String, TagInfo>) {
 fn gallery_rows_layout(#[case] n: usize, #[case] expected: Vec<usize>) {
     // given:
     // - an image count
-    // - in production the orphan trailing image is stripped upstream and promoted to the editor mockup, so this fn is usually called with even n
-    // - odd cases here verify the boundary is correct anyway
+    // - odd n only reaches this in production when dev_example_index is set
 
     // when: computing the row layout
     let rows = gallery_rows(n);
@@ -1386,13 +1633,39 @@ fn gallery_rows_layout(#[case] n: usize, #[case] expected: Vec<usize>) {
     assert_eq!(rows, expected);
 }
 
+#[rstest]
+#[case::no_images(0, None, vec![], None)]
+#[case::hero_only(1, None, vec![], Some(DevExample::Framed(0)))]
+#[case::odd_gallery_orphan_framed(6, None, vec![1, 2, 3, 4], Some(DevExample::Framed(5)))]
+#[case::even_gallery_last_reused(5, None, vec![1, 2, 3, 4], Some(DevExample::Framed(4)))]
+#[case::as_is_last(6, Some(5), vec![1, 2, 3, 4], Some(DevExample::AsIs(5)))]
+#[case::as_is_middle(6, Some(2), vec![1, 3, 4, 5], Some(DevExample::AsIs(2)))]
+#[case::as_is_odd_rest_kept(5, Some(4), vec![1, 2, 3], Some(DevExample::AsIs(4)))]
+#[case::hero_index_falls_back(6, Some(0), vec![1, 2, 3, 4], Some(DevExample::Framed(5)))]
+#[case::out_of_range_falls_back(6, Some(6), vec![1, 2, 3, 4], Some(DevExample::Framed(5)))]
+fn layout_images_split(
+    #[case] count: usize,
+    #[case] dev_example_index: Option<usize>,
+    #[case] gallery: Vec<usize>,
+    #[case] dev_example: Option<DevExample>,
+) {
+    // given: an image count and an optional dev_example_index
+
+    // when: laying out the game page images
+    let layout = layout_images(count, dev_example_index);
+
+    // then: gallery and development example get the expected indices
+    assert_eq!(layout.gallery, gallery);
+    assert_eq!(layout.dev_example, dev_example);
+}
+
 #[test]
 fn tags_line_empty() {
     // given: no tags
     let tags: Vec<String> = vec![];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None, &HashMap::new(), "");
+    let html = build_tags_line(&tags, "Tags:", Nav::default(), &HashMap::new(), "");
 
     // then: shows em dash
     assert!(html.contains("tags-line"));
@@ -1407,15 +1680,15 @@ fn tags_line_with_tags() {
     let tags = vec!["r18".to_string(), "ai".to_string()];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
+    let html = build_tags_line(&tags, "Tags:", Nav::default(), &config, "2024");
 
     // then: contains clickable links with inline colours
     assert!(html.contains("background:#dc2626"));
     assert!(html.contains("background:#2563eb"));
     assert!(html.contains("R18"));
     assert!(html.contains("AI"));
-    assert!(html.contains("/?search=r18"));
-    assert!(html.contains("/?search=ai"));
+    assert!(html.contains("/?search=tag%3Ar18\""));
+    assert!(html.contains("/?search=tag%3Aai\""));
 }
 
 #[test]
@@ -1424,11 +1697,71 @@ fn tags_line_with_lang() {
     let tags = vec!["r18".to_string()];
 
     // when: building tags line with Japanese
-    let html = build_tags_line(&tags, "タグ：", Some("ja"), &HashMap::new(), "2024/01/01");
+    let html = build_tags_line(
+        &tags,
+        "タグ：",
+        Nav::from_query(Some("ja"), None),
+        &HashMap::new(),
+        "2024",
+    );
 
-    // then: link includes lang param
-    assert!(html.contains("/?lang=ja&search=r18"));
+    // then: link includes lang param (HTML-escaped '&')
+    assert!(html.contains("/?lang=ja&amp;search=tag%3Ar18\""));
     assert!(html.contains("タグ："));
+}
+
+#[test]
+fn tags_line_quotes_multi_word_tag() {
+    // given: a tag with spaces
+    let tags = vec!["Terrace and Ray".to_string()];
+
+    // when: building tags line
+    let html = build_tags_line(&tags, "Tags:", Nav::default(), &HashMap::new(), "2024");
+
+    // then: the link searches for the quoted tag, URL-encoded
+    assert!(html.contains("/?search=tag%3A%22Terrace%20and%20Ray%22\""));
+}
+
+#[rstest]
+#[case::ja(Some("ja"), Some("ja"))]
+#[case::en(Some("en"), Some("en"))]
+#[case::missing(None, None)]
+#[case::unknown(Some("fr"), None)]
+#[case::markup(Some("\"><img src=x onerror=alert(1)>"), None)]
+fn valid_lang_param_whitelist(#[case] input: Option<&str>, #[case] expected: Option<&str>) {
+    // given: a raw ?lang= value
+
+    // when: validating it
+    let lang = valid_lang_param(input);
+
+    // then: only en/ja survive
+    assert_eq!(lang, expected);
+}
+
+#[rstest]
+#[case::exact(&["r18"], "r18", Some("r18"))]
+#[case::upper_tag(&["R18"], "r18", Some("R18"))]
+#[case::upper_name(&["r18"], "R18", Some("r18"))]
+#[case::multi_word(&["ai", "Terrace and Ray"], "terrace and ray", Some("Terrace and Ray"))]
+#[case::missing(&["ai"], "r18", None)]
+#[case::no_substring(&["r18-ish"], "r18", None)]
+#[case::empty(&[], "r18", None)]
+fn find_tag_ignores_case(
+    #[case] tags: &[&str],
+    #[case] name: &str,
+    #[case] expected: Option<&str>,
+) {
+    // given: a work's tags
+    let tags: Vec<String> = tags.iter().map(|t| t.to_string()).collect();
+
+    // when: looking up a tag by name
+    let found = find_tag(&tags, name);
+
+    // then:
+    // - matched ignoring case, returned in the work's own spelling
+    // - has_tag agrees
+    assert_eq!(found, expected);
+    assert_eq!(has_tag(&tags, name), expected.is_some());
 }
 
 #[test]
@@ -1544,7 +1877,7 @@ fn special_tags_get_colour() {
     ];
 
     // when: building tags line
-    let html = build_tags_line(&tags, "Tags:", None, &config, "2024/01/01");
+    let html = build_tags_line(&tags, "Tags:", Nav::default(), &config, "2024");
 
     // then: r18 gets red, Summer Jam gets gold, mystery gets tag-default
     assert!(html.contains("background:#dc2626"));
@@ -1562,8 +1895,8 @@ fn tag_with_url_renders_event_link() {
     let config = load_tag_config(yaml);
     let tags = vec!["TestFest".to_string()];
 
-    // when: building tags line with released year
-    let html = build_tags_line(&tags, "Tags:", None, &config, "2025/06/01");
+    // when: building tags line for a 2025 work
+    let html = build_tags_line(&tags, "Tags:", Nav::default(), &config, "2025");
 
     // then: event link rendered with resolved year and tag
     assert!(html.contains("https://example.com/2025"));

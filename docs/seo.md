@@ -29,8 +29,8 @@
   - Falls back to the production host if no `Host` header is present.
 
 ## Per-page metadata
-- Game pages (`public/game.html`) are server-rendered HTML with `<title>`, `meta description` (the tagline), and `og:title` / `og:description` / `og:image` / `og:url`. `og:image` is the first screenshot (already an absolute GitHub URL). Once a crawler reaches them (via the sitemap), they're fully indexable and share nicely.
-- The home page (`public/index.html`) has its own `og:*` tags; `og:image` is the site icon, rendered as an **absolute** URL (built from `base_url()`) so link-preview scrapers can fetch it.
+- Game pages (`templates/game.html`) are server-rendered HTML with `<title>`, `meta description` (the tagline), and `og:title` / `og:description` / `og:image` / `og:url`. `og:image` is the first screenshot (already an absolute GitHub URL). Once a crawler reaches them (via the sitemap), they're fully indexable and share nicely.
+- The home page (`templates/index.html`) has its own `og:*` tags; `og:image` is the site icon, rendered as an **absolute** URL (built from `base_url()`) so link-preview scrapers can fetch it.
 
 ## Canonical URLs
 - Both pages emit `<link rel="canonical">` + `og:url` pointing at the **param-less** absolute URL (`base_url()` + the path).

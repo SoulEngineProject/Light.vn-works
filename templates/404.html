@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="{{lang_detected_lang}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex" />
+  <title>{{not_found_title}} — Light.vn Works</title>
+
+  {{critical_css}}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="/lvn_icon.webp">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/components.css">
+</head>
+<body>
+  <button class="lang-toggle" id="lang-toggle">{{lang_toggle}}</button>
+
+  <div class="container">
+    <header>
+      <h1>404</h1>
+      <p class="subtitle">{{not_found_message}}</p>
+    </header>
+
+    <p class="contribute"><a href="{{home_href}}">{{all_works}}</a></p>
+  </div>
+  <script src="/page.js" defer></script>
+</body>
+</html>

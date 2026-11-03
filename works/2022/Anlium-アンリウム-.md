@@ -1,5 +1,5 @@
 ---
-creator: TitleA+++/WtmMif
+creator: TitleA+++, WtmMif
 released: 2022/10/15
 link_label: フリーゲーム夢現
 link_url: "https://freegame-mugen.jp/adventure/game_10585.html"

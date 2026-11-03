@@ -196,6 +196,13 @@
   background: black;
 }
 
+.dev-example {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+}
+
 .editor-preview-crop {
   position: absolute;
   left: 13.7%;
@@ -252,7 +259,8 @@
 /* Screenshot lightbox */
 .hero-image img,
 .gallery img,
-.editor-preview {
+.editor-preview,
+.dev-example {
   cursor: zoom-in;
 }
 

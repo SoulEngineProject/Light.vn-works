@@ -1,5 +1,5 @@
 ---
-creator: SILK P.O.D.
+creator: Silk P.O.D.
 released: 2018/03/10
 link_label: ふりーむ！
 link_url: "https://www.freem.ne.jp/win/game/17154"

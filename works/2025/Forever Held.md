@@ -1,5 +1,5 @@
 ---
-creator: Theo
+creator: theo
 released: 2025/07/16
 link_label: itch.io
 link_url: "https://minute.itch.io/forever-held"

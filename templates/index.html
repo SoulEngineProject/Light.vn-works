@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{page_lang}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -23,7 +23,7 @@
   <link rel="alternate" type="application/atom+xml" title="Light.vn Works" href="{{feed_url}}" />
 </head>
 <body>
-  <button id="lang-toggle" class="lang-toggle">日本語</button>
+  <button class="lang-toggle" id="lang-toggle">{{lang_toggle}}</button>
   <div class="container">
     <header>
       <h1>Light.vn Works</h1>
@@ -49,12 +49,13 @@
     <div id="tree"></div>
   </div>
 
-  <!-- Server-embedded data: translations, tag info, tag bar, and full game tree.
+  <!-- Server-embedded data: translations, tag bar, and full game tree.
        - No client-side API fetch, so the page renders instantly. -->
-  <script>var LANG_DATA = {{lang_json}}; var TAG_INFO = {{tag_info_json}}; var TAG_BAR = {{tag_bar_json}}; var TREE_DATA = {{tree_json}};</script>
+  <script>var PAGE_LANG = "{{page_lang}}"; var NAV_LANG = {{nav_lang}}; var LANG_DATA = {{lang_json}}; var TAG_BAR = {{tag_bar_json}}; var TREE_DATA = {{tree_json}};</script>
   <script src="/escape.js" defer></script>
   <script src="/search.js" defer></script>
   <script src="/view.js" defer></script>
+  <script src="/page.js" defer></script>
   <script src="/home.js" defer></script>
   <script data-goatcounter="https://lightvn-works.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 </body>
