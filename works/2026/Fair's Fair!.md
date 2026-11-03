@@ -14,5 +14,5 @@ thumbnail_index:
 <img width="1217" height="686" alt="FairsFair_004" src="https://github.com/user-attachments/assets/4a7cac09-47f1-490a-bc0d-267efda726b3" />
 
 ---
-A Twofold side story. Join the writing club!  
-This is the prologue only. Over the course of one year, the game will release new scenes episodically.
+Fair's Fair! A Twofold side story.
+Beginning in October 2026, this visual novel follows a monthly release schedule, with one new scene being added every month. The full game will be released over the course of a year (ending in October 2027).
