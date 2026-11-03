@@ -9,10 +9,10 @@ use lightvn_works::{
     escape_css_url, extract_all_images, extract_user_attachment_uuid, feed_date, find_tag,
     first_offsite_image, gallery_rows, get_lang, get_related_paths, has_tag, html_escape,
     is_canonical_released, is_composite_dimensions, json_script_escape, layout_images,
-    load_aliases, load_tag_config, make_thumbnail, parse_frontmatter, pick_priority_tag,
-    released_to_iso, resize_thumbnail, split_creators, strip_img_tags, tag_query, valid_lang_param,
-    work_order, work_sort_key, DevExample, ExtraLink, FeedEntry, GameMeta, Nav, ParsedGame,
-    TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    load_aliases, load_tag_config, make_thumbnail, markdown_to_html, parse_frontmatter,
+    pick_priority_tag, released_to_iso, resize_thumbnail, split_creators, strip_img_tags,
+    tag_query, valid_lang_param, work_order, work_sort_key, DevExample, ExtraLink, FeedEntry,
+    GameMeta, Nav, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -96,6 +96,25 @@ fn card_badges_html_renders_priority_and_ai(#[case] tags: &[&str], #[case] expec
     for part in expected {
         assert!(html.contains(part), "missing {part} in {html}");
     }
+}
+
+#[rstest]
+#[case::plain_newline("one\ntwo", "<p>one<br />\ntwo</p>\n")]
+#[case::two_spaces_still_work("one  \ntwo", "<p>one<br />\ntwo</p>\n")]
+#[case::blank_line_is_a_paragraph("one\n\ntwo", "<p>one</p>\n<p>two</p>\n")]
+#[case::tag_split_across_lines_untouched(
+    "a <img width=\"1\"\nsrc=\"x\" /> b",
+    "<p>a <img width=\"1\"\nsrc=\"x\" /> b</p>\n"
+)]
+#[case::html_block_untouched("<div>\none\ntwo\n</div>", "<div>\none\ntwo\n</div>")]
+fn markdown_newline_is_a_line_break(#[case] md: &str, #[case] expected: &str) {
+    // given: synopsis text with lines on their own
+
+    // when: rendering it
+    let html = markdown_to_html(md);
+
+    // then: each line stays on its own line, with or without trailing spaces
+    assert_eq!(html, expected);
 }
 
 #[test]
@@ -1003,7 +1022,7 @@ fn json_script_escape_keeps_json_parseable() {
 
 #[test]
 fn validate_all_markdown_files() {
-    // given: all .md files in the works/ directory
+    // given: every file in the works/ directory
     let works_dir = Path::new("works");
     if !works_dir.is_dir() {
         return;
@@ -1016,7 +1035,15 @@ fn validate_all_markdown_files() {
 
     for entry in WalkDir::new(works_dir).into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|e| e.to_str()) != Some("md") {
+        if !path.is_file() {
+            continue;
+        }
+        // - Only .md files are loaded; anything else silently drops off the site.
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            errors.push(format!(
+                "{}: not a .md file, so it won't be served (missing extension?)",
+                path.display()
+            ));
             continue;
         }
 

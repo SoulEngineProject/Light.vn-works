@@ -358,7 +358,7 @@ async fn creator_page_back_link_keeps_explicit_lang() {
 #[tokio::test]
 async fn homepage_and_game_page_agree_on_work_url() {
     // given: a title with characters JS and Rust used to encode differently
-    let path = "/works/2026/Fair's Fair! Prologue";
+    let path = "/works/2026/Fair's Fair!";
     let href = Nav::default().work_href(path);
 
     // when: rendering the homepage and the work's own page
@@ -366,7 +366,7 @@ async fn homepage_and_game_page_agree_on_work_url() {
     let game = get_html(&href).await;
 
     // then: the homepage's link is the work page's canonical URL
-    assert_eq!(href, "/works/2026/Fair%27s%20Fair%21%20Prologue");
+    assert_eq!(href, "/works/2026/Fair%27s%20Fair%21");
     assert!(home.contains(&format!("\"href\":\"{}\"", href)));
     assert!(game.contains(&format!("{}\" />", href)) || game.contains(&format!("{}\">", href)));
 }

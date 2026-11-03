@@ -411,9 +411,15 @@ pub fn first_offsite_image(body: &str) -> Option<String> {
     None
 }
 
+// - Every newline in the text is a line break, like a GitHub comment.
+// - Synopses are pasted from store pages one sentence per line; markdown's two-trailing-spaces
+//   rule kept getting missed and ran the lines together.
 pub fn markdown_to_html(md_content: &str) -> String {
     let mut html_output = String::new();
-    let parser = Parser::new(md_content);
+    let parser = Parser::new(md_content).map(|event| match event {
+        Event::SoftBreak => Event::HardBreak,
+        other => other,
+    });
     html::push_html(&mut html_output, parser);
     html_output
 }

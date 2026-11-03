@@ -24,6 +24,7 @@ tagline: <one-line description>
 ---
 Synopsis text here.
 ```
+- Synopsis line breaks show as-is; a blank line starts a new paragraph.
 
 For multiple links, add `extra_links`:
 ```
