@@ -372,6 +372,37 @@ async fn homepage_and_game_page_agree_on_work_url() {
 }
 
 #[tokio::test]
+async fn frontmatter_title_shows_everywhere_url_stays_file_name() {
+    // given: POV Verity, whose real title has a ':' the file name can't hold
+    let href = Nav::default().work_href("/works/2026/POV Verity");
+
+    // when: rendering its page and the homepage
+    let game = get_html(&href).await;
+    let home = get_html("/").await;
+
+    // then:
+    // - the URL is still the file name
+    // - the page and the homepage show `title:` from the frontmatter
+    assert_eq!(href, "/works/2026/POV%20Verity");
+    assert!(
+        game.contains("<h1>POV: Verity</h1>"),
+        "h1 should use title:"
+    );
+    assert!(
+        game.contains("<title>POV: Verity (2026)"),
+        "<title> should use title:"
+    );
+    assert!(
+        game.contains("og:title\" content=\"POV: Verity"),
+        "og:title should use title:"
+    );
+    assert!(
+        home.contains(&format!("\"title\":\"POV: Verity\",\"href\":\"{}\"", href)),
+        "homepage card should use title:"
+    );
+}
+
+#[tokio::test]
 async fn not_found_page_never_echoes_path() {
     // given: a work path carrying markup
     let uri = "/works/2024/%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E";

@@ -28,6 +28,7 @@ Non-obvious graceful-degradation choices. Don't "fix" these into stricter behavi
 
 - **Frontmatter YAML parse failure → default `GameMeta`** (`src/lib.rs::parse_frontmatter`).
   - Why: malformed frontmatter shouldn't error the page, just omit metadata.
+  - The validator still catches it: `frontmatter_error` names the error, so it doesn't show up as "creator is empty". Usual causes are an unquoted `: ` or a missing closing `---` (which often reads as a YAML error, since the synopsis's own `---` closes the block instead).
 
 - **Invalid `tags.yaml` → empty map** (`src/lib.rs::load_tag_config`).
   - Why: silent fallback rather than panicking the server on startup. Tags render as plain, unstyled badges.
