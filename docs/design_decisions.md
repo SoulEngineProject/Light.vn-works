@@ -15,7 +15,7 @@ Static assets send `Cache-Control: no-cache` rather than a long `max-age, immuta
 
 ## Server-embed tree data in home HTML
 
-The home page inlines `TREE_DATA`, `LANG_DATA`, `TAG_INFO`, and `TAG_BAR` as JSON in a `<script>` tag rather than fetching them client-side.
+The home page inlines `TREE_DATA`, `LANG_DATA`, and `TAG_BAR` as JSON in a `<script>` tag rather than fetching them client-side.
 
 - **Why**: eliminates the initial API roundtrip and loading state. Page renders immediately with full data.
 - **Tradeoff accepted**: HTML response size grows with catalog. Fine at 241 entries; revisit around 1000+ (noted in `performance_todo.md`).
@@ -38,7 +38,7 @@ Homepage thumbnails (ribbon + card) are served via `/thumb/:uuid/:size` — a Ru
 `config/tags.yaml` lists only tags that need special treatment — a colour, a link, a rewritten label. Any tag a work uses is valid whether or not it appears there; an unlisted tag renders plain and uncoloured, which is the default, not a mistake. `早稲田大学` sits unlisted on 9 works today.
 
 - **Unlisted tags still work**: `build_tag_index` folds every tag it sees into the tag bar (unlisted ones just carry `colour: None`), so they filter like any other. What listing buys is the colour, the optional `url`/`label`, and eligibility for the card's priority badge — `pick_priority_badge` deliberately has no fallback to unconfigured tags.
-- **No "unknown tag" validation, on purpose**: the markdown validator checks dates, images, and `thumbnail_index`, but never tags. Rejecting a tag for being absent from `tags.yaml` would invert the design and make every new tag a two-file change.
+- **No "unknown tag" validation, on purpose**: the markdown validator checks dates, images, `thumbnail_index`, and `dev_example_index`, but never tags. Rejecting a tag for being absent from `tags.yaml` would invert the design and make every new tag a two-file change.
 - **Adding to `tags.yaml` is a promotion**: do it when a tag earns a colour or a link, not to register it.
 
 ## Restart on content change
@@ -47,3 +47,25 @@ All markdown files are parsed once at startup into an in-memory `HashMap<canonic
 
 - **Why**: perf (no per-request parse or disk I/O) and simplicity (single walk of `works/`, one source of truth). The tree and creator index were already built at startup, so restart-on-change was already the de facto contract for most content changes; this makes it explicit and consistent.
 - **Considered and deferred**: `notify`-based file watching. Cross-platform file watching is a known source of subtle bugs (event coalescing, editor-atomic-write patterns differ per OS and per editor), and the win over "restart the server" is small for a content site deployed via push. Revisit if the dev loop starts to chafe.
+
+## Development example layout
+
+`layout_images` (`src/lib.rs`) decides which screenshots go in the gallery and which one is the development example.
+
+- **`dev_example_index` set**: that image is shown as-is and every other non-hero image goes in the gallery.
+  - An odd count leaves the last gallery image alone on a full-width row. Accepted: hiding a screenshot the author uploaded is worse than an uneven grid.
+- **Unset**: the last image goes in the editor frame. If it would otherwise be a lone gallery image, it's left out of the gallery so it isn't shown twice.
+- **One-image works show the hero again inside the frame**, on purpose. The frame still shows the engine, and dropping the section leaves the page bare.
+
+## One implementation per rule, decided server-side
+
+Several bugs came from the same rule written twice: tag checks that were case-sensitive in some places, language picked differently by server and client, works sorted three ways, links encoded differently by Rust and JS. So each rule now has one home.
+
+- **Links**: every internal link goes through `Nav` (`src/lib.rs`) — it carries `?lang=` and `?r18=0` and does the only URL encoding. The homepage gets server-built `href`s in the tree and adds `NAV_LANG` + the live checkbox via `buildHref`.
+- **Homepage display data**: each work's `title`, `href`, `creators` and `badges_html` come from the server, so `home.js` renders instead of re-deriving. `meta` stays complete for `/api/tree`.
+- **Ordering**: `work_order` is the only sort for lists of works (homepage years, creator pages, "More from").
+- **Language**: `detect_lang` decides for every page; `home.js` reads `PAGE_LANG`.
+- **Tags**: `find_tag`/`has_tag` and `findTag`/`hasTag` are the only tag comparisons.
+- **Unavoidable mirrors** (escaping, `tag_query`): checked against shared fixtures in `tests/fixtures/`.
+- **Tradeoff accepted**: the embedded tree grows a little per work. Worth it to delete the JS copies.
+

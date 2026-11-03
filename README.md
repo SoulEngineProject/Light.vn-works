@@ -34,6 +34,11 @@ extra_links:
     url: https://example.booth.pm/items/...
 ```
 
+If one of the screenshots is already a Light.vn editor screenshot, point `dev_example_index` at it (0 is the first image, which is the hero, so it can't be used). It's shown as-is under "Development example" instead of the last image being placed in the editor frame:
+```
+dev_example_index: 5
+```
+
 For R18 games, add `tags`:
 ```
 tags: [r18]

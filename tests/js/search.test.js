@@ -2,7 +2,8 @@
 // Each test body has `// given:`, `// when:`, `// then:` sections.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { parseTagQuery, workMatchesSearch } = require('../../public/search.js');
+const { parseTagQuery, workMatchesSearch, findTag, hasTag, searchNamesTag, tagQuery } = require('../../public/search.js');
+const tagQueryCases = require('../fixtures/tag_queries.json');
 
 test('parseTagQuery recognises the tag: prefix', () => {
   // given: queries that start with the tag: prefix, some quoted or padded
@@ -102,4 +103,51 @@ test('unclosed quote is treated literally (documents behavior)', () => {
   // then: the quote is not stripped, so it matches no clean tag (safe-fails)
   assert.strictEqual(parseTagQuery('tag:"ui'), '"ui');
   assert.strictEqual(workMatchesSearch('tag:"ui', 'GUI', '', ['UI']), false);
+});
+
+test('findTag and hasTag ignore case', () => {
+  // given: a work tagged in mixed case
+  const tags = ['R18', 'Terrace and Ray'];
+
+  // when: looking tags up in a different case
+  const r18 = findTag(tags, 'r18');
+  const terrace = findTag(tags, 'TERRACE AND RAY');
+
+  // then:
+  // - found, in the work's own spelling
+  // - hasTag agrees, and a missing or partial tag isn't found
+  assert.strictEqual(r18, 'R18');
+  assert.strictEqual(terrace, 'Terrace and Ray');
+  assert.strictEqual(hasTag(tags, 'r18'), true);
+  assert.strictEqual(hasTag(tags, 'ai'), false);
+  assert.strictEqual(hasTag(['r18-ish'], 'r18'), false);
+  assert.strictEqual(hasTag(undefined, 'r18'), false);
+});
+
+test('searchNamesTag matches plain or tag: form, ignoring case', () => {
+  // given: searches that name r18 in different forms and cases
+  const named = ['r18', 'R18', ' r18 ', 'tag:r18', 'TAG:R18', 'tag:"R18"'];
+  const notNamed = ['r1', 'r18 game', 'tag:ai', '', undefined];
+
+  // when: checking each against r18
+  const hits = named.map(q => searchNamesTag(q, 'r18'));
+  const misses = notNamed.map(q => searchNamesTag(q, 'r18'));
+
+  // then: only exact mentions count
+  assert.deepStrictEqual(hits, named.map(() => true));
+  assert.deepStrictEqual(misses, notNamed.map(() => false));
+});
+
+test('tagQuery matches the shared fixture, and parses back to the tag', () => {
+  // given: the tag → query pairs src/lib.rs::tag_query is also tested against
+  const cases = tagQueryCases;
+
+  // when: building each query
+  const built = cases.map(([tag]) => [tag, tagQuery(tag)]);
+
+  // then:
+  // - Rust and JS agree, case for case
+  // - every query round-trips through parseTagQuery
+  assert.deepStrictEqual(built, cases);
+  cases.forEach(([tag, query]) => assert.strictEqual(parseTagQuery(query), tag.toLowerCase()));
 });

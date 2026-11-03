@@ -2,7 +2,7 @@
 // Each test body has `// given:`, `// when:`, `// then:` sections.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { computeOpenYearFlags } = require('../../public/view.js');
+const { computeOpenYearFlags, ribbonEntries } = require('../../public/view.js');
 
 test('a query opens every group', () => {
   // given: groups of various sizes and an active query
@@ -81,4 +81,64 @@ test('a custom threshold is honoured', () => {
 
   // then: open while prior < 3 — first two open (prior 0, 2), third closed (prior 4)
   assert.deepStrictEqual(flags, [true, true, false]);
+});
+
+// - A two-year tree: a plain work, an R18 work (tagged in upper case), and a work with no thumbnail.
+function ribbonTree() {
+  return {
+    children: [
+      {
+        name: '2025',
+        children: [
+          { title: 'Plain', href: '/works/2025/Plain', thumbnail: '/thumb/a/card', thumbnail_ribbon: '/thumb/a/ribbon', meta: { tags: [] } },
+          { title: 'Adult', href: '/works/2025/Adult', thumbnail: '/thumb/b/card', meta: { tags: ['R18'] } }
+        ]
+      },
+      {
+        name: '2024',
+        children: [
+          { title: 'NoThumb', href: '/works/2024/NoThumb', meta: {} }
+        ]
+      }
+    ]
+  };
+}
+
+test('ribbon leaves out R18 works while Hide R18 is on', () => {
+  // given: a tree with an R18 work tagged "R18"
+  const data = ribbonTree();
+
+  // when: building ribbon entries with Hide R18 on
+  const entries = ribbonEntries(data, true);
+
+  // then: only the plain work remains, whatever the tag's case
+  assert.deepStrictEqual(entries.map(e => e.title), ['Plain']);
+});
+
+test('ribbon includes R18 works while Hide R18 is off', () => {
+  // given: the same tree
+  const data = ribbonTree();
+
+  // when: building ribbon entries with Hide R18 off
+  const entries = ribbonEntries(data, false);
+
+  // then:
+  // - both works with thumbnails appear, in tree order
+  // - the work without a thumbnail never does
+  assert.deepStrictEqual(entries.map(e => e.title), ['Plain', 'Adult']);
+});
+
+test('ribbon entries use the ribbon-size thumbnail and the server href', () => {
+  // given: one work with a ribbon thumbnail, one with only a card thumbnail
+  const data = ribbonTree();
+
+  // when: building ribbon entries with Hide R18 off
+  const [plain, adult] = ribbonEntries(data, false);
+
+  // then:
+  // - the smaller ribbon URL wins when present, else the card thumbnail
+  // - the server-built href is used as-is
+  assert.strictEqual(plain.url, '/thumb/a/ribbon');
+  assert.strictEqual(adult.url, '/thumb/b/card');
+  assert.strictEqual(plain.href, '/works/2025/Plain');
 });

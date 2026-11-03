@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { escapeHtml, escapeCssUrl } = require('../../public/escape.js');
+const escapeCases = require('../fixtures/escape_cases.json');
 
 test('escapeHtml escapes all five specials', () => {
   // given: a string with every HTML special character
@@ -67,4 +68,17 @@ test('escapeCssUrl encodes every breakout character, repeated', () => {
 
   // then: no quotes, parens, backslashes, or spaces survive
   assert.strictEqual(/['"()\\ ]/.test(out), false);
+});
+
+test('escape helpers match the shared fixture', () => {
+  // given: the cases src/lib.rs::html_escape / escape_css_url are also tested against
+  const { html, css_url: cssUrl } = escapeCases;
+
+  // when: escaping each input
+  const htmlOut = html.map(([input]) => [input, escapeHtml(input)]);
+  const cssOut = cssUrl.map(([input]) => [input, escapeCssUrl(input)]);
+
+  // then: JS and Rust agree, case for case
+  assert.deepStrictEqual(htmlOut, html);
+  assert.deepStrictEqual(cssOut, cssUrl);
 });

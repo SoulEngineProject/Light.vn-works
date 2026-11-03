@@ -1,0 +1,18 @@
+{
+  "html": [
+    ["&<>\"'", "&amp;&lt;&gt;&quot;&#39;"],
+    ["\"\"", "&quot;&quot;"],
+    ["a'b'c", "a&#39;b&#39;c"],
+    ["&amp;", "&amp;amp;"],
+    ["姉弟 <b>", "姉弟 &lt;b&gt;"],
+    ["plain", "plain"]
+  ],
+  "css_url": [
+    ["https://x/a b", "https://x/a%20b"],
+    ["it's", "it%27s"],
+    ["\"q\"", "%22q%22"],
+    ["(x)", "%28x%29"],
+    ["a\\b", "a%5Cb"],
+    ["already%20encoded", "already%20encoded"]
+  ]
+}

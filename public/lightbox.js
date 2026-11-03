@@ -22,10 +22,15 @@
 
   function init() {
     // - The game's own screenshots, in reading order: hero → gallery → the
-    //   editor-frame preview. Dedup by src so odd-count games (editor reuses
-    //   the last gallery image) don't list it twice, while even-count games
-    //   (last image lives only in the editor frame) still reach it.
-    var nodes = document.querySelectorAll('.hero-image img, .gallery img, .editor-preview');
+    //   development example (framed preview or as-is).
+    // - Dedup by src so odd-count games (editor reuses the last gallery image)
+    //   don't list it twice.
+    // - Images that live only in the development example still get reached:
+    //   the framed last image on even-count games, and an as-is image picked
+    //   by dev_example_index (never in the gallery).
+    // - Except a framed composite: it's a CSS background on
+    //   .editor-preview-crop, not an <img>, so it can't be opened here.
+    var nodes = document.querySelectorAll('.hero-image img, .gallery img, .editor-preview, .dev-example');
     var shots = [];
     var seen = {};
     for (var i = 0; i < nodes.length; i++) {

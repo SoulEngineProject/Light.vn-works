@@ -9,7 +9,8 @@ tests/
     smoke_test.rs     HTTP handler tests (drives build_app via oneshot)
   js/                 client-side logic tests (Node built-in runner)
     search.test.js    tag: search matching (public/search.js)
-    view.test.js      year-open cascade (public/view.js)
+    view.test.js      year-open cascade + ribbon entries (public/view.js)
+  fixtures/           cases both suites assert against (Rust↔JS mirrors)
 ```
 
 - Cargo only auto-discovers `tests/*.rs`, so the `tests/rs/` root is declared once in `Cargo.toml` (`[[test]] name = "rs"`). Adding a new Rust test file = drop it in `tests/rs/` and add one `mod` line to `main.rs`; no Cargo.toml change.
@@ -26,6 +27,7 @@ Stop the local server first if it's running — `cargo test` rebuilds the binary
 - Every test body is split into `// given:`, `// when:`, `// then:` sections.
 - Rust: parameterized cases use `rstest` (`#[case::name(...)]` — the name shows in `cargo test` output). Shared data comes from `#[fixture]`s.
 - JS: each `test(...)` uses `node:assert`; keep the tested logic in a pure function so the DOM isn't needed.
+- A rule that has to exist in both Rust and JS (escaping, `tag:` queries) gets one fixture in `tests/fixtures/` that both suites read, so the two copies can't drift. Prefer not having a mirror at all: if the server can compute it, ship the result in the page data instead.
 
 ## Coverage
 - Tool: `cargo llvm-cov` (LLVM source-based, cross-platform — same numbers on Windows and Linux CI).

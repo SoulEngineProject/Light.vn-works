@@ -1,17 +1,13 @@
-// - Shared chrome for the game + creator pages: language toggle + share button.
-// - Both pages set <html lang> to the server-detected language, which the
-//   toggle reads as its fallback when there's no ?lang override.
+// - Shared chrome for every page: language toggle + share button.
+// - The server decides the language (src/lib.rs::detect_lang), writes it to <html lang>,
+//   and renders the button label; this only handles the click.
+// - Reloads the current URL with ?lang= flipped, so everything else in it (search, r18) is kept.
 (function () {
   var toggle = document.getElementById('lang-toggle');
   if (toggle) {
-    var p = new URLSearchParams(location.search).get('lang');
-    var lang = p === 'ja' || p === 'en'
-      ? p
-      : (document.documentElement.lang === 'ja' ? 'ja' : 'en');
-    toggle.textContent = lang === 'ja' ? 'English' : '日本語';
     toggle.addEventListener('click', function () {
       var url = new URL(location.href);
-      url.searchParams.set('lang', lang === 'ja' ? 'en' : 'ja');
+      url.searchParams.set('lang', document.documentElement.lang === 'ja' ? 'en' : 'ja');
       location.href = url.toString();
     });
   }

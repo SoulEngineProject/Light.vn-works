@@ -22,6 +22,10 @@ pub struct LangStrings {
     pub creator_more_works: String,
     pub creator_view: String,
     pub creator_all_works: String,
+    pub not_found_title: String,
+    /// - Label of the language button: the name of the language it switches to.
+    pub lang_toggle: String,
+    pub not_found_message: String,
 }
 
 struct LangPair {
@@ -58,6 +62,9 @@ fn load_lang() -> &'static LangPair {
                 creator_more_works: get("creator_more_works"),
                 creator_view: get("creator_view"),
                 creator_all_works: get("creator_all_works"),
+                not_found_title: get("not_found_title"),
+                lang_toggle: get("lang_toggle"),
+                not_found_message: get("not_found_message"),
             }
         }
 
@@ -77,27 +84,58 @@ pub fn get_lang(lang: &str) -> &'static LangStrings {
     }
 }
 
-/// - Resolve the display language: an explicit `lang` param wins ("ja"/"en"),
-///   else the Accept-Language header, else English.
-pub fn detect_lang(lang_param: Option<&str>, accept_language: Option<&str>) -> &'static str {
+/// - The `lang` param as a value safe to echo into links: "en", "ja", or nothing.
+pub fn valid_lang_param(lang_param: Option<&str>) -> Option<&'static str> {
     match lang_param {
-        Some("ja") => "ja",
-        Some("en") => "en",
-        _ => {
-            if accept_language.unwrap_or("en").contains("ja") {
-                "ja"
-            } else {
-                "en"
-            }
-        }
+        Some("ja") => Some("ja"),
+        Some("en") => Some("en"),
+        _ => None,
     }
 }
 
-/// - Sort key for ordering a creator's works newest-first.
+/// - Resolve the display language for every page, homepage included.
+/// - An explicit `lang` param wins ("ja"/"en"); that's what the language button sets.
+/// - Else the browser's preference: whichever of ja/en ranks higher in
+///   Accept-Language by `q` weight, earlier entry on a tie. "en-US,ja;q=0.8" is
+///   English, matching what the browser itself reports as its first language.
+/// - Else English.
+pub fn detect_lang(lang_param: Option<&str>, accept_language: Option<&str>) -> &'static str {
+    if let Some(lang) = valid_lang_param(lang_param) {
+        return lang;
+    }
+    let mut best: Option<(&'static str, f32)> = None;
+    for entry in accept_language.unwrap_or("").split(',') {
+        let mut parts = entry.split(';');
+        let primary = parts
+            .next()
+            .unwrap_or("")
+            .trim()
+            .split('-')
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let lang = match primary.as_str() {
+            "ja" => "ja",
+            "en" => "en",
+            _ => continue,
+        };
+        let q = parts
+            .find_map(|p| p.trim().strip_prefix("q="))
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .unwrap_or(1.0);
+        if q > 0.0 && best.is_none_or(|(_, best_q)| q > best_q) {
+            best = Some((lang, q));
+        }
+    }
+    best.map_or("en", |(lang, _)| lang)
+}
+
+/// - Sort key behind `work_order`.
 /// - Uses the release date, falling back to the folder year when the date is
 ///   missing, empty, or "unknown" — so an undated work sorts by its year rather
-///   than jumping to the top (e.g. as the hero).
-pub fn creator_work_key<'a>(released: Option<&'a str>, folder_year: &'a str) -> &'a str {
+///   than jumping to the top (e.g. as the hero). Within its own year it sorts
+///   last, since "2014" < "2014/05/01".
+pub fn work_sort_key<'a>(released: Option<&'a str>, folder_year: &'a str) -> &'a str {
     match released {
         Some(r) if !r.is_empty() && r != RELEASED_UNKNOWN => r,
         _ => folder_year,
@@ -124,6 +162,10 @@ pub struct GameMeta {
     pub tags: Option<Vec<String>>,
     #[serde(default)]
     pub thumbnail_index: Option<usize>,
+    /// - Image shown as-is under "Development example", e.g. a real editor screenshot.
+    /// - Unset: the last image is placed inside the editor frame instead.
+    #[serde(default)]
+    pub dev_example_index: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
@@ -213,6 +255,30 @@ pub fn resize_thumbnail(img: &image::DynamicImage, size: ThumbSize) -> image::Dy
         let (w, h) = size.dimensions();
         img.resize_to_fill(w, h, filter)
     }
+}
+
+/// - Original image bytes → resized WebP q=80 thumbnail.
+/// - WebP via libwebp: smaller than JPEG at the same visual quality, and keeps alpha.
+/// - A panic anywhere in decode/resize/encode comes back as `Err`, same as a bad
+///   image. `webp::Encoder::encode` unwraps internally, and a panic that escaped
+///   would leave the caller's in-flight bookkeeping stuck until restart.
+pub fn make_thumbnail(bytes: &[u8], size: ThumbSize) -> Result<Vec<u8>, String> {
+    std::panic::catch_unwind(|| {
+        let img = image::load_from_memory(bytes).map_err(|e| format!("decode: {}", e))?;
+        let resized = resize_thumbnail(&img, size);
+        Ok(if resized.color().has_alpha() {
+            let rgba = resized.to_rgba8();
+            webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height())
+                .encode(80.0)
+                .to_vec()
+        } else {
+            let rgb = resized.to_rgb8();
+            webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height())
+                .encode(80.0)
+                .to_vec()
+        })
+    })
+    .unwrap_or_else(|_| Err("panicked while decoding/encoding".to_string()))
 }
 
 fn extract_attr_u32(tag: &str, attr: &str) -> Option<u32> {
@@ -392,16 +458,15 @@ pub fn json_script_escape(s: &str) -> String {
     s.replace("</", "<\\/")
 }
 
-/// - Percent-encode reserved URL characters in a path.
-/// - Preserves '/' (so callers can pass "/works/2021/title") and encodes
-///   everything else that's not an unreserved character per RFC 3986.
-/// - Titles starting with '#' or containing '?' would otherwise be mis-parsed
-///   by the browser.
-pub fn encode_path(path: &str) -> String {
-    let mut out = String::with_capacity(path.len());
-    for byte in path.bytes() {
+/// - Percent-encode one URL component (a path segment or a query value).
+/// - Everything but RFC 3986 unreserved characters is encoded, '/' included.
+/// - The only URL encoder: every link is built server-side, so a title like
+///   "That's…" gets one spelling everywhere (JS `encodeURIComponent` leaves `'()` alone).
+pub fn encode_component(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for byte in s.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 out.push(byte as char)
             }
             _ => out.push_str(&format!("%{:02X}", byte)),
@@ -410,14 +475,24 @@ pub fn encode_path(path: &str) -> String {
     out
 }
 
-/// - Build a URL query string from (key, value) pairs.
+/// - Percent-encode a path segment by segment, keeping the '/' separators.
+/// - Titles starting with '#' or containing '?' would otherwise be mis-parsed
+///   by the browser.
+pub fn encode_path(path: &str) -> String {
+    path.split('/')
+        .map(encode_component)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// - Build a URL query string from (key, value) pairs; values are percent-encoded.
 /// - Empty values are filtered out.
 /// - Returns "" for no non-empty pairs, or "?k1=v1&k2=v2".
 pub fn build_query(params: &[(&str, &str)]) -> String {
     let parts: Vec<String> = params
         .iter()
         .filter(|(_, v)| !v.is_empty())
-        .map(|(k, v)| format!("{}={}", k, v))
+        .map(|(k, v)| format!("{}={}", k, encode_component(v)))
         .collect();
     if parts.is_empty() {
         String::new()
@@ -490,7 +565,7 @@ pub fn released_to_iso(date: &str) -> Option<String> {
 ///   or zero-padded `YYYY/MM/DD` optionally followed by a non-digit suffix
 ///   (e.g. "2014/09/15～ (連載作品)" for serialized works).
 /// - Sorts compare `released` strings lexicographically (build_creator_paths,
-///   creator_work_key, the homepage year sort), which is only correct when
+///   work_sort_key, the homepage year sort), which is only correct when
 ///   zero-padded; the works validator uses this so unpadded dates fail CI.
 /// - Positional byte checks, not `&s[..10]` — slicing panics when a multibyte
 ///   char straddles byte 10 (malformed input like "2024/09/1あ").
@@ -585,26 +660,72 @@ pub fn build_atom_feed(base_url: &str, entries: &[FeedEntry]) -> String {
     out
 }
 
-/// - Compute the breadcrumb-back suffix and the forward-link suffix for a game
-///   page.
-/// - Both propagate `lang`.
-/// - Back-suffix forces `r18=0` if this page is R18 (so the homepage shows it);
-///   forward-suffix only carries `r18=0` if the incoming request had it.
-pub fn game_page_suffixes(
-    lang_param: Option<&str>,
-    is_r18: bool,
-    incoming_r18_zero: bool,
-) -> (String, String) {
-    let lang = lang_param.unwrap_or("");
-    let back = build_query(&[
-        ("lang", lang),
-        ("r18", if is_r18 || incoming_r18_zero { "0" } else { "" }),
-    ]);
-    let fwd = build_query(&[
-        ("lang", lang),
-        ("r18", if incoming_r18_zero { "0" } else { "" }),
-    ]);
-    (back, fwd)
+/// - The state every internal link carries between pages: the visitor's explicit
+///   language choice and whether R18 works are shown.
+/// - Every server-built link goes through this, so no page can drop or invent
+///   state. The homepage gets `lang` as `NAV_LANG` and adds the live checkbox.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Nav {
+    /// - Only an explicit, valid `?lang=`. The browser's own preference isn't
+    ///   carried: every page detects it the same way anyway.
+    pub lang: Option<&'static str>,
+    /// - `?r18=0`: "Hide R18" was switched off.
+    pub show_r18: bool,
+}
+
+impl Nav {
+    /// - From a request's `?lang=` and `?r18=`; invalid values are dropped, never echoed.
+    pub fn from_query(lang: Option<&str>, r18: Option<&str>) -> Nav {
+        Nav {
+            lang: valid_lang_param(lang),
+            show_r18: r18 == Some("0"),
+        }
+    }
+
+    /// - For links from an R18 work back to the homepage: keep that work visible there.
+    pub fn showing_r18(self) -> Nav {
+        Nav {
+            show_r18: true,
+            ..self
+        }
+    }
+
+    /// - "?lang=…&r18=0&extra=…" with only the parts that apply, or "".
+    pub fn query(&self, extra: &[(&str, &str)]) -> String {
+        let mut params = vec![
+            ("lang", self.lang.unwrap_or("")),
+            ("r18", if self.show_r18 { "0" } else { "" }),
+        ];
+        params.extend_from_slice(extra);
+        build_query(&params)
+    }
+
+    /// - The homepage, optionally with extra query params (e.g. a search).
+    pub fn home_href(&self, extra: &[(&str, &str)]) -> String {
+        format!("/{}", self.query(extra))
+    }
+
+    /// - A work page, from its canonical path ("/works/YYYY/title").
+    pub fn work_href(&self, path: &str) -> String {
+        format!("{}{}", encode_path(path), self.query(&[]))
+    }
+
+    /// - A creator page. The name is one path segment, so '/' is encoded too.
+    pub fn creator_href(&self, name: &str) -> String {
+        format!("/creator/{}{}", encode_component(name), self.query(&[]))
+    }
+}
+
+/// - The homepage search that filters to exactly one tag: `tag:ai`, or
+///   `tag:"Terrace and Ray"` when the name has spaces.
+/// - Mirrors `tagQuery` in public/search.js; both are checked against
+///   tests/fixtures/tag_queries.json.
+pub fn tag_query(name: &str) -> String {
+    if name.contains(' ') {
+        format!("tag:\"{}\"", name)
+    } else {
+        format!("tag:{}", name)
+    }
 }
 
 /// - A parsed markdown game file.
@@ -620,6 +741,16 @@ pub struct ParsedGame {
     pub thumbnail: Option<String>, // card-size URL: "/thumb/UUID/card" or passthrough
     pub thumbnail_ribbon: Option<String>, // ribbon-size URL: "/thumb/UUID/ribbon" or passthrough
     pub thumbnail_composite: bool,
+}
+
+/// - The one ordering for lists of works: newest first, then title A→Z.
+/// - Used by the homepage year groups, creator pages, and "More from".
+/// - Title breaks ties so same-day releases keep one order on every restart
+///   (HashMap iteration order is random per process).
+pub fn work_order(a: &ParsedGame, b: &ParsedGame) -> std::cmp::Ordering {
+    let ka = work_sort_key(a.meta.released.as_deref(), &a.year);
+    let kb = work_sort_key(b.meta.released.as_deref(), &b.year);
+    kb.cmp(ka).then_with(|| a.title.cmp(&b.title))
 }
 
 /// - Size variant for the thumbnail proxy.
@@ -671,7 +802,7 @@ pub fn split_creators(creator: &str) -> Vec<String> {
 }
 
 /// - Build creator → paths index.
-/// - Paths are sorted by release date descending (unknown last).
+/// - Each creator's paths follow `work_order`.
 /// - Creators with commas are split into separate entries.
 pub fn build_creator_paths(games: &HashMap<String, ParsedGame>) -> HashMap<String, Vec<String>> {
     let mut index: HashMap<String, Vec<String>> = HashMap::new();
@@ -690,23 +821,12 @@ pub fn build_creator_paths(games: &HashMap<String, ParsedGame>) -> HashMap<Strin
         }
     }
 
-    // Sort each creator's paths by release date (newest first, "unknown" last)
+    // - Every path in the index came from `games`, so the lookups can't miss.
     for paths in index.values_mut() {
-        paths.sort_by(|a, b| {
-            let a_date = released_for_sort(games.get(a));
-            let b_date = released_for_sort(games.get(b));
-            b_date.cmp(a_date)
-        });
+        paths.sort_by(|a, b| work_order(&games[a], &games[b]));
     }
 
     index
-}
-
-fn released_for_sort(game: Option<&ParsedGame>) -> &str {
-    match game.and_then(|g| g.meta.released.as_deref()) {
-        Some(r) if r != RELEASED_UNKNOWN => r,
-        _ => "",
-    }
 }
 
 /// - Get related paths by the same creator(s), excluding the current path.
@@ -813,11 +933,49 @@ pub fn aggregate_creator_links(metas: &[&GameMeta]) -> Vec<ExtraLink> {
     links
 }
 
+/// - How the development example is shown.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DevExample {
+    /// - Placed inside the editor frame mockup.
+    Framed(usize),
+    /// - Shown as-is; the image already is an editor screenshot.
+    AsIs(usize),
+}
+
+/// - Image indices for each part of a game page.
+/// - Index 0 is always the hero.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ImageLayout {
+    pub gallery: Vec<usize>,
+    pub dev_example: Option<DevExample>,
+}
+
+/// - Split a game's images into gallery and development example.
+/// - `dev_example_index` set and in range (not the hero): that image is shown
+///   as-is and left out of the gallery; everything else goes in the gallery.
+/// - Otherwise the last image goes in the editor frame. If the gallery would
+///   end on an orphan, that orphan is dropped from it so the framed image
+///   isn't shown twice.
+/// - A bad index falls back to the default rather than failing the page.
+pub fn layout_images(count: usize, dev_example_index: Option<usize>) -> ImageLayout {
+    if let Some(i) = dev_example_index.filter(|&i| i > 0 && i < count) {
+        return ImageLayout {
+            gallery: (1..count).filter(|&j| j != i).collect(),
+            dev_example: Some(DevExample::AsIs(i)),
+        };
+    }
+    let g = count.saturating_sub(1);
+    let gallery_len = if g % 2 == 1 { g - 1 } else { g };
+    ImageLayout {
+        gallery: (1..1 + gallery_len).collect(),
+        dev_example: count.checked_sub(1).map(DevExample::Framed),
+    }
+}
+
 /// - Compute gallery row sizes — max 2 per row.
 /// - Bigger thumbnails for screenshot detail.
-/// - Orphan (single trailing image) is handled upstream by promoting it to the
-///   editor mockup, so this function is typically called with even `n` in
-///   production.
+/// - Odd `n` ends on a single-image row. Only happens with `dev_example_index`
+///   set; otherwise `layout_images` drops the orphan into the editor frame.
 pub fn gallery_rows(n: usize) -> Vec<usize> {
     if n == 0 {
         return vec![];
@@ -979,6 +1137,32 @@ pub fn tag_style(tag: &str, tag_config: &HashMap<String, TagInfo>) -> Option<Str
         .map(|info| format!("background:{};color:white", info.colour))
 }
 
+/// - Card badges: priority tag top-right, AI top-left.
+/// - The only badge renderer. Server-built cards use it directly, and the homepage
+///   gets it per work in the tree JSON (`badges_html`) instead of re-deriving it.
+pub fn card_badges_html(tags: &[String], config: &HashMap<String, TagInfo>) -> String {
+    let mut out = String::new();
+    if let Some(t) = pick_priority_tag(tags, config) {
+        let style_attr = tag_style(t, config)
+            .map(|s| format!(r#" style="{}""#, html_escape(&s)))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            r#"<span class="card-badge"{}>{}</span>"#,
+            style_attr,
+            html_escape(&t.to_uppercase())
+        ));
+    }
+    if has_tag(tags, "ai") {
+        if let Some(style) = tag_style("ai", config) {
+            out.push_str(&format!(
+                r#"<span class="card-badge card-badge-left" style="{}">AI</span>"#,
+                html_escape(&style)
+            ));
+        }
+    }
+    out
+}
+
 /// Pick the tag for the top-right priority badge slot. Priority order:
 ///   1. R18 (content warning)
 ///   2. "Terrace and Ray" (publisher identity)
@@ -992,14 +1176,8 @@ pub fn pick_priority_tag<'a>(
     tags: &'a [String],
     config: &HashMap<String, TagInfo>,
 ) -> Option<&'a str> {
-    if let Some(t) = tags.iter().find(|t| t.eq_ignore_ascii_case("r18")) {
-        return Some(t.as_str());
-    }
-    if let Some(t) = tags
-        .iter()
-        .find(|t| t.eq_ignore_ascii_case("terrace and ray"))
-    {
-        return Some(t.as_str());
+    if let Some(t) = find_tag(tags, "r18").or_else(|| find_tag(tags, "terrace and ray")) {
+        return Some(t);
     }
     if let Some(t) = tags.iter().find(|t| {
         config
@@ -1009,6 +1187,22 @@ pub fn pick_priority_tag<'a>(
         return Some(t.as_str());
     }
     None
+}
+
+/// - The work's own spelling of tag `name`, matched case-insensitively.
+/// - Every tag comparison goes through here (or `has_tag`) so none of them can
+///   quietly be case-sensitive: a work tagged "R18" once got the badge but
+///   slipped past "Hide R18".
+pub fn find_tag<'a>(tags: &'a [String], name: &str) -> Option<&'a str> {
+    let name = name.to_lowercase();
+    tags.iter()
+        .find(|t| t.to_lowercase() == name)
+        .map(String::as_str)
+}
+
+/// - Whether the work carries tag `name`, ignoring case.
+pub fn has_tag(tags: &[String], name: &str) -> bool {
+    find_tag(tags, name).is_some()
 }
 
 /// Parse alias groups YAML into a bidirectional lookup map (lowercased).
@@ -1032,12 +1226,14 @@ pub fn load_aliases(yaml: &str) -> HashMap<String, Vec<String>> {
     map
 }
 
+/// - `nav` is the state for links back to the homepage (see `Nav::showing_r18`).
+/// - `year` is the work's folder year, which the validator ties to `released`.
 pub fn build_tags_line(
     tags: &[String],
     tags_label: &str,
-    lang_param: Option<&str>,
+    nav: Nav,
     tag_config: &HashMap<String, TagInfo>,
-    released: &str,
+    year: &str,
 ) -> String {
     let tag_links: String = if tags.is_empty() {
         "<span class=\"tags-none\">\u{2014}</span>".to_string()
@@ -1053,14 +1249,11 @@ pub fn build_tags_line(
                 } else {
                     "tag-link tag-default"
                 };
-                let href = if let Some(lang) = lang_param {
-                    format!("/?lang={}&search={}", html_escape(lang), html_escape(tag))
-                } else {
-                    format!("/?search={}", html_escape(tag))
-                };
+                // - Exact tag: query, same as the homepage tag-bar chip. A bare ?search=ai would substring-match "Fairy Land".
+                let href = nav.home_href(&[("search", &tag_query(tag))]);
                 format!(
                     r#"<a href="{}" class="{}"{}>{}</a>"#,
-                    href,
+                    html_escape(&href),
                     class,
                     style_attr,
                     html_escape(&tag.to_uppercase())
@@ -1070,11 +1263,6 @@ pub fn build_tags_line(
     };
 
     // Build event links for tags that have url/label
-    let year = if released.len() >= 4 {
-        &released[..4]
-    } else {
-        ""
-    };
     let event_links: String = tags
         .iter()
         .filter_map(|tag| {

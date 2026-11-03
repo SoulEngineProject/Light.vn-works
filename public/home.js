@@ -1,13 +1,9 @@
 let allData = null;
 let t = {}; // translations
 
-const LANG_PARAM = new URLSearchParams(location.search).get('lang');
-const LANG = LANG_PARAM === 'ja' || LANG_PARAM === 'en'
-  ? LANG_PARAM
-  : (navigator.language.startsWith('ja') ? 'ja' : 'en');
-// - The static HTML declares lang="en"; correct it to the language actually rendered
-// - Screen readers pick their voice from this, and it stops mismatched translate prompts
-document.documentElement.lang = LANG;
+// - The server picks the language (src/lib.rs::detect_lang), same rule as game and creator pages
+// - It also sets <html lang>, so screen readers and translate prompts already match
+const LANG = typeof PAGE_LANG !== 'undefined' ? PAGE_LANG : 'en';
 
 // Restore state from URL
 const PARAMS = new URLSearchParams(location.search);
@@ -18,7 +14,7 @@ if (R18_PARAM === '0') {
 }
 if (SEARCH_PARAM) {
   document.getElementById('search').value = SEARCH_PARAM;
-  if (SEARCH_PARAM === 'r18') {
+  if (searchNamesTag(SEARCH_PARAM, 'r18')) {
     document.getElementById('hide-r18').checked = false;
   }
 }
@@ -30,11 +26,11 @@ if (typeof LANG_DATA !== 'undefined') {
   }
 }
 
-// Setup language toggle and apply translations immediately
-setupLangToggle();
+// - Apply translations immediately
+// - The language button is shared: public/page.js
 applyStaticTranslations();
 
-// - Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_INFO, TAG_BAR)
+// - Render from server-embedded data (TREE_DATA, LANG_DATA, TAG_BAR)
 // - No API fetch needed; everything is baked into the HTML at serve time
 if (typeof TREE_DATA !== 'undefined') {
   allData = TREE_DATA;
@@ -42,7 +38,7 @@ if (typeof TREE_DATA !== 'undefined') {
   renderTree(TREE_DATA, initialQuery, document.getElementById('hide-r18').checked);
   scrollToHash();
   updateGameCount(TREE_DATA);
-  buildRibbon(TREE_DATA);
+  buildRibbon(TREE_DATA, document.getElementById('hide-r18').checked);
   buildTagBar();
 }
 
@@ -69,25 +65,6 @@ function applyStaticTranslations() {
   }
 }
 
-function setupLangToggle() {
-  const btn = document.getElementById('lang-toggle');
-  if (!btn) {
-    return;
-  }
-  btn.textContent = LANG === 'ja' ? 'English' : '日本語';
-  btn.addEventListener('click', function() {
-    const other = LANG === 'ja' ? 'en' : 'ja';
-    const url = new URL(location.href);
-    url.searchParams.set('lang', other);
-    if (!document.getElementById('hide-r18').checked) {
-      url.searchParams.set('r18', '0');
-    } else {
-      url.searchParams.delete('r18');
-    }
-    location.href = url.toString();
-  });
-}
-
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el && text) {
@@ -102,24 +79,19 @@ function setHtml(id, html) {
   }
 }
 
-// Percent-encode each path segment individually so reserved chars like '#'
-// in titles aren't read as fragment separators by the browser.
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/');
-}
-
-// - Build an href that preserves lang + r18 state so navigation doesn't reset the user's filter
-// - Reads live checkbox state each call so mid-session toggles reflect on re-render
-function buildHref(linkPath) {
+// - Append the visitor's lang/r18 state to a server-built href (already encoded, no query)
+// - Same params and order as src/lib.rs::Nav::query: lang is NAV_LANG (validated server-side), r18 is the live checkbox
+// - Reads the checkbox on each call so mid-session toggles reflect on re-render
+function buildHref(href) {
   var parts = [];
-  if (LANG_PARAM) {
-    parts.push('lang=' + LANG);
+  if (typeof NAV_LANG !== 'undefined' && NAV_LANG) {
+    parts.push('lang=' + NAV_LANG);
   }
   var hideR18 = document.getElementById('hide-r18');
   if (hideR18 && !hideR18.checked) {
     parts.push('r18=0');
   }
-  return encodePath(linkPath) + (parts.length ? '?' + parts.join('&') : '');
+  return href + (parts.length ? '?' + parts.join('&') : '');
 }
 
 // - Debounce typing so we don't churn the URL bar on every keystroke
@@ -133,6 +105,10 @@ document.getElementById('search').addEventListener('input', function() {
 });
 document.getElementById('hide-r18').addEventListener('change', function() {
   rerender();
+  // - Rebuilt here, not in rerender(): search keystrokes shouldn't reshuffle the ribbon
+  if (allData) {
+    buildRibbon(allData, this.checked);
+  }
   syncUrl();
 });
 
@@ -163,26 +139,6 @@ function syncUrl() {
   history.replaceState(null, '', url.toString());
 }
 
-// - Pick the tag for the top-right priority badge slot
-// - Mirrors src/lib.rs::pick_priority_tag
-// - Priority order: R18 → Terrace and Ray → first other configured tag whose group has card_priority_badge: true
-// - AI and language tags have card_priority_badge: false in tags.yaml, so they never promote here: AI uses the left slot, languages are metadata for the tag-bar filter only
-function pickPriorityTag(tags, tagInfo) {
-  let t = tags.find(x => x.toLowerCase() === 'r18');
-  if (t) {
-    return t;
-  }
-  t = tags.find(x => x.toLowerCase() === 'terrace and ray');
-  if (t) {
-    return t;
-  }
-  t = tags.find(x => {
-    const info = tagInfo[x.toLowerCase()];
-    return info && info.card_priority_badge;
-  });
-  return t || null;
-}
-
 function renderTree(data, query, hideR18) {
   const container = document.getElementById('tree');
   container.innerHTML = '';
@@ -205,7 +161,7 @@ function renderTree(data, query, hideR18) {
       }
 
       const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
-      if (hideR18 && tags.includes('r18')) {
+      if (hideR18 && hasTag(tags, 'r18')) {
         return false;
       }
 
@@ -213,16 +169,12 @@ function renderTree(data, query, hideR18) {
         return true;
       }
 
-      const name = item.name.replace(/\.md$/i, '');
+      const name = item.title || '';
       const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
       return workMatchesSearch(query, name, creator, tags);
     });
 
-    items.sort((a, b) => {
-      const ra = (a.meta && a.meta.released) || '';
-      const rb = (b.meta && b.meta.released) || '';
-      return rb.localeCompare(ra);
-    });
+    // - Already in display order: the server sorts each year with src/lib.rs::work_order
 
     if (items.length > 0) {
       groups.push({ year: year, items: items });
@@ -260,29 +212,10 @@ function renderTree(data, query, hideR18) {
     filesDiv.className = 'files';
 
     items.forEach(item => {
-      const displayName = item.name.replace(/\.md$/i, '').trim();
-      let linkPath = item.path;
-      if (linkPath.endsWith('.md')) {
-        linkPath = linkPath.slice(0, -3);
-      }
-
-      const creator = (item.meta && item.meta.creator) ? item.meta.creator : '';
+      // - title, href, creators and badges_html come from the server (src/app.rs::build_tree_from_games)
+      const displayName = item.title || '';
       const tagline = (item.meta && item.meta.tagline) ? item.meta.tagline : '';
-      const tags = (item.meta && item.meta.tags) ? item.meta.tags : [];
-
-      var tagInfo = (typeof TAG_INFO !== 'undefined') ? TAG_INFO : {};
-      // - Two-slot layout: priority badge (top-right) + AI (top-left)
-      // - See pickPriorityTag() for priority order
-      let badges = '';
-      const priorityTag = pickPriorityTag(tags, tagInfo);
-      if (priorityTag) {
-        const colour = tagInfo[priorityTag.toLowerCase()].colour;
-        badges += '<span class="card-badge" style="background:' + colour + ';color:white">' + escapeHtml(priorityTag.toUpperCase()) + '</span>';
-      }
-      const aiInfo = tagInfo['ai'];
-      if (aiInfo && tags.some(x => x.toLowerCase() === 'ai')) {
-        badges += '<span class="card-badge card-badge-left" style="background:' + aiInfo.colour + ';color:white">AI</span>';
-      }
+      const badges = item.badges_html || '';
 
       const card = document.createElement('div');
       card.className = 'file-card';
@@ -303,16 +236,16 @@ function renderTree(data, query, hideR18) {
       // - Creator byline links to each creator's page. The card itself is a
       //   stretched link (.card-link below), so these must not nest inside it.
       let creatorHtml = '';
-      if (creator) {
-        const links = creator.split(',').map(function(c) {
-          const nm = c.trim();
-          return '<a class="creator-link" href="/creator/' + encodeURIComponent(nm) + '">' + escapeHtml(nm) + '</a>';
+      const creators = item.creators || [];
+      if (creators.length) {
+        const links = creators.map(function(c) {
+          return '<a class="creator-link" href="' + escapeHtml(buildHref(c.href)) + '">' + escapeHtml(c.name) + '</a>';
         }).join(', ');
         creatorHtml = '<div class="card-creator">by ' + links + '</div>';
       }
 
       card.innerHTML =
-        '<a class="card-link" href="' + buildHref(linkPath) + '" aria-label="' + escapeHtml(displayName) + '"></a>' +
+        '<a class="card-link" href="' + escapeHtml(buildHref(item.href)) + '" aria-label="' + escapeHtml(displayName) + '"></a>' +
         thumbHtml +
         '<div class="card-body">' +
           '<div class="card-title">' + escapeHtml(displayName) + '</div>' +
@@ -348,30 +281,15 @@ function renderTree(data, query, hideR18) {
   }
 }
 
-function buildRibbon(data) {
+// - Follows "Hide R18" like the list does; called again whenever the checkbox changes
+function buildRibbon(data, hideR18) {
   const container = document.getElementById('ribbon');
   if (!container || !data.children) {
     return;
   }
+  container.replaceChildren();
 
-  const items = [];
-  data.children.forEach(year => {
-    if (year.children) {
-      year.children.forEach(item => {
-        if (item.thumbnail) {
-          let path = item.path;
-          if (path.endsWith('.md')) {
-            path = path.slice(0, -3);
-          }
-          const title = item.name.replace(/\.md$/i, '').trim();
-          // - thumbnail_ribbon is the smaller (240x140) proxy URL for GitHub user-attachments
-          // - Falls back to thumbnail for non-proxied URLs
-          const url = item.thumbnail_ribbon || item.thumbnail;
-          items.push({ url: url, path: path, title: title, composite: !!item.thumbnail_composite });
-        }
-      });
-    }
-  });
+  const items = ribbonEntries(data, hideR18);
 
   if (items.length < 6) {
     return;
@@ -400,7 +318,7 @@ function buildRibbon(data) {
     const all = entries.concat(entries);
     all.forEach(entry => {
       const a = document.createElement('a');
-      a.href = buildHref(entry.path);
+      a.href = buildHref(entry.href);
       // - aria-label is the accessible name for the link; title is the sighted-hover tooltip
       // - img below uses alt="" since this link already carries the name
       a.title = entry.title;
@@ -477,12 +395,11 @@ function buildTagBar() {
 
     btn.addEventListener('click', function() {
       // - Toggle: clicking the active chip clears the filter; otherwise set a tag: query
-      // - Multi-word tags are quoted so they parse as one token
       const current = parseTagQuery(search.value.trim().toLowerCase());
       if (current === entry.name.toLowerCase()) {
         search.value = '';
       } else {
-        search.value = 'tag:' + (/\s/.test(entry.name) ? '"' + entry.name + '"' : entry.name);
+        search.value = tagQuery(entry.name);
       }
       rerender();
       syncActiveTagChip();
