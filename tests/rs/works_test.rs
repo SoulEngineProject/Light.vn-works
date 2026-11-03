@@ -5,14 +5,15 @@
 
 use lightvn_works::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_query, build_sitemap,
-    build_tag_index, build_tags_line, card_badges_html, detect_lang, encode_component, encode_path,
-    escape_css_url, extract_all_images, extract_user_attachment_uuid, feed_date, find_tag,
-    first_offsite_image, gallery_rows, get_lang, get_related_paths, has_tag, html_escape,
-    is_canonical_released, is_composite_dimensions, json_script_escape, layout_images,
-    load_aliases, load_tag_config, make_thumbnail, markdown_to_html, parse_frontmatter,
-    pick_priority_tag, released_to_iso, resize_thumbnail, split_creators, strip_img_tags,
-    tag_query, valid_lang_param, work_order, work_sort_key, DevExample, ExtraLink, FeedEntry,
-    GameMeta, Nav, ParsedGame, TagInfo, ThumbSize, RELEASED_UNKNOWN,
+    build_tag_index, build_tags_line, card_badges_html, detect_lang, display_title,
+    encode_component, encode_path, escape_css_url, extract_all_images,
+    extract_user_attachment_uuid, feed_date, find_tag, first_offsite_image, frontmatter_error,
+    gallery_rows, get_lang, get_related_paths, has_tag, html_escape, is_canonical_released,
+    is_composite_dimensions, json_script_escape, layout_images, load_aliases, load_tag_config,
+    make_thumbnail, markdown_to_html, parse_frontmatter, pick_priority_tag, released_to_iso,
+    resize_thumbnail, split_creators, strip_img_tags, tag_query, valid_lang_param, work_order,
+    work_sort_key, DevExample, ExtraLink, FeedEntry, GameMeta, Nav, ParsedGame, TagInfo, ThumbSize,
+    RELEASED_UNKNOWN,
 };
 use rstest::{fixture, rstest};
 use std::collections::HashMap;
@@ -764,6 +765,66 @@ fn parse_frontmatter_basic() {
     assert!(body.contains("Some body text."));
 }
 
+#[rstest]
+#[case::set(Some("POV: Verity"), "POV: Verity")]
+#[case::unset(None, "POV Verity")]
+#[case::blank(Some("  "), "POV Verity")]
+#[case::trimmed(Some("  POV: Verity "), "POV: Verity")]
+fn display_title_prefers_frontmatter_title(#[case] title: Option<&str>, #[case] expected: &str) {
+    // given: a work saved as "POV Verity.md"
+    let meta = GameMeta {
+        title: title.map(str::to_string),
+        ..Default::default()
+    };
+
+    // when: picking the name to show
+    let shown = display_title(&meta, "POV Verity");
+
+    // then: a real title wins; missing or blank falls back to the file name
+    assert_eq!(shown, expected);
+}
+
+#[test]
+fn parse_frontmatter_reads_quoted_title_with_colon() {
+    // given: a title with ': ' in quotes
+    let input = "---\ntitle: \"POV: Verity\"\ncreator: A\n---\nbody";
+
+    // when: parsing frontmatter
+    let (meta, _) = parse_frontmatter(input);
+
+    // then: the title is kept whole and nothing is reported
+    assert_eq!(meta.title.as_deref(), Some("POV: Verity"));
+    assert_eq!(frontmatter_error(input), None);
+}
+
+#[test]
+fn parse_frontmatter_falls_back_on_unquoted_colon() {
+    // given: the same title without quotes
+    let input = "---\ntitle: POV: Verity\ncreator: A\n---\nbody";
+
+    // when: parsing frontmatter
+    let (meta, _) = parse_frontmatter(input);
+
+    // then: the page gets empty meta instead of an error
+    assert_eq!(meta.title, None);
+    assert_eq!(meta.creator, None);
+}
+
+#[rstest]
+#[case::fine("---\ncreator: A\n---\nbody", false)]
+#[case::no_frontmatter("just a body", false)]
+#[case::unclosed("---\ncreator: A\nbody", true)]
+#[case::unquoted_colon("---\ntitle: POV: Verity\n---\nbody", true)]
+fn frontmatter_error_flags_only_broken_blocks(#[case] input: &str, #[case] broken: bool) {
+    // given: a work file's contents
+
+    // when: checking its frontmatter
+    let error = frontmatter_error(input);
+
+    // then: only an unreadable block is reported; no frontmatter is the validator's own check
+    assert_eq!(error.is_some(), broken, "{error:?}");
+}
+
 #[test]
 fn parse_frontmatter_missing() {
     // given: markdown without frontmatter
@@ -1056,7 +1117,7 @@ fn validate_all_markdown_files() {
                 .find(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|'))
             {
                 errors.push(format!(
-                    "{}: filename contains '{}', which is illegal on Windows",
+                    "{}: filename contains '{}', which is illegal on Windows; drop it and set `title:` to the real name",
                     path.display(),
                     bad
                 ));
@@ -1076,7 +1137,35 @@ fn validate_all_markdown_files() {
             continue;
         }
 
+        // - Invalid YAML silently empties every field, so say so instead of
+        //   "creator is empty" etc. Usually an unquoted ': ' in a value.
+        if let Some(e) = frontmatter_error(&content) {
+            errors.push(format!(
+                "{}: frontmatter can't be read ({}); check the closing --- and quote values containing ': '",
+                path.display(),
+                e
+            ));
+            continue;
+        }
+
         let (meta, body) = parse_frontmatter(&content);
+
+        // - `title:` is only for names the file can't hold; a copy of the file name
+        //   is a second spelling that can drift.
+        if let Some(t) = meta.title.as_deref().map(str::trim) {
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if t.is_empty() {
+                errors.push(format!(
+                    "{}: title is blank; remove it to use the file name",
+                    path.display()
+                ));
+            } else if t == stem {
+                errors.push(format!(
+                    "{}: title is the same as the file name; remove it",
+                    path.display()
+                ));
+            }
+        }
 
         let creator = meta.creator.as_deref().unwrap_or("");
         if creator.is_empty() {

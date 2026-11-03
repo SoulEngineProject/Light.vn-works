@@ -1,4 +1,5 @@
 ---
+title: "POV: Verity"
 creator: Knickknack PJ
 released: 2026/06/30
 link_label: itch.io

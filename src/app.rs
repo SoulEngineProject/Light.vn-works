@@ -26,7 +26,7 @@ use walkdir::WalkDir;
 
 use crate::{
     aggregate_creator_links, build_atom_feed, build_creator_paths, build_sitemap, build_tag_index,
-    build_tags_line, card_badges_html, detect_lang, encode_path, escape_css_url,
+    build_tags_line, card_badges_html, detect_lang, display_title, encode_path, escape_css_url,
     extract_all_images, extract_user_attachment_uuid, feed_date, gallery_rows, get_lang,
     get_related_paths, has_tag, html_escape, json_script_escape, layout_images, load_aliases,
     load_tag_config, make_thumbnail, markdown_to_html, parse_frontmatter, split_creators,
@@ -441,7 +441,8 @@ async fn render_markdown(
     let images = &game.images;
     let md_html = game.body_html.as_str();
 
-    let title_display = title.clone();
+    // - `title:` from the frontmatter when set; the URL segment is only the file name.
+    let title_display = game.title.clone();
 
     let creator_html = meta
         .creator
@@ -704,12 +705,12 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
             Some(parts) => parts,
             None => continue,
         };
-        let title = match path.file_stem().and_then(|s| s.to_str()) {
+        let stem = match path.file_stem().and_then(|s| s.to_str()) {
             Some(s) => s.to_string(),
             None => continue,
         };
         let year = year.to_string();
-        let canonical_path = format!("/works/{}/{}", year, title);
+        let canonical_path = format!("/works/{}/{}", year, stem);
 
         let content = match std::fs::read_to_string(path) {
             Ok(c) => c,
@@ -741,7 +742,7 @@ fn build_games_index() -> (HashMap<String, ParsedGame>, HashMap<String, String>)
 
             let game = ParsedGame {
                 year: year.clone(),
-                title: title.clone(),
+                title: display_title(&meta, &stem),
                 path: canonical_path.clone(),
                 meta,
                 body_html,
@@ -783,7 +784,7 @@ fn build_tree_from_games(
     let mut by_year: BTreeMap<String, Vec<Node>> = BTreeMap::new();
     for game in sorted {
         by_year.entry(game.year.clone()).or_default().push(Node {
-            name: format!("{}.md", game.title),
+            name: format!("{}.md", game.path.rsplit('/').next().unwrap_or("")),
             path: format!("{}.md", game.path),
             is_dir: false,
             children: None,

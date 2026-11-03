@@ -144,6 +144,10 @@ pub fn work_sort_key<'a>(released: Option<&'a str>, folder_year: &'a str) -> &'a
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct GameMeta {
+    /// - Official title, for names a file can't hold (e.g. `:` on Windows).
+    /// - Display only: the URL still comes from the file name. See `display_title`.
+    #[serde(default)]
+    pub title: Option<String>,
     #[serde(default)]
     pub creator: Option<String>,
     #[serde(default)]
@@ -176,28 +180,50 @@ pub struct ExtraLink {
 
 /// - Split YAML frontmatter from markdown body.
 /// - Returns (parsed meta, body without frontmatter).
+/// - Invalid YAML falls back to an empty `GameMeta`; `frontmatter_error` says why, for the validator.
 pub fn parse_frontmatter(content: &str) -> (GameMeta, &str) {
-    let trimmed = content.trim_start();
-
-    if !trimmed.starts_with("---") {
-        return (GameMeta::default(), content);
-    }
-
-    let after_open = &trimmed[3..];
-    let after_open = after_open.trim_start_matches(['\r', '\n']);
-
-    if let Some(close_idx) = after_open.find("\n---") {
-        let yaml_str = &after_open[..close_idx];
-        let body_start = close_idx + 4;
-        let body = after_open[body_start..].trim_start_matches(['\r', '\n']);
-
-        match serde_yaml::from_str::<GameMeta>(yaml_str) {
+    match split_frontmatter(content) {
+        Some((yaml, body)) => match serde_yaml::from_str::<GameMeta>(yaml) {
             Ok(meta) => (meta, body),
             Err(_) => (GameMeta::default(), content),
-        }
-    } else {
-        (GameMeta::default(), content)
+        },
+        None => (GameMeta::default(), content),
     }
+}
+
+/// - Why the frontmatter didn't parse, if it didn't. `None` when it's fine or absent.
+/// - Typical causes: an unquoted value containing ": " (`title: POV: Verity`),
+///   or a missing closing `---`.
+pub fn frontmatter_error(content: &str) -> Option<String> {
+    if !content.trim_start().starts_with("---") {
+        return None;
+    }
+    let Some((yaml, _)) = split_frontmatter(content) else {
+        return Some("no closing ---".to_string());
+    };
+    serde_yaml::from_str::<GameMeta>(yaml)
+        .err()
+        .map(|e| e.to_string())
+}
+
+/// - (YAML, body) when the content opens with a closed `---` block.
+fn split_frontmatter(content: &str) -> Option<(&str, &str)> {
+    let after_open = content.trim_start().strip_prefix("---")?;
+    let after_open = after_open.trim_start_matches(['\r', '\n']);
+    let close_idx = after_open.find("\n---")?;
+    let body = after_open[close_idx + 4..].trim_start_matches(['\r', '\n']);
+    Some((&after_open[..close_idx], body))
+}
+
+/// - Name shown for a work: `title:` from the frontmatter, else the file name.
+/// - Decided once at parse time; every page reads `ParsedGame.title`.
+pub fn display_title(meta: &GameMeta, file_stem: &str) -> String {
+    meta.title
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .unwrap_or(file_stem)
+        .to_string()
 }
 
 #[derive(Clone, Debug)]
@@ -739,8 +765,8 @@ pub fn tag_query(name: &str) -> String {
 #[derive(Clone, Debug)]
 pub struct ParsedGame {
     pub year: String,  // directory name
-    pub title: String, // file stem, no .md
-    pub path: String,  // "/works/YYYY/title", no .md
+    pub title: String, // display_title: frontmatter `title:` or the file stem
+    pub path: String,  // "/works/YYYY/<file stem>", no .md
     pub meta: GameMeta,
     pub body_html: String, // pre-rendered markdown
     pub images: Vec<ImageInfo>,

@@ -57,6 +57,13 @@ All markdown files are parsed once at startup into an in-memory `HashMap<canonic
 - **Unset**: the last image goes in the editor frame. If it would otherwise be a lone gallery image, it's left out of the gallery so it isn't shown twice.
 - **One-image works show the hero again inside the frame**, on purpose. The frame still shows the engine, and dropping the section leaves the page bare.
 
+## File name is the URL, `title:` is the name shown
+
+- **The file name** gives the URL, so it stays safe on every OS (no `:` etc., which break `git checkout` on Windows).
+- **`title:`** in the frontmatter is the official name, for the rare title a file name can't hold. Shown everywhere a work's name appears; the URL doesn't change.
+- **Optional**: without it, the file name is shown. Requiring it would mean a second copy of every name to keep in sync.
+- Decided once in `display_title` (`src/lib.rs`) and stored as `ParsedGame.title`.
+
 ## One implementation per rule, decided server-side
 
 Several bugs came from the same rule written twice: tag checks that were case-sensitive in some places, language picked differently by server and client, works sorted three ways, links encoded differently by Rust and JS. So each rule now has one home.

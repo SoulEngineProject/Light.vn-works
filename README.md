@@ -26,6 +26,11 @@ Synopsis text here.
 ```
 - Synopsis line breaks show as-is; a blank line starts a new paragraph.
 
+If the official title has a character a file name can't hold (`:` `?` `*` etc.), leave it out of the file name and set `title`, quoted:
+```
+title: "POV: Verity"
+```
+
 For multiple links, add `extra_links`:
 ```
 extra_links:
