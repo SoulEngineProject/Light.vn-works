@@ -1,4 +1,5 @@
 ---
+title: "プトリカ 1st.cut:The Reason She Must Perish"
 creator: トトメトリ
 released: 2024/10/07
 link_label: Steam
