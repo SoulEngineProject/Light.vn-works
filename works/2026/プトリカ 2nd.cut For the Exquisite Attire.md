@@ -1,5 +1,5 @@
 ---
-title:プトリカ 2nd.cut:For the Exquisite Attire
+title: "プトリカ 2nd.cut:For the Exquisite Attire"
 creator: トトメトリ
 released: 2026/06/05
 link_label: Steam
